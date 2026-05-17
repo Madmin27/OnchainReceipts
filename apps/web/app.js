@@ -436,21 +436,25 @@ function inferMethod(tx) {
   return `${tx.input.slice(0, 10)} call`;
 }
 
-function topObservedTransferRows(transfers, sender, existingRows) {
+function observedTransferRows(transfers, sender, existingRows, maxRows = 4) {
   const used = new Set(existingRows.map(row => `${row.value}:${row.detail}`));
-  return transfers
-    .map(item => ({
-      label: item.from === sender ? "Token out" : item.to === sender ? "Token in" : "Token movement",
+  const rows = [];
+
+  for (const item of transfers) {
+    const direction = item.from === sender ? "Token out" : item.to === sender ? "Token in" : "Token movement";
+    const row = {
+      label: `${direction} ${rows.length + 1}`,
       value: transferText(item, "Token transfer"),
       detail: transferDetail(item, sender),
-    }))
-    .filter(row => {
-      const key = `${row.value}:${row.detail}`;
-      if (used.has(key)) return false;
-      used.add(key);
-      return true;
-    })
-    .slice(0, 2);
+    };
+    const key = `${row.value}:${row.detail}`;
+    if (used.has(key)) continue;
+    used.add(key);
+    rows.push(row);
+    if (rows.length >= maxRows) break;
+  }
+
+  return rows;
 }
 
 async function fetchQrDataUrl(value) {
@@ -515,7 +519,11 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block) {
     {
       label: "User received",
       value: receivedText,
-      detail: summary.firstReceived ? transferDetail(summary.firstReceived, sender) : "No direct wallet receipt",
+      detail: summary.firstReceived
+        ? transferDetail(summary.firstReceived, sender)
+        : transfers.length
+          ? "No direct wallet receipt; movements listed below"
+          : "No direct wallet receipt",
     },
     {
       label: "Gas paid",
@@ -523,6 +531,10 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block) {
       detail: `${network.name} network fee`,
     },
   ];
+  const observedRows = observedTransferRows(transfers, sender, baseRows, 4);
+  const primaryTransferCount = Number(Boolean(summary.firstSent))
+    + Number(Boolean(summary.firstReceived && summary.firstReceived !== summary.firstSent));
+  const undisplayedTransferCount = Math.max(transfers.length - primaryTransferCount - observedRows.length, 0);
 
   return {
     id: `or_${network.id}_${txHash.slice(2, 10)}`,
@@ -551,11 +563,11 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block) {
     method: inferMethod(tx),
     transferRows: [
       ...baseRows,
-      ...topObservedTransferRows(transfers, sender, baseRows),
-      ...(transfers.length > 2
+      ...observedRows,
+      ...(undisplayedTransferCount > 0
         ? [{
             label: "Other transfers",
-            value: `${Math.max(transfers.length - 2, 0)} observed`,
+            value: `${undisplayedTransferCount} observed`,
             detail: "Potential router, fee, or protocol movement",
           }]
         : []),
@@ -976,7 +988,7 @@ async function renderReceiptCanvas(data) {
   canvas.height = RECEIPT_HEIGHT;
   const context = canvas.getContext("2d");
   const qrImage = await loadImage(data.qrDataUrl);
-  const rows = Array.isArray(data.transferRows) ? data.transferRows.slice(0, 5) : [];
+  const rows = Array.isArray(data.transferRows) ? data.transferRows.slice(0, 8) : [];
 
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
@@ -1004,7 +1016,11 @@ async function renderReceiptCanvas(data) {
   drawText(context, "Sent", 112, 380, { color: "#5c655f", size: 26 });
   drawText(context, data.sent, 112, 440, { size: 52, weight: 800, maxLength: 28 });
   drawText(context, "Received", 880, 380, { color: "#5c655f", size: 26 });
-  drawText(context, data.received, 880, 440, { size: 52, weight: 800, maxLength: 28 });
+  drawText(context, data.received, 880, 440, {
+    size: String(data.received || "").length > 14 ? 44 : 52,
+    weight: 800,
+    maxLength: 22,
+  });
   context.strokeStyle = "#d7ddd4";
   context.lineWidth = 4;
   context.beginPath();
@@ -1028,10 +1044,10 @@ async function renderReceiptCanvas(data) {
   drawDivider(context, 590);
   drawText(context, "Payment and fee breakdown", 112, 670, { size: 34, weight: 800, maxLength: 40 });
   rows.forEach((row, index) => {
-    const y = 735 + index * 64;
-    drawText(context, row.label, 112, y, { color: "#5c655f", size: 24, maxLength: 28 });
-    drawText(context, row.value, 376, y, { size: 28, weight: 800, maxLength: 30 });
-    drawText(context, row.detail, 720, y, { color: "#5c655f", size: 24, maxLength: 70 });
+    const y = 735 + index * 46;
+    drawText(context, row.label, 112, y, { color: "#5c655f", size: 21, maxLength: 24 });
+    drawText(context, row.value, 376, y, { size: 24, weight: 800, maxLength: 28 });
+    drawText(context, row.detail, 720, y, { color: "#5c655f", size: 21, maxLength: 74 });
   });
 
   drawDivider(context, 1084);
