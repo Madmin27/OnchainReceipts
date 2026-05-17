@@ -31,17 +31,33 @@ const txStatus = document.querySelector("#txStatus");
 const connectWalletButton = document.querySelector("#connectWallet");
 const walletLabel = document.querySelector("#walletLabel");
 const networkSelect = document.querySelector("#networkSelect");
+const loadHistoryButton = document.querySelector("#loadHistory");
+const loadMoreHistoryButton = document.querySelector("#loadMoreHistory");
+const historyStatus = document.querySelector("#historyStatus");
+const historyList = document.querySelector("#historyList");
+const historyTabs = document.querySelectorAll("[data-history-tab]");
 
 const BASE_RPC_URL = "https://mainnet.base.org";
+const BASE_BLOCKSCOUT_URL = "https://base.blockscout.com";
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETH_DECIMALS = 18n;
+const PAGE_SIZE = 20;
 
 const knownTokens = {
   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { symbol: "USDC", decimals: 6n },
   "0x4200000000000000000000000000000000000006": { symbol: "WETH", decimals: 18n },
   "0x4200000000000000000000000000000000000042": { symbol: "OP", decimals: 18n },
   "0x532f27101965dd16442e59d40670faf5ebb142e4": { symbol: "BRETT", decimals: 18n },
+};
+
+let connectedWallet = null;
+let activeHistoryTab = "all";
+let historyState = {
+  transactions: [],
+  transfers: [],
+  txNext: null,
+  transferNext: null,
 };
 
 function escapeText(value) {
@@ -118,6 +134,11 @@ function setStatus(message, tone = "neutral") {
   txStatus.dataset.tone = tone;
 }
 
+function setHistoryStatus(message, tone = "neutral") {
+  historyStatus.textContent = message;
+  historyStatus.dataset.tone = tone;
+}
+
 async function rpc(method, params) {
   const response = await fetch(BASE_RPC_URL, {
     method: "POST",
@@ -154,6 +175,178 @@ function formatUnits(value, decimals, maxDigits = 6) {
 
 function shortHash(value) {
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function labelAddress(entity) {
+  if (!entity) return "Unknown";
+  return entity.ens_domain_name || entity.name || shortHash(entity.hash || entity);
+}
+
+function sameAddress(a, b) {
+  return Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+}
+
+function formatDecimalUnits(value, decimals = 18, maxDigits = 6) {
+  try {
+    return formatUnits(BigInt(value || "0"), BigInt(decimals || 18), maxDigits);
+  } catch {
+    return "0";
+  }
+}
+
+function formatEthValue(value, maxDigits = 6) {
+  return `${formatDecimalUnits(value || "0", 18, maxDigits)} ETH`;
+}
+
+function formatDate(value) {
+  if (!value) return "Unknown date";
+  return new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function buildUrl(path, params = null) {
+  const url = new URL(path, BASE_BLOCKSCOUT_URL);
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) url.searchParams.set(key, String(value));
+    });
+  }
+  return url.toString();
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error(`History API returned HTTP ${response.status}`);
+  return response.json();
+}
+
+function pageParamsToQuery(params) {
+  if (!params) return null;
+  return params;
+}
+
+function normalizeTx(item) {
+  const from = item.from?.hash || "";
+  const to = item.to?.hash || "";
+  const isIncoming = sameAddress(to, connectedWallet) && !sameAddress(from, connectedWallet);
+  const isOutgoing = sameAddress(from, connectedWallet);
+  const method = item.method || item.decoded_input?.method_call?.split("(")[0] || "transaction";
+  return {
+    kind: "tx",
+    hash: item.hash,
+    title: `${isIncoming ? "Incoming" : isOutgoing ? "Outgoing" : "Contract"} ${method}`,
+    subtitle: `${labelAddress(item.from)} -> ${labelAddress(item.to)}`,
+    timestamp: item.timestamp,
+    value: item.value && item.value !== "0" ? formatEthValue(item.value) : item.status || item.result || "ok",
+    direction: isIncoming ? "incoming" : isOutgoing ? "outgoing" : "other",
+  };
+}
+
+function normalizeTransfer(item) {
+  const from = item.from?.hash || "";
+  const to = item.to?.hash || "";
+  const tokenType = item.token_type || item.token?.type || "token";
+  const isNft = tokenType === "ERC-721" || tokenType === "ERC-1155";
+  const decimals = item.total?.decimals ?? item.token?.decimals ?? (isNft ? 0 : 18);
+  const symbol = item.token?.symbol || item.token?.name || tokenType;
+  const amount = isNft
+    ? `#${item.total?.token_id || "token"}`
+    : `${formatDecimalUnits(item.total?.value || "0", decimals)} ${symbol}`;
+  const isIncoming = sameAddress(to, connectedWallet) && !sameAddress(from, connectedWallet);
+  const isOutgoing = sameAddress(from, connectedWallet);
+
+  return {
+    kind: isNft ? "nft" : "token",
+    hash: item.transaction_hash,
+    title: `${isIncoming ? "Incoming" : isOutgoing ? "Outgoing" : "Observed"} ${tokenType}`,
+    subtitle: `${labelAddress(item.from)} -> ${labelAddress(item.to)}`,
+    timestamp: item.timestamp,
+    value: amount,
+    direction: isIncoming ? "incoming" : isOutgoing ? "outgoing" : "other",
+  };
+}
+
+function combinedHistoryItems() {
+  const normalized = [
+    ...historyState.transactions.map(normalizeTx),
+    ...historyState.transfers.map(normalizeTransfer),
+  ];
+  const unique = new Map();
+  for (const item of normalized) {
+    const key = `${item.kind}:${item.hash}:${item.title}:${item.value}`;
+    if (!unique.has(key)) unique.set(key, item);
+  }
+
+  return [...unique.values()]
+    .filter(item => {
+      if (activeHistoryTab === "all") return item.kind === "tx";
+      if (activeHistoryTab === "tokens") return item.kind === "token";
+      if (activeHistoryTab === "nfts") return item.kind === "nft";
+      return item.direction === activeHistoryTab;
+    })
+    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
+    .slice(0, PAGE_SIZE);
+}
+
+function renderHistory() {
+  const items = combinedHistoryItems();
+  historyList.innerHTML = "";
+
+  if (!connectedWallet) {
+    setHistoryStatus("Connect a wallet to load the latest Base activity automatically.");
+    loadMoreHistoryButton.hidden = true;
+    return;
+  }
+
+  if (!items.length) {
+    setHistoryStatus("No activity found for this tab yet.");
+    loadMoreHistoryButton.hidden = !historyState.txNext && !historyState.transferNext;
+    return;
+  }
+
+  setHistoryStatus(`Showing ${items.length} recent ${activeHistoryTab === "all" ? "transaction" : activeHistoryTab} record${items.length === 1 ? "" : "s"}.`);
+
+  for (const item of items) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "history-item";
+    button.innerHTML = `<span><strong>${escapeText(item.title)}</strong><span class="history-meta">${escapeText(item.subtitle)} · ${escapeText(formatDate(item.timestamp))}</span></span><span class="history-value">${escapeText(item.value)}</span>`;
+    button.addEventListener("click", () => {
+      txInput.value = item.hash;
+      txForm.requestSubmit();
+    });
+    historyList.appendChild(button);
+  }
+
+  loadMoreHistoryButton.hidden = !historyState.txNext && !historyState.transferNext;
+}
+
+async function loadHistory({ more = false } = {}) {
+  if (!connectedWallet) {
+    setHistoryStatus("Connect a wallet first.", "error");
+    return;
+  }
+
+  try {
+    setHistoryStatus(more ? "Loading older Base activity..." : "Loading latest Base activity...");
+    const txParams = more ? pageParamsToQuery(historyState.txNext) : null;
+    const transferParams = more ? pageParamsToQuery(historyState.transferNext) : null;
+    const [txPayload, transferPayload] = await Promise.all([
+      fetchJson(buildUrl(`/api/v2/addresses/${connectedWallet}/transactions`, txParams)),
+      fetchJson(buildUrl(`/api/v2/addresses/${connectedWallet}/token-transfers`, transferParams)),
+    ]);
+
+    historyState.transactions = more
+      ? [...historyState.transactions, ...(txPayload.items || [])]
+      : txPayload.items || [];
+    historyState.transfers = more
+      ? [...historyState.transfers, ...(transferPayload.items || [])]
+      : transferPayload.items || [];
+    historyState.txNext = txPayload.next_page_params || null;
+    historyState.transferNext = transferPayload.next_page_params || null;
+    renderHistory();
+  } catch (error) {
+    setHistoryStatus(error instanceof Error ? error.message : "Could not load wallet history.", "error");
+  }
 }
 
 function topicToAddress(topic) {
@@ -272,7 +465,14 @@ function buildReceiptFromChain(txHash, tx, txReceipt) {
 }
 
 function setWallet(address, chainId) {
+  connectedWallet = address || null;
   walletLabel.textContent = address ? `${shortHash(address)} · chain ${parseInt(chainId || "0x0", 16)}` : "Not connected";
+  if (connectedWallet) {
+    loadHistory();
+  } else {
+    historyState = { transactions: [], transfers: [], txNext: null, transferNext: null };
+    renderHistory();
+  }
 }
 
 async function ensureBaseNetwork() {
@@ -324,6 +524,17 @@ connectWalletButton.addEventListener("click", async () => {
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Could not connect wallet.", "error");
   }
+});
+
+loadHistoryButton.addEventListener("click", () => loadHistory());
+loadMoreHistoryButton.addEventListener("click", () => loadHistory({ more: true }));
+
+historyTabs.forEach(tabButton => {
+  tabButton.addEventListener("click", () => {
+    activeHistoryTab = tabButton.dataset.historyTab;
+    historyTabs.forEach(button => button.classList.toggle("active", button === tabButton));
+    renderHistory();
+  });
 });
 
 if (window.ethereum) {

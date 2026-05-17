@@ -184,6 +184,29 @@
           </div>
           <button id="connectWallet" class="button secondary" type="button">Connect wallet</button>
         </div>
+        <section class="history-panel" aria-label="Wallet transaction history">
+          <div class="history-head">
+            <div>
+              <p class="eyebrow">Wallet history</p>
+              <h3>Recent Base activity</h3>
+            </div>
+            <button id="loadHistory" class="button secondary" type="button">Load latest 20</button>
+          </div>
+          <div class="history-tabs" role="tablist" aria-label="History filters">
+            <button class="history-tab active" type="button" data-history-tab="all">All</button>
+            <button class="history-tab" type="button" data-history-tab="incoming">Incoming</button>
+            <button class="history-tab" type="button" data-history-tab="outgoing">Outgoing</button>
+            <button class="history-tab" type="button" data-history-tab="tokens">Tokens</button>
+            <button class="history-tab" type="button" data-history-tab="nfts">NFTs</button>
+          </div>
+          <div id="historyStatus" class="form-status">
+            Connect a wallet to load the latest Base activity automatically.
+          </div>
+          <div id="historyList" class="history-list"></div>
+          <button id="loadMoreHistory" class="button secondary load-more" type="button" hidden>
+            Load more
+          </button>
+        </section>
         <form id="txForm" class="tx-form">
           <label for="txHash">Base transaction hash</label>
           <div class="tx-row">
