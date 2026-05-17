@@ -407,6 +407,69 @@ function parseTransfers(logs) {
     });
 }
 
+function normalizeExplorerTokenTransfers(payload) {
+  if (!Array.isArray(payload?.items)) return [];
+  return payload.items
+    .filter(item => item.token_type === "ERC-20" && item.total?.value)
+    .map(item => {
+      const decimals = BigInt(item.total.decimals || item.token?.decimals || "18");
+      const symbol = safeDisplay(item.token?.symbol || item.token_type || "TOKEN", 18);
+      const amount = formatUnits(BigInt(item.total.value || "0"), decimals);
+      const exchangeRate = Number(item.token?.exchange_rate || 0);
+      const usdValue = Number.isFinite(exchangeRate) && exchangeRate > 0
+        ? Number(amount) * exchangeRate
+        : 0;
+      return {
+        token: String(item.token?.address_hash || "").toLowerCase(),
+        symbol,
+        decimals,
+        from: String(item.from?.hash || "").toLowerCase(),
+        to: String(item.to?.hash || "").toLowerCase(),
+        amountRaw: BigInt(item.total.value || "0"),
+        amount,
+        usdValue,
+        fromInfo: item.from || null,
+        toInfo: item.to || null,
+        tokenName: safeDisplay(item.token?.name || symbol, 32),
+      };
+    });
+}
+
+async function fetchExplorerTokenTransfers(txHash) {
+  const network = currentNetwork();
+  if (!network.blockscoutUrl) return [];
+  try {
+    const payload = await fetchJson(buildUrl(`/api/v2/transactions/${txHash}/token-transfers`));
+    return normalizeExplorerTokenTransfers(payload);
+  } catch {
+    return [];
+  }
+}
+
+function normalizeExplorerInternalTransfers(payload) {
+  if (!Array.isArray(payload?.items)) return [];
+  return payload.items
+    .map(item => ({
+      from: String(item.from?.hash || item.from || "").toLowerCase(),
+      to: String(item.to?.hash || item.to || "").toLowerCase(),
+      value: String(item.value || item.amount || "0"),
+      fromInfo: typeof item.from === "object" ? item.from : null,
+      toInfo: typeof item.to === "object" ? item.to : null,
+    }))
+    .filter(item => item.from && item.to && item.value !== "0");
+}
+
+async function fetchExplorerInternalTransfers(txHash) {
+  const network = currentNetwork();
+  if (!network.blockscoutUrl) return [];
+  try {
+    const payload = await fetchJson(buildUrl(`/api/v2/transactions/${txHash}/internal-transactions`));
+    return normalizeExplorerInternalTransfers(payload);
+  } catch {
+    return [];
+  }
+}
+
 function summarizeTransfers(tx, transfers) {
   const sender = tx.from.toLowerCase();
   const sent = transfers.filter(item => item.from === sender && item.to !== ZERO_ADDRESS);
@@ -425,11 +488,26 @@ function transferText(item, fallback) {
   return `${formatUnits(item.amountRaw, item.decimals)} ${item.symbol}`;
 }
 
-function addressRole(address, sender, appAddress) {
+function usdText(item) {
+  if (!item?.usdValue) return "";
+  if (item.usdValue < 0.01) return "~$0.01";
+  return `~$${item.usdValue.toFixed(2)}`;
+}
+
+function addressName(info) {
+  if (!info) return "";
+  const implementation = Array.isArray(info.implementations) ? info.implementations[0]?.name : "";
+  return safeDisplay(info.ens_domain_name || info.name || implementation || "", 24);
+}
+
+function addressRole(address, sender, appAddress, info = null) {
   if (!address) return "unknown";
   if (address === ZERO_ADDRESS) return "mint/burn";
   if (sameAddress(address, sender)) return "your wallet";
   if (appAddress && sameAddress(address, appAddress)) return "app/router";
+  const name = addressName(info);
+  if (name) return name;
+  if (info?.is_contract) return "contract";
   return "protocol address";
 }
 
@@ -443,9 +521,11 @@ function transferLabel(item, sender) {
 
 function transferDetail(item, sender, appAddress = "") {
   if (!item) return "";
-  const fromRole = addressRole(item.from, sender, appAddress);
-  const toRole = addressRole(item.to, sender, appAddress);
-  return `${fromRole} -> ${toRole} (${shortHash(item.from)} -> ${shortHash(item.to)})`;
+  const fromRole = addressRole(item.from, sender, appAddress, item.fromInfo);
+  const toRole = addressRole(item.to, sender, appAddress, item.toInfo);
+  const fiat = usdText(item);
+  const path = `${fromRole} -> ${toRole} (${shortHash(item.from)} -> ${shortHash(item.to)})`;
+  return fiat ? `${fiat}; ${path}` : path;
 }
 
 function inferMethod(tx) {
@@ -471,6 +551,18 @@ function observedTransferRows(transfers, sender, appAddress, existingRows, maxRo
   }
 
   return rows;
+}
+
+function internalTransferRows(transfers, sender, appAddress, maxRows = 2) {
+  return transfers.slice(0, maxRows).map(item => {
+    const fromRole = addressRole(item.from, sender, appAddress, item.fromInfo);
+    const toRole = addressRole(item.to, sender, appAddress, item.toInfo);
+    return {
+      label: item.to === sender ? "Native received" : item.from === sender ? "Native sent" : "Internal native",
+      value: `${formatUnits(BigInt(item.value), ETH_DECIMALS, 8)} ETH`,
+      detail: `${fromRole} -> ${toRole} (${shortHash(item.from)} -> ${shortHash(item.to)})`,
+    };
+  });
 }
 
 async function fetchQrDataUrl(value) {
@@ -504,9 +596,9 @@ function inferTitle(summary, tx) {
   return `${currentNetwork().name} transaction`;
 }
 
-function buildReceiptFromChain(txHash, tx, txReceipt, block) {
+function buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers = [], internalTransfers = []) {
   const network = currentNetwork();
-  const transfers = parseTransfers(txReceipt.logs || []);
+  const transfers = explorerTransfers.length ? explorerTransfers : parseTransfers(txReceipt.logs || []);
   const summary = summarizeTransfers(tx, transfers);
   const gasFeeWei = hexToBigInt(txReceipt.gasUsed) * hexToBigInt(txReceipt.effectiveGasPrice || tx.gasPrice);
   const ethValue = hexToBigInt(tx.value);
@@ -549,6 +641,7 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block) {
     },
   ];
   const observedRows = observedTransferRows(transfers, sender, appAddress, baseRows, 4);
+  const internalRows = internalTransferRows(internalTransfers, sender, appAddress, 2);
   const primaryTransferCount = Number(Boolean(summary.firstSent))
     + Number(Boolean(summary.firstReceived && summary.firstReceived !== summary.firstSent));
   const undisplayedTransferCount = Math.max(transfers.length - primaryTransferCount - observedRows.length, 0);
@@ -580,6 +673,7 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block) {
     method: inferMethod(tx),
     transferRows: [
       ...baseRows,
+      ...internalRows,
       ...observedRows,
       ...(undisplayedTransferCount > 0
         ? [{
@@ -920,8 +1014,12 @@ async function generateReceipt(txHash, { download = false } = {}) {
       return;
     }
 
-    const block = await rpc("eth_getBlockByNumber", [txReceipt.blockNumber, false]);
-    receipt = buildReceiptFromChain(txHash, tx, txReceipt, block);
+    const [block, explorerTransfers, internalTransfers] = await Promise.all([
+      rpc("eth_getBlockByNumber", [txReceipt.blockNumber, false]),
+      fetchExplorerTokenTransfers(txHash),
+      fetchExplorerInternalTransfers(txHash),
+    ]);
+    receipt = buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers, internalTransfers);
     try {
       receipt.qrDataUrl = await fetchQrDataUrl(receipt.explorerUrl);
     } catch {
