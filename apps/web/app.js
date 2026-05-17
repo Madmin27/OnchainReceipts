@@ -54,10 +54,6 @@ function escapeXml(value) {
     .replace(/'/g, "&apos;");
 }
 
-function qrUrl(value) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=1&data=${encodeURIComponent(value)}`;
-}
-
 function rowsToSvg(rows) {
   return rows
     .slice(0, 4)
@@ -73,7 +69,6 @@ function rowsToSvg(rows) {
 function buildReceiptSvg(data) {
   const safe = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, escapeXml(value)]));
   const rows = Array.isArray(data.transferRows) ? data.transferRows : [];
-  const qr = qrUrl(data.explorerUrl || "https://basescan.org/");
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="860" height="620" viewBox="0 0 860 620">
   <rect width="860" height="620" fill="#ffffff"/>
@@ -89,8 +84,10 @@ function buildReceiptSvg(data) {
   <line x1="306" y1="204" x2="394" y2="204" stroke="#d7ddd4" stroke-width="2"/>
   <text x="438" y="188" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="13">Received</text>
   <text x="438" y="222" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="760">${safe.received}</text>
-  <image x="684" y="156" width="92" height="92" href="${qr}"/>
-  <text x="678" y="262" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="11">Scan for BaseScan</text>
+  <rect x="684" y="156" width="92" height="92" rx="6" fill="#f4f7f4" stroke="#d7ddd4"/>
+  <text x="703" y="192" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">BaseScan</text>
+  <text x="699" y="216" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="11">tx details</text>
+  <text x="682" y="262" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="10">${safe.tx}</text>
   <line x1="56" y1="286" x2="804" y2="286" stroke="#d7ddd4"/>
 
   <text x="56" y="326" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="760">Payment and fee breakdown</text>
@@ -302,7 +299,7 @@ function renderHistory() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "history-item";
-    button.innerHTML = `<span><strong>${escapeText(item.title)}</strong><span class="history-meta">${escapeText(item.subtitle)} · ${escapeText(formatDate(item.timestamp))}</span></span><span class="history-value">${escapeText(item.value)}</span><span class="history-receipt-button">Receipt PNG</span>`;
+    button.innerHTML = `<span><strong>${escapeText(item.title)}</strong><span class="history-meta">${escapeText(item.subtitle)} · ${escapeText(formatDate(item.timestamp))}</span></span><span class="history-value">${escapeText(item.value)}</span><span class="history-receipt-button">Receipt</span>`;
     button.addEventListener("click", async () => {
       await generateAndDownloadReceipt(item.hash);
     });
@@ -504,6 +501,12 @@ async function ensureBaseNetwork() {
 
 connectWalletButton.addEventListener("click", async () => {
   try {
+    if (connectedWallet) {
+      setWallet(null, "0x0");
+      setStatus("Wallet disconnected locally.", "success");
+      return;
+    }
+
     if (!window.ethereum) {
       setStatus("No injected wallet found. Install MetaMask or a compatible wallet.", "error");
       return;
@@ -605,6 +608,7 @@ function downloadReceiptPng() {
       URL.revokeObjectURL(url);
       canvas.toBlob(blob => {
         if (!blob) {
+          setStatus("Could not create receipt PNG.", "error");
           resolve();
           return;
         }
@@ -616,6 +620,7 @@ function downloadReceiptPng() {
         link.click();
         link.remove();
         URL.revokeObjectURL(pngUrl);
+        setStatus("Receipt PNG downloaded.", "success");
         resolve();
       }, "image/png");
     };
