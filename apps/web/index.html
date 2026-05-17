@@ -156,7 +156,7 @@
         </div>
       </section>
 
-      <section id="demo" class="section demo-section">
+      <section id="demo" class="section demo-section app-surface">
         <div class="demo-panel">
           <div>
             <p class="eyebrow">Prototype</p>
@@ -182,7 +182,9 @@
               <option value="8453" selected>Base</option>
             </select>
           </div>
-          <button id="connectWallet" class="button secondary" type="button">Connect wallet</button>
+          <button id="connectWallet" class="button primary wallet-button" type="button">
+            Connect wallet
+          </button>
         </div>
         <section class="history-panel" aria-label="Wallet transaction history">
           <div class="history-head">
@@ -224,6 +226,13 @@
             Demo data is shown until a real Base transaction hash is fetched.
           </p>
         </form>
+        <div id="sampleNotice" class="sample-notice">
+          <strong>Sample receipt preview</strong>
+          <span>
+            This is demo data. Connect a wallet or fetch a Base transaction hash to generate a real
+            receipt.
+          </span>
+        </div>
         <div class="artifact-wrap">
           <div id="receiptArtifact" class="artifact" role="img" aria-label="Receipt artifact"></div>
         </div>

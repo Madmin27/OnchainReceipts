@@ -28,6 +28,7 @@ const pngButton = document.querySelector("#downloadPng");
 const txForm = document.querySelector("#txForm");
 const txInput = document.querySelector("#txHash");
 const txStatus = document.querySelector("#txStatus");
+const sampleNotice = document.querySelector("#sampleNotice");
 const connectWalletButton = document.querySelector("#connectWallet");
 const walletLabel = document.querySelector("#walletLabel");
 const networkSelect = document.querySelector("#networkSelect");
@@ -127,6 +128,10 @@ function buildReceiptSvg(data) {
 
 function renderArtifact() {
   artifact.innerHTML = buildReceiptSvg(receipt);
+}
+
+function markRealReceipt() {
+  sampleNotice.hidden = true;
 }
 
 function setStatus(message, tone = "neutral") {
@@ -578,6 +583,7 @@ txForm.addEventListener("submit", async event => {
 
     receipt = buildReceiptFromChain(txHash, tx, txReceipt);
     renderArtifact();
+    markRealReceipt();
     setStatus("Receipt generated from Base transaction data.", "success");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Could not fetch Base transaction.", "error");

@@ -1,13 +1,16 @@
 :root {
-  --bg: #f6f7f2;
-  --paper: #ffffff;
-  --ink: #111412;
-  --muted: #5c655f;
-  --line: #d7ddd4;
+  --bg: #090d0f;
+  --paper: #111719;
+  --ink: #f6f8f4;
+  --muted: #9ba7a0;
+  --line: #263034;
   --blue: #0052ff;
+  --blue-soft: #8db1ff;
   --green: #0b7a45;
   --green-bg: #e5f4ec;
-  --shadow: 0 24px 60px rgba(17, 20, 18, 0.12);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  --app-bg: #0d1214;
+  --field: #ffffff;
 }
 
 * {
@@ -34,7 +37,7 @@ a {
 
 .topbar {
   align-items: center;
-  background: rgba(246, 247, 242, 0.92);
+  background: rgba(9, 13, 15, 0.92);
   border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
@@ -58,9 +61,9 @@ nav {
 
 .brand-mark {
   align-items: center;
-  background: var(--ink);
+  background: #f6f8f4;
   border-radius: 6px;
-  color: var(--paper);
+  color: #090d0f;
   display: inline-flex;
   font-size: 12px;
   height: 34px;
@@ -89,7 +92,7 @@ nav {
 
 .eyebrow,
 .mini-label {
-  color: var(--blue);
+  color: var(--blue-soft);
   font-size: 12px;
   font-weight: 760;
   letter-spacing: 0.08em;
@@ -138,7 +141,7 @@ h3 {
 }
 
 .button {
-  border: 1px solid var(--ink);
+  border: 1px solid #f6f8f4;
   border-radius: 7px;
   cursor: pointer;
   display: inline-flex;
@@ -151,8 +154,8 @@ h3 {
 }
 
 .button.primary {
-  background: var(--ink);
-  color: var(--paper);
+  background: #f6f8f4;
+  color: #090d0f;
 }
 
 .button.secondary {
@@ -300,7 +303,7 @@ dd {
 }
 
 .checklist {
-  background: #eef1ea;
+  background: #101719;
   border: 1px solid var(--line);
   border-radius: 8px;
   list-style: none;
@@ -319,7 +322,8 @@ dd {
 }
 
 .demo-section {
-  background: #eef1ea;
+  background: radial-gradient(circle at top left, rgba(0, 82, 255, 0.2), transparent 30%),
+    var(--app-bg);
 }
 
 .demo-panel {
@@ -329,13 +333,13 @@ dd {
 
 .wallet-panel {
   align-items: center;
-  background: #101412;
-  border: 1px solid #26312a;
+  background: #101719;
+  border: 1px solid #2b373b;
   border-radius: 8px;
   color: var(--paper);
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(0, 1fr) 220px auto;
+  grid-template-columns: minmax(0, 1fr) 220px minmax(170px, auto);
   margin-bottom: 16px;
   padding: 18px;
 }
@@ -358,13 +362,18 @@ dd {
 
 .wallet-panel select {
   appearance: none;
-  background: #ffffff;
+  background: var(--field);
   border: 1px solid #d7ddd4;
   border-radius: 7px;
-  color: var(--ink);
+  color: #111412;
   font: inherit;
   min-height: 46px;
   padding: 10px 12px;
+  width: 100%;
+}
+
+.wallet-button {
+  align-self: end;
   width: 100%;
 }
 
@@ -403,7 +412,7 @@ dd {
 }
 
 .history-tab {
-  background: #eef1ea;
+  background: #172023;
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
@@ -415,9 +424,9 @@ dd {
 }
 
 .history-tab.active {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
+  background: #f6f8f4;
+  border-color: #f6f8f4;
+  color: #090d0f;
 }
 
 .history-list {
@@ -428,7 +437,7 @@ dd {
 
 .history-item {
   align-items: center;
-  background: #fbfcf8;
+  background: #0d1214;
   border: 1px solid var(--line);
   border-radius: 8px;
   cursor: pointer;
@@ -484,11 +493,29 @@ dd {
 .tx-row input {
   border: 1px solid var(--line);
   border-radius: 7px;
-  color: var(--ink);
+  color: #111412;
   font: inherit;
   min-height: 46px;
   min-width: 0;
   padding: 10px 12px;
+}
+
+.sample-notice {
+  align-items: center;
+  background: rgba(141, 177, 255, 0.12);
+  border: 1px solid rgba(141, 177, 255, 0.35);
+  border-radius: 8px;
+  color: #dbe6ff;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin: 0 auto 14px;
+  max-width: 780px;
+  padding: 12px 14px;
+}
+
+.sample-notice span {
+  color: #b8c5c0;
 }
 
 .form-status {
@@ -512,6 +539,7 @@ dd {
 }
 
 .artifact {
+  background: #ffffff;
   min-height: 520px;
   overflow: hidden;
   width: min(100%, 780px);
@@ -552,6 +580,11 @@ dd {
   .wallet-panel,
   .history-item {
     grid-template-columns: 1fr;
+  }
+
+  .sample-notice {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .history-value {
