@@ -425,10 +425,27 @@ function transferText(item, fallback) {
   return `${formatUnits(item.amountRaw, item.decimals)} ${item.symbol}`;
 }
 
-function transferDetail(item, sender) {
+function addressRole(address, sender, appAddress) {
+  if (!address) return "unknown";
+  if (address === ZERO_ADDRESS) return "mint/burn";
+  if (sameAddress(address, sender)) return "your wallet";
+  if (appAddress && sameAddress(address, appAddress)) return "app/router";
+  return "protocol address";
+}
+
+function transferLabel(item, sender) {
+  if (item.from === ZERO_ADDRESS) return "Token minted";
+  if (item.to === ZERO_ADDRESS) return "Token burned";
+  if (item.from === sender) return "Wallet sent";
+  if (item.to === sender) return "Wallet received";
+  return "Protocol moved";
+}
+
+function transferDetail(item, sender, appAddress = "") {
   if (!item) return "";
-  const direction = item.from === sender ? `${shortHash(item.from)} -> ${shortHash(item.to)}` : `${shortHash(item.from)} -> ${shortHash(item.to)}`;
-  return direction;
+  const fromRole = addressRole(item.from, sender, appAddress);
+  const toRole = addressRole(item.to, sender, appAddress);
+  return `${fromRole} -> ${toRole} (${shortHash(item.from)} -> ${shortHash(item.to)})`;
 }
 
 function inferMethod(tx) {
@@ -436,16 +453,15 @@ function inferMethod(tx) {
   return `${tx.input.slice(0, 10)} call`;
 }
 
-function observedTransferRows(transfers, sender, existingRows, maxRows = 4) {
+function observedTransferRows(transfers, sender, appAddress, existingRows, maxRows = 4) {
   const used = new Set(existingRows.map(row => `${row.value}:${row.detail}`));
   const rows = [];
 
   for (const item of transfers) {
-    const direction = item.from === sender ? "Token out" : item.to === sender ? "Token in" : "Token movement";
     const row = {
-      label: `${direction} ${rows.length + 1}`,
+      label: transferLabel(item, sender),
       value: transferText(item, "Token transfer"),
-      detail: transferDetail(item, sender),
+      detail: transferDetail(item, sender, appAddress),
     };
     const key = `${row.value}:${row.detail}`;
     if (used.has(key)) continue;
@@ -496,6 +512,7 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block) {
   const ethValue = hexToBigInt(tx.value);
   const success = txReceipt.status === "0x1";
   const sender = tx.from.toLowerCase();
+  const appAddress = tx.to || "";
   const explorerUrl = `${network.explorerUrl}/tx/${txHash}`;
 
   const sentText = summary.firstSent
@@ -507,22 +524,22 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block) {
   const receivedText = summary.firstReceived
     ? transferText(summary.firstReceived, "Observed token transfer")
     : transfers.length
-      ? `${transfers.length} token transfer${transfers.length === 1 ? "" : "s"}`
+      ? `${transfers.length} token movement${transfers.length === 1 ? "" : "s"}`
       : "No token receipt detected";
 
   const baseRows = [
     {
       label: "User paid",
       value: sentText,
-      detail: summary.firstSent ? transferDetail(summary.firstSent, sender) : "Native value or contract call",
+      detail: summary.firstSent ? transferDetail(summary.firstSent, sender, appAddress) : "Native value or contract call",
     },
     {
       label: "User received",
       value: receivedText,
       detail: summary.firstReceived
-        ? transferDetail(summary.firstReceived, sender)
+        ? transferDetail(summary.firstReceived, sender, appAddress)
         : transfers.length
-          ? "No direct wallet receipt; movements listed below"
+          ? "No direct wallet receipt; token path listed below"
           : "No direct wallet receipt",
     },
     {
@@ -531,7 +548,7 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block) {
       detail: `${network.name} network fee`,
     },
   ];
-  const observedRows = observedTransferRows(transfers, sender, baseRows, 4);
+  const observedRows = observedTransferRows(transfers, sender, appAddress, baseRows, 4);
   const primaryTransferCount = Number(Boolean(summary.firstSent))
     + Number(Boolean(summary.firstReceived && summary.firstReceived !== summary.firstSent));
   const undisplayedTransferCount = Math.max(transfers.length - primaryTransferCount - observedRows.length, 0);
@@ -1042,7 +1059,7 @@ async function renderReceiptCanvas(data) {
   drawText(context, "Scan for transaction details", 1462, 540, { align: "center", color: "#5c655f", size: 18, maxLength: 36 });
 
   drawDivider(context, 590);
-  drawText(context, "Payment and fee breakdown", 112, 670, { size: 34, weight: 800, maxLength: 40 });
+  drawText(context, "Payment, fees, and token path", 112, 670, { size: 34, weight: 800, maxLength: 40 });
   rows.forEach((row, index) => {
     const y = 735 + index * 46;
     drawText(context, row.label, 112, y, { color: "#5c655f", size: 21, maxLength: 24 });
