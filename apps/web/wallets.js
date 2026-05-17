@@ -1,7 +1,38 @@
 const discoveredWallets = new Map();
 
+function normalizeWalletName(name) {
+  return String(name || "Browser wallet")
+    .toLowerCase()
+    .replace(/\s+wallet$/u, "")
+    .replace(/\s+evm$/u, "")
+    .replace(/\s+solana$/u, "")
+    .replace(/[^a-z0-9]+/gu, "");
+}
+
+function providerAlreadyStored(provider, family) {
+  return [...discoveredWallets.entries()].find(([, wallet]) => wallet.provider === provider && wallet.family === family);
+}
+
+function walletAlreadyStored(name, family) {
+  const normalized = normalizeWalletName(name);
+  return [...discoveredWallets.entries()].find(([, wallet]) => normalizeWalletName(wallet.name) === normalized && wallet.family === family);
+}
+
 function rememberWallet(id, name, provider, family = "evm") {
-  if (!provider || discoveredWallets.has(id)) return;
+  if (!provider) return;
+  const direct = discoveredWallets.has(id) ? [id, discoveredWallets.get(id)] : null;
+  const existing = direct || providerAlreadyStored(provider, family) || walletAlreadyStored(name, family);
+  if (existing) {
+    const [existingId, wallet] = existing;
+    if (existingId === id && wallet.provider === provider && wallet.name === name && wallet.family === family) return;
+    if (normalizeWalletName(wallet.name) === normalizeWalletName(name) && !wallet.name.startsWith("Injected") && wallet.name !== "Browser wallet") return;
+    if (wallet.name.startsWith("Injected") || wallet.name === "Browser wallet") {
+      discoveredWallets.delete(existingId);
+      discoveredWallets.set(id, { id, name, provider, family });
+      window.dispatchEvent(new CustomEvent("txreceipts:walletsChanged"));
+    }
+    return;
+  }
   discoveredWallets.set(id, { id, name, provider, family });
   window.dispatchEvent(new CustomEvent("txreceipts:walletsChanged"));
 }
@@ -18,7 +49,8 @@ function discoverLegacyWallets() {
   if (!injected) return;
   const providers = Array.isArray(injected.providers) ? injected.providers : [injected];
   providers.forEach((provider, index) => {
-    if (provider.isMetaMask) rememberWallet("metamask", "MetaMask", provider);
+    if (provider.isPhantom) rememberWallet("phantom-evm", "Phantom", provider);
+    else if (provider.isMetaMask) rememberWallet("metamask", "MetaMask", provider);
     else if (provider.isCoinbaseWallet) rememberWallet("coinbase", "Coinbase Wallet", provider);
     else if (provider.isRabby) rememberWallet("rabby", "Rabby", provider);
     else if (provider.isTrust) rememberWallet("trust", "Trust Wallet", provider);
