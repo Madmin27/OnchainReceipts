@@ -19,7 +19,7 @@ const PAGE_SIZE = 20;
 const SOLANA_HISTORY_PAGE_ATTEMPTS = 5;
 const MAX_QR_BYTES = 80_000;
 const RECEIPT_WIDTH = 1720;
-const RECEIPT_HEIGHT = 1680;
+const RECEIPT_HEIGHT = 1900;
 const networks = window.TX_RECEIPTS_NETWORKS || [];
 
 const knownTokens = {
@@ -596,6 +596,17 @@ function inferTitle(summary, tx) {
   return `${currentNetwork().name} transaction`;
 }
 
+function inferReceiptPurpose(summary, tx, transfers) {
+  if (summary.firstSent && summary.firstReceived) return "Swap / exchange record";
+  if (summary.firstSent || hexToBigInt(tx.value) > 0n) return "Payment / transfer proof";
+  if (transfers.length) return "Token movement record";
+  return "Contract interaction record";
+}
+
+function evidenceText(network, block) {
+  return `${network.name} block ${block || "pending"}; explorer QR and full tx hash included`;
+}
+
 function buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers = [], internalTransfers = []) {
   const network = currentNetwork();
   const transfers = explorerTransfers.length ? explorerTransfers : parseTransfers(txReceipt.logs || []);
@@ -645,10 +656,15 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers =
   const primaryTransferCount = Number(Boolean(summary.firstSent))
     + Number(Boolean(summary.firstReceived && summary.firstReceived !== summary.firstSent));
   const undisplayedTransferCount = Math.max(transfers.length - primaryTransferCount - observedRows.length, 0);
+  const blockNumber = String(parseInt(txReceipt.blockNumber, 16));
 
   return {
     id: `or_${network.id}_${txHash.slice(2, 10)}`,
     title: inferTitle(summary, tx),
+    purpose: inferReceiptPurpose(summary, tx, transfers),
+    counterparty: tx.to ? `${shortHash(tx.to)} contract` : "Contract creation",
+    accountingNote: `${sentText} paid; ${receivedText} received; ${formatUnits(gasFeeWei, ETH_DECIMALS, 8)} ETH network fee`,
+    evidence: evidenceText(network, blockNumber),
     app: tx.to ? shortHash(tx.to) : "Contract creation",
     network: network.name,
     date: block?.timestamp
@@ -669,7 +685,7 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers =
     protocolFee: "Not detected",
     status: success ? "Verified" : "Failed",
     explorerUrl,
-    block: String(parseInt(txReceipt.blockNumber, 16)),
+    block: blockNumber,
     method: inferMethod(tx),
     transferRows: [
       ...baseRows,
@@ -703,6 +719,10 @@ function buildSolanaReceipt(signature, tx) {
   return {
     id: `or_${network.id}_${signature.slice(0, 8)}`,
     title: "Solana transaction",
+    purpose: "Wallet activity record",
+    counterparty: "Solana program interaction",
+    accountingNote: `Network fee ${lamportsToSol(fee)}; status ${failed ? "failed" : "confirmed"}`,
+    evidence: evidenceText(network, String(tx?.slot || "pending")),
     app: safeDisplay(signer, 44),
     network: network.name,
     date: blockTime.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
@@ -1107,7 +1127,7 @@ async function renderReceiptCanvas(data) {
 
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
-  roundedRect(context, 64, 64, 1592, 1552, 18);
+  roundedRect(context, 64, 64, 1592, 1772, 18);
   context.fillStyle = "#ffffff";
   context.fill();
   context.strokeStyle = "#d7ddd4";
@@ -1116,6 +1136,10 @@ async function renderReceiptCanvas(data) {
 
   drawText(context, "TXRECEIPTS", 112, 150, { color: "#0052ff", size: 24, weight: 800, maxLength: 24 });
   drawText(context, data.title, 112, 228, { size: 64, weight: 800, maxLength: 42 });
+  drawText(context, "Purpose", 112, 278, { color: "#5c655f", size: 20, maxLength: 12 });
+  drawText(context, data.purpose || "Transaction record", 212, 278, { size: 22, weight: 800, maxLength: 36 });
+  drawText(context, "Receipt ID", 660, 278, { color: "#5c655f", size: 20, maxLength: 12 });
+  drawText(context, data.id, 780, 278, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 22, weight: 800, maxLength: 32 });
   roundedRect(context, 1408, 114, 180, 68, 34);
   context.fillStyle = data.status === "Verified" ? "#e5f4ec" : "#ffe4e4";
   context.fill();
@@ -1127,11 +1151,11 @@ async function renderReceiptCanvas(data) {
     maxLength: 18,
   });
 
-  drawDivider(context, 300);
-  drawText(context, "Sent", 112, 380, { color: "#5c655f", size: 26 });
-  drawText(context, data.sent, 112, 440, { size: 52, weight: 800, maxLength: 28 });
-  drawText(context, "Received", 880, 380, { color: "#5c655f", size: 26 });
-  drawText(context, data.received, 880, 440, {
+  drawDivider(context, 326);
+  drawText(context, "Sent", 112, 405, { color: "#5c655f", size: 26 });
+  drawText(context, data.sent, 112, 465, { size: 52, weight: 800, maxLength: 28 });
+  drawText(context, "Received", 880, 405, { color: "#5c655f", size: 26 });
+  drawText(context, data.received, 880, 465, {
     size: String(data.received || "").length > 14 ? 44 : 52,
     weight: 800,
     maxLength: 22,
@@ -1139,51 +1163,56 @@ async function renderReceiptCanvas(data) {
   context.strokeStyle = "#d7ddd4";
   context.lineWidth = 4;
   context.beginPath();
-  context.moveTo(680, 414);
-  context.lineTo(800, 414);
+  context.moveTo(680, 439);
+  context.lineTo(800, 439);
   context.stroke();
 
-  roundedRect(context, 1368, 320, 188, 188, 14);
+  roundedRect(context, 1368, 346, 188, 188, 14);
   context.fillStyle = "#f4f7f4";
   context.fill();
   context.strokeStyle = "#d7ddd4";
   context.stroke();
   if (qrImage) {
-    context.drawImage(qrImage, 1382, 334, 160, 160);
+    context.drawImage(qrImage, 1382, 360, 160, 160);
   } else {
-    drawText(context, "Explorer", 1462, 398, { align: "center", size: 26, weight: 800, maxLength: 12 });
-    drawText(context, "tx details", 1462, 438, { align: "center", color: "#5c655f", size: 20, maxLength: 12 });
+    drawText(context, "Explorer", 1462, 424, { align: "center", size: 26, weight: 800, maxLength: 12 });
+    drawText(context, "tx details", 1462, 464, { align: "center", color: "#5c655f", size: 20, maxLength: 12 });
   }
-  drawText(context, "Scan for transaction details", 1462, 540, { align: "center", color: "#5c655f", size: 18, maxLength: 36 });
+  drawText(context, "Scan for transaction details", 1462, 566, { align: "center", color: "#5c655f", size: 18, maxLength: 36 });
 
-  drawDivider(context, 590);
-  drawText(context, "Payment, fees, and token path", 112, 670, { size: 34, weight: 800, maxLength: 40 });
+  drawDivider(context, 620);
+  drawText(context, "Payment, fees, and token path", 112, 700, { size: 34, weight: 800, maxLength: 40 });
   rows.forEach((row, index) => {
-    const y = 735 + index * 46;
+    const y = 765 + index * 46;
     drawText(context, row.label, 112, y, { color: "#5c655f", size: 21, maxLength: 24 });
     drawText(context, row.value, 376, y, { size: 24, weight: 800, maxLength: 28 });
     drawText(context, row.detail, 720, y, { color: "#5c655f", size: 21, maxLength: 74 });
   });
 
-  drawDivider(context, 1084);
-  drawText(context, "Transaction details", 112, 1160, { size: 34, weight: 800, maxLength: 28 });
-  drawText(context, "Method", 112, 1225, { color: "#5c655f", size: 22 });
-  drawText(context, data.method || "contract call", 240, 1225, { size: 24, weight: 800, maxLength: 28 });
-  drawText(context, "Status", 560, 1225, { color: "#5c655f", size: 22 });
-  drawText(context, data.status, 680, 1225, { size: 24, weight: 800, maxLength: 18 });
-  drawText(context, "Block", 890, 1225, { color: "#5c655f", size: 22 });
-  drawText(context, data.block || "Pending", 1000, 1225, { size: 24, weight: 800, maxLength: 18 });
-  drawText(context, "Time", 1200, 1225, { color: "#5c655f", size: 22 });
-  drawText(context, data.date, 1290, 1225, { size: 24, weight: 800, maxLength: 30 });
+  drawDivider(context, 1135);
+  drawText(context, "Accounting and proof", 112, 1210, { size: 34, weight: 800, maxLength: 30 });
+  drawText(context, "Counterparty", 112, 1275, { color: "#5c655f", size: 22 });
+  drawText(context, data.counterparty || data.toFull, 280, 1275, { size: 24, weight: 800, maxLength: 42 });
+  drawText(context, "Accounting note", 112, 1338, { color: "#5c655f", size: 22 });
+  drawText(context, data.accountingNote || "Public onchain transaction record", 320, 1338, { size: 22, weight: 800, maxLength: 86 });
+  drawText(context, "Verification", 112, 1401, { color: "#5c655f", size: 22 });
+  drawText(context, data.evidence || `Verified on ${data.network}`, 280, 1401, { size: 22, weight: 800, maxLength: 88 });
 
-  drawText(context, "From", 112, 1305, { color: "#5c655f", size: 22 });
-  drawText(context, data.fromFull, 112, 1345, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 24, weight: 800, maxLength: 66 });
-  drawText(context, "To", 112, 1405, { color: "#5c655f", size: 22 });
-  drawText(context, data.toFull, 112, 1445, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 24, weight: 800, maxLength: 66 });
-  drawText(context, "Tx hash", 112, 1505, { color: "#5c655f", size: 22 });
-  drawText(context, data.fullTxHash, 112, 1545, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 24, weight: 800, maxLength: 66 });
-  drawText(context, `Receipt ${data.id} - ${data.network}`, 112, 1592, { color: "#5c655f", size: 20, maxLength: 54 });
-  drawText(context, `Verified on ${data.network}`, 1540, 1592, { align: "right", size: 24, weight: 800, maxLength: 28 });
+  drawText(context, "Method", 112, 1480, { color: "#5c655f", size: 22 });
+  drawText(context, data.method || "contract call", 240, 1480, { size: 24, weight: 800, maxLength: 28 });
+  drawText(context, "Status", 560, 1480, { color: "#5c655f", size: 22 });
+  drawText(context, data.status, 680, 1480, { size: 24, weight: 800, maxLength: 18 });
+  drawText(context, "Time", 890, 1480, { color: "#5c655f", size: 22 });
+  drawText(context, data.date, 980, 1480, { size: 24, weight: 800, maxLength: 36 });
+
+  drawText(context, "From", 112, 1560, { color: "#5c655f", size: 22 });
+  drawText(context, data.fromFull, 112, 1600, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 24, weight: 800, maxLength: 66 });
+  drawText(context, "To", 112, 1660, { color: "#5c655f", size: 22 });
+  drawText(context, data.toFull, 112, 1700, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 24, weight: 800, maxLength: 66 });
+  drawText(context, "Tx hash", 112, 1760, { color: "#5c655f", size: 22 });
+  drawText(context, data.fullTxHash, 112, 1800, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 24, weight: 800, maxLength: 66 });
+  drawText(context, `Receipt ${data.id} - ${data.network}`, 112, 1828, { color: "#5c655f", size: 20, maxLength: 54 });
+  drawText(context, `Verified on ${data.network}`, 1540, 1828, { align: "right", size: 24, weight: 800, maxLength: 28 });
 
   return canvas;
 }
