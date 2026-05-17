@@ -160,10 +160,10 @@
         <div class="demo-panel">
           <div>
             <p class="eyebrow">Prototype</p>
-            <h2>Generate a demo receipt artifact.</h2>
+            <h2>Generate a Base receipt artifact.</h2>
             <p>
-              This first prototype renders a trusted-looking receipt from static sample data. The
-              next milestone connects the renderer to the Base receipt engine.
+              Paste a Base transaction hash to fetch the transaction receipt from public Base RPC,
+              parse token transfers, estimate gas paid, and render a downloadable receipt.
             </p>
           </div>
           <div class="demo-actions">
@@ -171,6 +171,23 @@
             <button id="downloadPng" class="button secondary" type="button">Download PNG</button>
           </div>
         </div>
+        <form id="txForm" class="tx-form">
+          <label for="txHash">Base transaction hash</label>
+          <div class="tx-row">
+            <input
+              id="txHash"
+              name="txHash"
+              inputmode="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="0x..."
+            />
+            <button class="button primary" type="submit">Fetch receipt</button>
+          </div>
+          <p id="txStatus" class="form-status" role="status">
+            Demo data is shown until a real Base transaction hash is fetched.
+          </p>
+        </form>
         <div class="artifact-wrap">
           <div id="receiptArtifact" class="artifact" role="img" aria-label="Receipt artifact"></div>
         </div>

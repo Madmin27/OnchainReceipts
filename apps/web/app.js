@@ -1,4 +1,4 @@
-const receipt = {
+let receipt = {
   id: "or_demo_base_swap_001",
   title: "USDC to ETH swap",
   app: "ExampleSwap",
@@ -17,6 +17,21 @@ const receipt = {
 const artifact = document.querySelector("#receiptArtifact");
 const svgButton = document.querySelector("#downloadSvg");
 const pngButton = document.querySelector("#downloadPng");
+const txForm = document.querySelector("#txForm");
+const txInput = document.querySelector("#txHash");
+const txStatus = document.querySelector("#txStatus");
+
+const BASE_RPC_URL = "https://mainnet.base.org";
+const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ETH_DECIMALS = 18n;
+
+const knownTokens = {
+  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { symbol: "USDC", decimals: 6n },
+  "0x4200000000000000000000000000000000000006": { symbol: "WETH", decimals: 18n },
+  "0x4200000000000000000000000000000000000042": { symbol: "OP", decimals: 18n },
+  "0x532f27101965dd16442e59d40670faf5ebb142e4": { symbol: "BRETT", decimals: 18n },
+};
 
 function escapeText(value) {
   return String(value)
@@ -68,6 +83,163 @@ function buildReceiptSvg(data) {
 function renderArtifact() {
   artifact.innerHTML = buildReceiptSvg(receipt);
 }
+
+function setStatus(message, tone = "neutral") {
+  txStatus.textContent = message;
+  txStatus.dataset.tone = tone;
+}
+
+async function rpc(method, params) {
+  const response = await fetch(BASE_RPC_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Base RPC returned HTTP ${response.status}`);
+  }
+
+  const payload = await response.json();
+  if (payload.error) {
+    throw new Error(payload.error.message || "Base RPC error");
+  }
+
+  return payload.result;
+}
+
+function hexToBigInt(value) {
+  if (!value || value === "0x") return 0n;
+  return BigInt(value);
+}
+
+function formatUnits(value, decimals, maxDigits = 6) {
+  const base = 10n ** decimals;
+  const integer = value / base;
+  const fraction = value % base;
+  if (fraction === 0n) return integer.toString();
+
+  const fractionText = fraction.toString().padStart(Number(decimals), "0").slice(0, maxDigits);
+  return `${integer}.${fractionText.replace(/0+$/, "")}`;
+}
+
+function shortHash(value) {
+  return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function topicToAddress(topic) {
+  return `0x${topic.slice(-40)}`.toLowerCase();
+}
+
+function parseTransfers(logs) {
+  return logs
+    .filter(log => log.topics && log.topics[0]?.toLowerCase() === TRANSFER_TOPIC && log.topics.length >= 3)
+    .map(log => {
+      const token = log.address.toLowerCase();
+      const metadata = knownTokens[token] || { symbol: shortHash(token), decimals: 18n };
+      return {
+        token,
+        symbol: metadata.symbol,
+        decimals: metadata.decimals,
+        from: topicToAddress(log.topics[1]),
+        to: topicToAddress(log.topics[2]),
+        amountRaw: hexToBigInt(log.data),
+      };
+    });
+}
+
+function summarizeTransfers(tx, transfers) {
+  const sender = tx.from.toLowerCase();
+  const sent = transfers.filter(item => item.from === sender && item.to !== ZERO_ADDRESS);
+  const received = transfers.filter(item => item.to === sender && item.from !== ZERO_ADDRESS);
+
+  return {
+    sent,
+    received,
+    firstSent: sent[0],
+    firstReceived: received[0],
+  };
+}
+
+function transferText(item, fallback) {
+  if (!item) return fallback;
+  return `${formatUnits(item.amountRaw, item.decimals)} ${item.symbol}`;
+}
+
+function inferTitle(summary, tx) {
+  if (summary.firstSent && summary.firstReceived) {
+    return `${summary.firstSent.symbol} to ${summary.firstReceived.symbol} activity`;
+  }
+
+  if (summary.firstSent) return `${summary.firstSent.symbol} transfer`;
+  if (hexToBigInt(tx.value) > 0n) return "ETH transfer";
+  return "Base transaction";
+}
+
+function buildReceiptFromChain(txHash, tx, txReceipt) {
+  const transfers = parseTransfers(txReceipt.logs || []);
+  const summary = summarizeTransfers(tx, transfers);
+  const gasFeeWei = hexToBigInt(txReceipt.gasUsed) * hexToBigInt(txReceipt.effectiveGasPrice || tx.gasPrice);
+  const ethValue = hexToBigInt(tx.value);
+  const success = txReceipt.status === "0x1";
+
+  const sentText = summary.firstSent
+    ? transferText(summary.firstSent, "Observed token transfer")
+    : ethValue > 0n
+      ? `${formatUnits(ethValue, ETH_DECIMALS)} ETH`
+      : "No direct asset sent";
+
+  const receivedText = summary.firstReceived
+    ? transferText(summary.firstReceived, "Observed token transfer")
+    : transfers.length
+      ? `${transfers.length} token transfer${transfers.length === 1 ? "" : "s"}`
+      : "No token receipt detected";
+
+  return {
+    id: `or_base_${txHash.slice(2, 10)}`,
+    title: inferTitle(summary, tx),
+    app: tx.to ? shortHash(tx.to) : "Contract creation",
+    network: "Base",
+    date: new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
+    tx: shortHash(txHash),
+    from: shortHash(tx.from),
+    sent: sentText,
+    received: receivedText,
+    gas: `${formatUnits(gasFeeWei, ETH_DECIMALS, 8)} ETH`,
+    appFee: summary.sent.length > 1 ? "Detected in transfers" : "Not detected",
+    protocolFee: "Not detected",
+    status: success ? "Verified" : "Failed",
+  };
+}
+
+txForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const txHash = txInput.value.trim();
+
+  if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+    setStatus("Enter a valid 0x transaction hash.", "error");
+    return;
+  }
+
+  try {
+    setStatus("Fetching transaction from Base RPC...");
+    const [tx, txReceipt] = await Promise.all([
+      rpc("eth_getTransactionByHash", [txHash]),
+      rpc("eth_getTransactionReceipt", [txHash]),
+    ]);
+
+    if (!tx || !txReceipt) {
+      setStatus("Transaction not found on Base yet.", "error");
+      return;
+    }
+
+    receipt = buildReceiptFromChain(txHash, tx, txReceipt);
+    renderArtifact();
+    setStatus("Receipt generated from Base transaction data.", "success");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "Could not fetch Base transaction.", "error");
+  }
+});
 
 function downloadBlob(filename, mimeType, content) {
   const blob = new Blob([content], { type: mimeType });

@@ -26,6 +26,30 @@ Several tools generate blockchain transaction documentation or crypto payment in
 
 Implication: The receipt model should include both verified onchain outcomes and the app's declared business context.
 
+### Chain Receipt
+
+Chain Receipt presents itself as professional blockchain intelligence and audit-grade documentation. It appears closer to deterministic transaction interpretation and documentation than a casual explorer view.
+
+Implication: OnchainReceipts must keep the Base-first and dapp-intent verification angle strong, rather than becoming a broad transaction intelligence product.
+
+Source: https://chainreceipt.vercel.app/
+
+### Proof of Pain
+
+Proof of Pain creates shareable onchain receipts based on wallet history and social storytelling. It is expressive and consumer-facing rather than accounting-focused.
+
+Implication: OnchainReceipts should avoid novelty/social receipt positioning. The visual language should remain serious, itemized, and reconciliation-friendly.
+
+Source: https://www.proofofpain.com/
+
+### Pieverse Receipt
+
+Pieverse has open-source receipt generation components for Web3 transactions with custom branding and tax-compliance positioning.
+
+Implication: The dapp SDK should not stop at a downloadable receipt button. The differentiator is verified Base receipts that compare submitted intent against observed onchain outcomes.
+
+Source: https://github.com/Pieverse-Eng/pieverse-receipt
+
 ## Base-specific opportunity
 
 Base is well suited for receipts because it has:

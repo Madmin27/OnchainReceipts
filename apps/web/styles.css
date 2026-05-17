@@ -327,6 +327,51 @@ dd {
   margin-bottom: 28px;
 }
 
+.tx-form {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 24px;
+  padding: 18px;
+}
+
+.tx-form label {
+  display: block;
+  font-size: 13px;
+  font-weight: 760;
+  margin-bottom: 10px;
+}
+
+.tx-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.tx-row input {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  font: inherit;
+  min-height: 46px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.form-status {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 12px 0 0;
+}
+
+.form-status[data-tone="success"] {
+  color: var(--green);
+}
+
+.form-status[data-tone="error"] {
+  color: #9f1d1d;
+}
+
 .artifact-wrap {
   display: flex;
   justify-content: center;
@@ -368,7 +413,8 @@ dd {
 
   .hero,
   .feature-grid,
-  .pricing-grid {
+  .pricing-grid,
+  .tx-row {
     grid-template-columns: 1fr;
   }
 
