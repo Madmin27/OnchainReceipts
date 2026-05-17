@@ -16,6 +16,7 @@ const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETH_DECIMALS = 18n;
 const PAGE_SIZE = 20;
+const SOLANA_HISTORY_PAGE_ATTEMPTS = 5;
 const MAX_QR_BYTES = 80_000;
 const RECEIPT_WIDTH = 1720;
 const RECEIPT_HEIGHT = 1680;
@@ -347,12 +348,21 @@ async function loadSolanaHistory({ more = false } = {}) {
     visibleHistoryLimit = PAGE_SIZE;
   }
   setHistoryStatus(more ? "Loading older Solana activity..." : "Loading latest Solana activity...");
-  const before = more ? historyState.txNext : undefined;
-  const params = [connectedWallet, { limit: PAGE_SIZE, ...(before ? { before } : {}) }];
-  const signatures = await solanaRpc("getSignaturesForAddress", params);
+  let before = more ? historyState.txNext : undefined;
+  const signatures = [];
+  let hasMore = false;
+  for (let attempt = 0; attempt < SOLANA_HISTORY_PAGE_ATTEMPTS && signatures.length < PAGE_SIZE; attempt += 1) {
+    const limit = PAGE_SIZE - signatures.length;
+    const params = [connectedWallet, { limit, ...(before ? { before } : {}) }];
+    const page = await solanaRpc("getSignaturesForAddress", params);
+    signatures.push(...page);
+    before = page.at(-1)?.signature;
+    hasMore = Boolean(before && page.length === limit);
+    if (!hasMore) break;
+  }
   historyState.transactions = more ? [...historyState.transactions, ...signatures] : signatures;
   historyState.transfers = [];
-  historyState.txNext = signatures.length === PAGE_SIZE ? signatures[signatures.length - 1].signature : null;
+  historyState.txNext = hasMore ? signatures.at(-1).signature : null;
   historyState.transferNext = null;
   if (more) {
     visibleHistoryLimit += PAGE_SIZE;
