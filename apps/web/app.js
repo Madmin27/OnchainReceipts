@@ -337,6 +337,7 @@ async function loadHistory({ more = false } = {}) {
     }
     renderHistory();
   } catch (error) {
+    loadMoreHistoryButton.hidden = true;
     setHistoryStatus(error instanceof Error ? error.message : "Could not load wallet history.", "error");
   }
 }

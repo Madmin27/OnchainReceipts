@@ -59,7 +59,7 @@ window.TX_RECEIPTS_NETWORKS = [
     name: "Solana",
     family: "solana",
     cluster: "mainnet-beta",
-    rpcUrl: "https://api.mainnet-beta.solana.com",
+    rpcUrl: "https://solana-rpc.publicnode.com",
     explorerUrl: "https://solscan.io",
     nativeCurrency: { name: "Solana", symbol: "SOL", decimals: 9 },
   },
