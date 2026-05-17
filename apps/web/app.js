@@ -48,6 +48,14 @@ function currentNetwork() {
   return networks.find(network => network.id === networkSelect.value) || networks[0];
 }
 
+function networkByFamily(family) {
+  return networks.find(network => network.family === family) || networks[0];
+}
+
+function selectedWalletInfo() {
+  return window.TxReceiptsWallets?.getInfo(walletProviderSelect.value) || null;
+}
+
 function setStatus(message, tone = "neutral") {
   txStatus.textContent = message;
   txStatus.dataset.tone = tone;
@@ -75,6 +83,19 @@ async function rpc(method, params) {
     throw new Error(payload.error.message || `${network.name} RPC error`);
   }
 
+  return payload.result;
+}
+
+async function solanaRpc(method, params) {
+  const network = currentNetwork();
+  const response = await fetch(network.rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
+  });
+  if (!response.ok) throw new Error(`${network.name} RPC returned HTTP ${response.status}`);
+  const payload = await response.json();
+  if (payload.error) throw new Error(payload.error.message || `${network.name} RPC error`);
   return payload.result;
 }
 
@@ -187,10 +208,12 @@ function normalizeTransfer(item) {
 }
 
 function allHistoryItems() {
-  const normalized = [
-    ...historyState.transactions.map(normalizeTx),
-    ...historyState.transfers.map(normalizeTransfer),
-  ];
+  const normalized = currentNetwork().family === "solana"
+    ? historyState.transactions.map(normalizeSolanaTx)
+    : [
+        ...historyState.transactions.map(normalizeTx),
+        ...historyState.transfers.map(normalizeTransfer),
+      ];
   const unique = new Map();
   for (const item of normalized) {
     const key = `${item.kind}:${item.hash}:${item.title}:${item.value}`;
@@ -205,6 +228,19 @@ function allHistoryItems() {
       return item.direction === activeHistoryTab;
     })
     .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+}
+
+function normalizeSolanaTx(item) {
+  const failed = Boolean(item.err);
+  return {
+    kind: "tx",
+    hash: safeDisplay(item.signature, 96),
+    title: failed ? "Solana transaction failed" : "Solana transaction",
+    subtitle: `${shortHash(connectedWallet)} - slot ${item.slot || "unknown"}`,
+    timestamp: item.blockTime ? new Date(item.blockTime * 1000).toISOString() : null,
+    value: failed ? "failed" : "ok",
+    direction: "other",
+  };
 }
 
 function combinedHistoryItems() {
@@ -269,6 +305,10 @@ async function loadHistory({ more = false } = {}) {
   }
 
   try {
+    if (currentNetwork().family === "solana") {
+      await loadSolanaHistory({ more });
+      return;
+    }
     if (!more) {
       visibleHistoryLimit = PAGE_SIZE;
     }
@@ -295,6 +335,24 @@ async function loadHistory({ more = false } = {}) {
   } catch (error) {
     setHistoryStatus(error instanceof Error ? error.message : "Could not load wallet history.", "error");
   }
+}
+
+async function loadSolanaHistory({ more = false } = {}) {
+  if (!more) {
+    visibleHistoryLimit = PAGE_SIZE;
+  }
+  setHistoryStatus(more ? "Loading older Solana activity..." : "Loading latest Solana activity...");
+  const before = more ? historyState.txNext : undefined;
+  const params = [connectedWallet, { limit: PAGE_SIZE, ...(before ? { before } : {}) }];
+  const signatures = await solanaRpc("getSignaturesForAddress", params);
+  historyState.transactions = more ? [...historyState.transactions, ...signatures] : signatures;
+  historyState.transfers = [];
+  historyState.txNext = signatures.length === PAGE_SIZE ? signatures[signatures.length - 1].signature : null;
+  historyState.transferNext = null;
+  if (more) {
+    visibleHistoryLimit += PAGE_SIZE;
+  }
+  renderHistory();
 }
 
 function topicToAddress(topic) {
@@ -474,9 +532,51 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block) {
   };
 }
 
+function lamportsToSol(lamports) {
+  return `${formatUnits(BigInt(Math.max(Number(lamports || 0), 0)), 9n, 9)} SOL`;
+}
+
+function buildSolanaReceipt(signature, tx) {
+  const network = currentNetwork();
+  const meta = tx?.meta || {};
+  const message = tx?.transaction?.message || {};
+  const accountKeys = message.accountKeys || [];
+  const signer = accountKeys[0]?.pubkey || accountKeys[0] || connectedWallet;
+  const fee = meta.fee || 0;
+  const failed = Boolean(meta.err);
+  const blockTime = tx?.blockTime ? new Date(tx.blockTime * 1000) : new Date();
+  const explorerUrl = `${network.explorerUrl}/tx/${signature}`;
+  return {
+    id: `or_${network.id}_${signature.slice(0, 8)}`,
+    title: "Solana transaction",
+    app: safeDisplay(signer, 44),
+    network: network.name,
+    date: blockTime.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
+    tx: shortHash(signature),
+    fullTxHash: signature,
+    from: shortHash(signer),
+    fromFull: signer,
+    toFull: "Solana program interaction",
+    sent: "Program interaction",
+    received: failed ? "Failed" : "Confirmed",
+    gas: lamportsToSol(fee),
+    status: failed ? "Failed" : "Verified",
+    explorerUrl,
+    block: String(tx?.slot || "Pending"),
+    method: "solana transaction",
+    transferRows: [
+      { label: "Signer", value: shortHash(signer), detail: "Wallet that authorized the transaction" },
+      { label: "Network fee", value: lamportsToSol(fee), detail: `${network.name} fee paid in lamports` },
+      { label: "Instructions", value: `${message.instructions?.length || 0}`, detail: "Program instructions observed" },
+      { label: "Status", value: failed ? "Failed" : "Confirmed", detail: failed ? "Transaction returned an error" : "Transaction finalized by RPC" },
+    ],
+  };
+}
+
 function setWallet(address, chainId) {
   connectedWallet = address || null;
-  walletLabel.textContent = address ? `${shortHash(address)} - chain ${parseInt(chainId || "0x0", 16)}` : "Not connected";
+  const chainLabel = currentNetwork().family === "solana" ? currentNetwork().name : `chain ${parseInt(chainId || "0x0", 16)}`;
+  walletLabel.textContent = address ? `${shortHash(address)} - ${chainLabel}` : "Not connected";
   connectWalletButton.textContent = address ? "Wallet connected" : "Connect wallet";
   if (connectedWallet) {
     loadHistory();
@@ -524,15 +624,29 @@ function populateWalletProviders() {
   options.forEach(wallet => {
     const option = document.createElement("option");
     option.value = wallet.id;
-    option.textContent = wallet.name;
+    option.textContent = `${wallet.name} (${wallet.family})`;
     walletProviderSelect.appendChild(option);
   });
   walletProviderSelect.value = options[0].id;
+  syncNetworkToSelectedWallet();
+}
+
+function syncNetworkToSelectedWallet() {
+  const info = selectedWalletInfo();
+  if (!info) return;
+  const targetNetwork = networkByFamily(info.family);
+  if (targetNetwork && networkSelect.value !== targetNetwork.id) {
+    networkSelect.value = targetNetwork.id;
+    resetHistory();
+  }
 }
 
 async function ensureSelectedNetwork(provider) {
   if (!provider) throw new Error("No injected wallet found.");
   const network = currentNetwork();
+  if (network.family === "solana") {
+    return network.cluster || "mainnet-beta";
+  }
   const chainId = await provider.request({ method: "eth_chainId" });
   if (chainId === network.chainId) {
     return chainId;
@@ -568,18 +682,32 @@ async function ensureSelectedNetwork(provider) {
 connectWalletButton.addEventListener("click", async () => {
   try {
     if (connectedWallet) {
+      if (currentNetwork().family === "solana" && walletProvider?.disconnect) {
+        await walletProvider.disconnect();
+      }
       setWallet(null, "0x0");
       setStatus("Wallet disconnected locally.", "success");
       return;
     }
 
     const provider = selectedProvider();
+    const info = selectedWalletInfo();
     if (!provider) {
       setStatus("No injected wallet found. Install MetaMask or a compatible wallet.", "error");
       return;
     }
 
     walletProvider = provider;
+    syncNetworkToSelectedWallet();
+    if (info?.family === "solana") {
+      const response = await provider.connect();
+      const address = response?.publicKey?.toString() || provider.publicKey?.toString();
+      if (!address) throw new Error("Could not read Phantom Solana public key.");
+      setWallet(address, currentNetwork().cluster);
+      setStatus(`Wallet connected and ${currentNetwork().name} selected.`, "success");
+      return;
+    }
+
     if (provider.request) {
       try {
         await provider.request({
@@ -622,6 +750,10 @@ networkSelect.addEventListener("change", async () => {
   resetHistory();
   txStatus.textContent = `Selected ${currentNetwork().name}. Paste a tx hash or connect a wallet.`;
   if (!connectedWallet || !walletProvider) return;
+  if (currentNetwork().family === "solana") {
+    loadHistory();
+    return;
+  }
   try {
     const chainId = await ensureSelectedNetwork(walletProvider);
     setWallet(connectedWallet, chainId);
@@ -631,6 +763,7 @@ networkSelect.addEventListener("change", async () => {
 });
 
 walletProviderSelect.addEventListener("change", () => {
+  syncNetworkToSelectedWallet();
   setWallet(null, "0x0");
   setStatus("Wallet provider changed. Connect again to approve access.", "neutral");
 });
@@ -651,6 +784,11 @@ if (window.ethereum) {
   });
 
   window.ethereum.on?.("chainChanged", chainId => {
+    const network = networks.find(item => item.chainId === chainId);
+    if (network && networkSelect.value !== network.id) {
+      networkSelect.value = network.id;
+      resetHistory();
+    }
     const current = walletLabel.textContent.split(" - ")[0];
     walletLabel.textContent = `${current} - chain ${parseInt(chainId, 16)}`;
   });
@@ -663,13 +801,21 @@ txForm.addEventListener("submit", async event => {
 });
 
 async function generateReceipt(txHash, { download = false } = {}) {
-  if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
-    setStatus("Enter a valid 0x transaction hash.", "error");
+  const network = currentNetwork();
+  const isValidHash = network.family === "solana"
+    ? /^[1-9A-HJ-NP-Za-km-z]{64,96}$/.test(txHash)
+    : /^0x[a-fA-F0-9]{64}$/.test(txHash);
+  if (!isValidHash) {
+    setStatus(network.family === "solana" ? "Enter a valid Solana transaction signature." : "Enter a valid 0x transaction hash.", "error");
     return;
   }
 
   try {
-    setStatus(`Fetching transaction from ${currentNetwork().name} RPC...`);
+    if (network.family === "solana") {
+      await generateSolanaReceipt(txHash, { download });
+      return;
+    }
+    setStatus(`Fetching transaction from ${network.name} RPC...`);
     const [tx, txReceipt] = await Promise.all([
       rpc("eth_getTransactionByHash", [txHash]),
       rpc("eth_getTransactionReceipt", [txHash]),
@@ -687,12 +833,34 @@ async function generateReceipt(txHash, { download = false } = {}) {
     } catch {
       receipt.qrDataUrl = "";
     }
-    setStatus(`Receipt generated from ${currentNetwork().name} transaction data.`, "success");
+    setStatus(`Receipt generated from ${network.name} transaction data.`, "success");
     if (download) {
       await downloadReceiptPng();
     }
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : `Could not fetch ${currentNetwork().name} transaction.`, "error");
+    setStatus(error instanceof Error ? error.message : `Could not fetch ${network.name} transaction.`, "error");
+  }
+}
+
+async function generateSolanaReceipt(signature, { download = false } = {}) {
+  setStatus("Fetching transaction from Solana RPC...");
+  const tx = await solanaRpc("getTransaction", [
+    signature,
+    { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 },
+  ]);
+  if (!tx) {
+    setStatus("Transaction not found on Solana yet.", "error");
+    return;
+  }
+  receipt = buildSolanaReceipt(signature, tx);
+  try {
+    receipt.qrDataUrl = await fetchQrDataUrl(receipt.explorerUrl);
+  } catch {
+    receipt.qrDataUrl = "";
+  }
+  setStatus("Receipt generated from Solana transaction data.", "success");
+  if (download) {
+    await downloadReceiptPng();
   }
 }
 

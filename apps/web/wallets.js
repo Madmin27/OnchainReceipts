@@ -1,11 +1,15 @@
 const discoveredWallets = new Map();
 
-function rememberWallet(id, name, provider) {
+function rememberWallet(id, name, provider, family = "evm") {
   if (!provider || discoveredWallets.has(id)) return;
-  discoveredWallets.set(id, { id, name, provider });
+  discoveredWallets.set(id, { id, name, provider, family });
 }
 
 function discoverLegacyWallets() {
+  if (window.phantom?.solana) rememberWallet("phantom-solana", "Phantom Solana", window.phantom.solana, "solana");
+  else if (window.solana?.isPhantom) rememberWallet("phantom-solana", "Phantom Solana", window.solana, "solana");
+  if (window.phantom?.ethereum) rememberWallet("phantom-evm", "Phantom EVM", window.phantom.ethereum, "evm");
+
   const injected = window.ethereum;
   if (!injected) return;
   const providers = Array.isArray(injected.providers) ? injected.providers : [injected];
@@ -25,11 +29,17 @@ window.addEventListener("eip6963:announceProvider", event => {
 
 window.dispatchEvent(new Event("eip6963:requestProvider"));
 discoverLegacyWallets();
+setTimeout(discoverLegacyWallets, 250);
 
 window.TxReceiptsWallets = {
   list() {
     discoverLegacyWallets();
-    return [...discoveredWallets.values()].map(({ id, name }) => ({ id, name }));
+    return [...discoveredWallets.values()].map(({ id, name, family }) => ({ id, name, family }));
+  },
+  getInfo(id) {
+    discoverLegacyWallets();
+    const wallet = discoveredWallets.get(id);
+    return wallet ? { id: wallet.id, name: wallet.name, family: wallet.family } : null;
   },
   get(id) {
     discoverLegacyWallets();

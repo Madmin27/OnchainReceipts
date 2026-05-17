@@ -2,6 +2,7 @@ window.TX_RECEIPTS_NETWORKS = [
   {
     id: "base",
     name: "Base",
+    family: "evm",
     chainId: "0x2105",
     decimalChainId: "8453",
     rpcUrl: "https://mainnet.base.org",
@@ -12,6 +13,7 @@ window.TX_RECEIPTS_NETWORKS = [
   {
     id: "ethereum",
     name: "Ethereum",
+    family: "evm",
     chainId: "0x1",
     decimalChainId: "1",
     rpcUrl: "https://ethereum-rpc.publicnode.com",
@@ -22,6 +24,7 @@ window.TX_RECEIPTS_NETWORKS = [
   {
     id: "optimism",
     name: "Optimism",
+    family: "evm",
     chainId: "0xa",
     decimalChainId: "10",
     rpcUrl: "https://mainnet.optimism.io",
@@ -32,6 +35,7 @@ window.TX_RECEIPTS_NETWORKS = [
   {
     id: "arbitrum",
     name: "Arbitrum One",
+    family: "evm",
     chainId: "0xa4b1",
     decimalChainId: "42161",
     rpcUrl: "https://arb1.arbitrum.io/rpc",
@@ -42,11 +46,21 @@ window.TX_RECEIPTS_NETWORKS = [
   {
     id: "polygon",
     name: "Polygon",
+    family: "evm",
     chainId: "0x89",
     decimalChainId: "137",
     rpcUrl: "https://polygon-rpc.com",
     explorerUrl: "https://polygonscan.com",
     blockscoutUrl: "https://polygon.blockscout.com",
     nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
+  },
+  {
+    id: "solana",
+    name: "Solana",
+    family: "solana",
+    cluster: "mainnet-beta",
+    rpcUrl: "https://api.mainnet-beta.solana.com",
+    explorerUrl: "https://solscan.io",
+    nativeCurrency: { name: "Solana", symbol: "SOL", decimals: 9 },
   },
 ];
