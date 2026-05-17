@@ -167,8 +167,12 @@
             </p>
           </div>
           <div class="demo-actions">
-            <button id="downloadSvg" class="button primary" type="button">Download SVG</button>
-            <button id="downloadPng" class="button secondary" type="button">Download PNG</button>
+            <button id="downloadSvg" class="button primary" type="button" disabled>
+              Download SVG
+            </button>
+            <button id="downloadPng" class="button secondary" type="button" disabled>
+              Download PNG
+            </button>
           </div>
         </div>
         <div class="wallet-panel">
@@ -223,18 +227,24 @@
             <button class="button primary" type="submit">Fetch receipt</button>
           </div>
           <p id="txStatus" class="form-status" role="status">
-            Demo data is shown until a real Base transaction hash is fetched.
+            Choose a wallet activity or paste a Base transaction hash.
           </p>
         </form>
-        <div id="sampleNotice" class="sample-notice">
-          <strong>Sample receipt preview</strong>
-          <span>
-            This is demo data. Connect a wallet or fetch a Base transaction hash to generate a real
-            receipt.
-          </span>
-        </div>
         <div class="artifact-wrap">
-          <div id="receiptArtifact" class="artifact" role="img" aria-label="Receipt artifact"></div>
+          <div id="emptyReceipt" class="empty-receipt">
+            <strong>No receipt generated yet</strong>
+            <span>
+              Connect a wallet and select a Base activity, or paste a transaction hash to generate a
+              receipt.
+            </span>
+          </div>
+          <div
+            id="receiptArtifact"
+            class="artifact"
+            role="img"
+            aria-label="Receipt artifact"
+            hidden
+          ></div>
         </div>
       </section>
     </main>

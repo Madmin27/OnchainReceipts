@@ -1,34 +1,12 @@
-let receipt = {
-  id: "or_demo_base_swap_001",
-  title: "USDC to ETH swap",
-  app: "ExampleSwap",
-  network: "Base",
-  date: "May 17, 2026, 12:15",
-  tx: "0x1111...1111",
-  from: "demo.base.eth",
-  sent: "25.00 USDC",
-  received: "0.0068 ETH",
-  gas: "$0.08",
-  appFee: "$0.03",
-  protocolFee: "$0.06",
-  status: "Verified",
-  explorerUrl: "https://basescan.org/tx/0x1111111111111111111111111111111111111111111111111111111111111111",
-  block: "30214511",
-  transferRows: [
-    { label: "User paid", value: "25.00 USDC", detail: "demo.base.eth -> Swap Router" },
-    { label: "User received", value: "0.0068 ETH", detail: "Swap Router -> demo.base.eth" },
-    { label: "Gas paid", value: "$0.08", detail: "Base network fee" },
-    { label: "App fee", value: "$0.03", detail: "ExampleSwap" },
-  ],
-};
+let receipt = null;
 
 const artifact = document.querySelector("#receiptArtifact");
+const emptyReceipt = document.querySelector("#emptyReceipt");
 const svgButton = document.querySelector("#downloadSvg");
 const pngButton = document.querySelector("#downloadPng");
 const txForm = document.querySelector("#txForm");
 const txInput = document.querySelector("#txHash");
 const txStatus = document.querySelector("#txStatus");
-const sampleNotice = document.querySelector("#sampleNotice");
 const connectWalletButton = document.querySelector("#connectWallet");
 const walletLabel = document.querySelector("#walletLabel");
 const networkSelect = document.querySelector("#networkSelect");
@@ -127,11 +105,18 @@ function buildReceiptSvg(data) {
 }
 
 function renderArtifact() {
+  if (!receipt) {
+    artifact.hidden = true;
+    emptyReceipt.hidden = false;
+    svgButton.disabled = true;
+    pngButton.disabled = true;
+    return;
+  }
   artifact.innerHTML = buildReceiptSvg(receipt);
-}
-
-function markRealReceipt() {
-  sampleNotice.hidden = true;
+  artifact.hidden = false;
+  emptyReceipt.hidden = true;
+  svgButton.disabled = false;
+  pngButton.disabled = false;
 }
 
 function setStatus(message, tone = "neutral") {
@@ -314,7 +299,7 @@ function renderHistory() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "history-item";
-    button.innerHTML = `<span><strong>${escapeText(item.title)}</strong><span class="history-meta">${escapeText(item.subtitle)} · ${escapeText(formatDate(item.timestamp))}</span></span><span class="history-value">${escapeText(item.value)}</span>`;
+    button.innerHTML = `<span><strong>${escapeText(item.title)}</strong><span class="history-meta">${escapeText(item.subtitle)} · ${escapeText(formatDate(item.timestamp))}</span></span><span class="history-value">${escapeText(item.value)}</span><span class="history-receipt-button">Receipt</span>`;
     button.addEventListener("click", () => {
       txInput.value = item.hash;
       txForm.requestSubmit();
@@ -472,6 +457,7 @@ function buildReceiptFromChain(txHash, tx, txReceipt) {
 function setWallet(address, chainId) {
   connectedWallet = address || null;
   walletLabel.textContent = address ? `${shortHash(address)} · chain ${parseInt(chainId || "0x0", 16)}` : "Not connected";
+  connectWalletButton.textContent = address ? "Wallet connected" : "Connect wallet";
   if (connectedWallet) {
     loadHistory();
   } else {
@@ -583,7 +569,6 @@ txForm.addEventListener("submit", async event => {
 
     receipt = buildReceiptFromChain(txHash, tx, txReceipt);
     renderArtifact();
-    markRealReceipt();
     setStatus("Receipt generated from Base transaction data.", "success");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Could not fetch Base transaction.", "error");
