@@ -60,14 +60,9 @@ nav {
 }
 
 .brand-mark {
-  align-items: center;
-  background: #f6f8f4;
   border-radius: 6px;
-  color: #090d0f;
-  display: inline-flex;
-  font-size: 12px;
   height: 34px;
-  justify-content: center;
+  object-fit: contain;
   width: 34px;
 }
 
