@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OnchainReceipts</title>
+    <meta
+      name="description"
+      content="Open-source receipt infrastructure for human-readable, verified Base transactions."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="OnchainReceipts home">
+        <span class="brand-mark" aria-hidden="true">OR</span>
+        <span>OnchainReceipts</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#product">Product</a>
+        <a href="#security">Security</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#demo">Demo</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Base-first verified receipt infrastructure</p>
+          <h1>Every onchain transaction deserves a receipt people can trust.</h1>
+          <p class="lede">
+            OnchainReceipts turns Base activity into signed, human-readable receipts by comparing
+            dapp intent with verified onchain results.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#demo">Preview receipt</a>
+            <a class="button secondary" href="../../docs/product.md">Read product plan</a>
+          </div>
+        </div>
+
+        <aside class="receipt-card" aria-label="Verified receipt preview">
+          <div class="receipt-head">
+            <div>
+              <p class="mini-label">Verified Receipt</p>
+              <h2>USDC to ETH swap</h2>
+            </div>
+            <span class="status-pill">Verified</span>
+          </div>
+          <div class="receipt-flow">
+            <div>
+              <span class="mini-label">Sent</span>
+              <strong>25.00 USDC</strong>
+            </div>
+            <div class="flow-line" aria-hidden="true"></div>
+            <div>
+              <span class="mini-label">Received</span>
+              <strong>0.0068 ETH</strong>
+            </div>
+          </div>
+          <dl class="receipt-grid">
+            <div>
+              <dt>Network</dt>
+              <dd>Base</dd>
+            </div>
+            <div>
+              <dt>Gas</dt>
+              <dd>$0.08</dd>
+            </div>
+            <div>
+              <dt>App fee</dt>
+              <dd>$0.03</dd>
+            </div>
+            <div>
+              <dt>Protocol fee</dt>
+              <dd>$0.06</dd>
+            </div>
+          </dl>
+          <div class="receipt-checks">
+            <span>Transaction succeeded</span>
+            <span>Intent matched</span>
+            <span>Fees itemized</span>
+          </div>
+        </aside>
+      </section>
+
+      <section id="product" class="section">
+        <div class="section-title">
+          <p class="eyebrow">Product</p>
+          <h2>Not another explorer view.</h2>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <h3>User receipt inbox</h3>
+            <p>
+              Users connect a wallet, browse Base transactions by date, generate receipts, and
+              download SVG or PNG files for monthly reconciliation.
+            </p>
+          </article>
+          <article>
+            <h3>Dapp intent metadata</h3>
+            <p>
+              Dapps can submit the business context behind a transaction: expected assets, fees,
+              merchant references, categories, and receipt copy.
+            </p>
+          </article>
+          <article>
+            <h3>Onchain verification</h3>
+            <p>
+              The engine checks transaction success, token transfers, gas paid, observed fees, and
+              whether the app's claim matched the Base transaction.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="security" class="section split">
+        <div>
+          <p class="eyebrow">Security</p>
+          <h2>Read-only by default. Explicit when shared.</h2>
+          <p>
+            OnchainReceipts should never ask for approvals, spending permissions, private keys, or
+            seed phrases. Wallet signatures are used only for login and quota ownership.
+          </p>
+        </div>
+        <ul class="checklist">
+          <li>No token approvals required</li>
+          <li>Untrusted dapp metadata is verified before display</li>
+          <li>Escaped receipt rendering, no arbitrary HTML</li>
+          <li>Wallet, IP, and API-key rate limits</li>
+          <li>Duplicate transaction dedupe for fair billing</li>
+        </ul>
+      </section>
+
+      <section id="pricing" class="section">
+        <div class="section-title">
+          <p class="eyebrow">Launch pricing</p>
+          <h2>Free for users, low-friction for builders.</h2>
+        </div>
+        <div class="pricing-grid">
+          <article>
+            <h3>Users</h3>
+            <strong>Free</strong>
+            <p>100 receipts per wallet per month, 90-day Base history, SVG/PNG download.</p>
+          </article>
+          <article>
+            <h3>Starter</h3>
+            <strong>$9 / month</strong>
+            <p>5,000 verified dapp receipts, API key, dashboard, basic branding.</p>
+          </article>
+          <article>
+            <h3>Builder</h3>
+            <strong>$29 / month</strong>
+            <p>25,000 verified receipts, custom logo, webhook delivery, CSV export.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="demo" class="section demo-section">
+        <div class="demo-panel">
+          <div>
+            <p class="eyebrow">Prototype</p>
+            <h2>Generate a demo receipt artifact.</h2>
+            <p>
+              This first prototype renders a trusted-looking receipt from static sample data. The
+              next milestone connects the renderer to the Base receipt engine.
+            </p>
+          </div>
+          <div class="demo-actions">
+            <button id="downloadSvg" class="button primary" type="button">Download SVG</button>
+            <button id="downloadPng" class="button secondary" type="button">Download PNG</button>
+          </div>
+        </div>
+        <div class="artifact-wrap">
+          <div id="receiptArtifact" class="artifact" role="img" aria-label="Receipt artifact"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>OnchainReceipts is open-source receipt infrastructure for Base.</span>
+      <a href="../../docs/security-model.md">Security model</a>
+    </footer>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

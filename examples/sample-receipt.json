@@ -1,0 +1,106 @@
+{
+  "version": "0.1",
+  "receiptId": "or_demo_base_swap_001",
+  "chainId": 8453,
+  "txHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "status": "verified",
+  "issuedAt": "2026-05-17T09:15:00Z",
+  "block": {
+    "number": 30214511,
+    "timestamp": "2026-05-17T09:14:42Z"
+  },
+  "category": "swap",
+  "summary": {
+    "title": "USDC to ETH swap",
+    "description": "Swapped 25.00 USDC for 0.0068 ETH on Base. The app intent matched the observed token transfers.",
+    "appName": "ExampleSwap",
+    "network": "Base"
+  },
+  "participants": {
+    "from": {
+      "address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "label": "demo.base.eth"
+    },
+    "to": {
+      "address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "label": "Swap Router"
+    },
+    "app": {
+      "address": "0xcccccccccccccccccccccccccccccccccccccccc",
+      "label": "ExampleSwap",
+      "url": "https://example.com"
+    }
+  },
+  "assets": {
+    "sent": [
+      {
+        "symbol": "USDC",
+        "amount": "25.00",
+        "decimals": 6,
+        "contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "fiatValue": "25.00",
+        "fiatCurrency": "USD"
+      }
+    ],
+    "received": [
+      {
+        "symbol": "ETH",
+        "amount": "0.0068",
+        "decimals": 18,
+        "fiatValue": "24.91",
+        "fiatCurrency": "USD"
+      }
+    ]
+  },
+  "fees": {
+    "gas": {
+      "amount": "0.000021",
+      "symbol": "ETH",
+      "fiatValue": "0.08",
+      "fiatCurrency": "USD"
+    },
+    "app": {
+      "amount": "0.03",
+      "symbol": "USDC",
+      "fiatValue": "0.03",
+      "fiatCurrency": "USD",
+      "recipient": {
+        "address": "0xcccccccccccccccccccccccccccccccccccccccc",
+        "label": "ExampleSwap"
+      }
+    },
+    "protocol": {
+      "amount": "0.06",
+      "symbol": "USDC",
+      "fiatValue": "0.06",
+      "fiatCurrency": "USD"
+    }
+  },
+  "verification": {
+    "result": "verified",
+    "checks": [
+      {
+        "id": "tx_success",
+        "status": "pass",
+        "label": "Transaction succeeded"
+      },
+      {
+        "id": "chain",
+        "status": "pass",
+        "label": "Transaction confirmed on Base"
+      },
+      {
+        "id": "intent_match",
+        "status": "pass",
+        "label": "Dapp intent matched observed transfers"
+      },
+      {
+        "id": "fees_observed",
+        "status": "pass",
+        "label": "Gas and app fees were itemized"
+      }
+    ],
+    "receiptHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+    "signature": "demo-signature-placeholder"
+  }
+}

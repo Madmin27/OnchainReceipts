@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onchainreceipts.org/schema/receipt.schema.json",
+  "title": "OnchainReceipts Receipt",
+  "type": "object",
+  "required": [
+    "version",
+    "receiptId",
+    "chainId",
+    "txHash",
+    "status",
+    "issuedAt",
+    "summary",
+    "participants",
+    "assets",
+    "fees",
+    "verification"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "0.1"
+    },
+    "receiptId": {
+      "type": "string",
+      "pattern": "^or_[a-zA-Z0-9_-]+$"
+    },
+    "chainId": {
+      "type": "integer",
+      "const": 8453
+    },
+    "txHash": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{64}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["verified", "partial", "mismatch", "failed"]
+    },
+    "issuedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "block": {
+      "type": "object",
+      "properties": {
+        "number": { "type": "integer" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "category": {
+      "type": "string",
+      "enum": ["transfer", "swap", "mint", "payment", "subscription", "bridge", "approval", "unknown"]
+    },
+    "summary": {
+      "type": "object",
+      "required": ["title", "description"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "appName": { "type": "string", "maxLength": 80 },
+        "network": { "type": "string", "const": "Base" }
+      },
+      "additionalProperties": false
+    },
+    "participants": {
+      "type": "object",
+      "required": ["from"],
+      "properties": {
+        "from": { "$ref": "#/$defs/party" },
+        "to": { "$ref": "#/$defs/party" },
+        "app": { "$ref": "#/$defs/party" }
+      },
+      "additionalProperties": false
+    },
+    "assets": {
+      "type": "object",
+      "required": ["sent", "received"],
+      "properties": {
+        "sent": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assetAmount" }
+        },
+        "received": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assetAmount" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "fees": {
+      "type": "object",
+      "required": ["gas"],
+      "properties": {
+        "gas": { "$ref": "#/$defs/fee" },
+        "app": { "$ref": "#/$defs/fee" },
+        "protocol": { "$ref": "#/$defs/fee" },
+        "wallet": { "$ref": "#/$defs/fee" }
+      },
+      "additionalProperties": false
+    },
+    "verification": {
+      "type": "object",
+      "required": ["result", "checks"],
+      "properties": {
+        "result": {
+          "type": "string",
+          "enum": ["verified", "partial", "mismatch", "failed"]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "status", "label"],
+            "properties": {
+              "id": { "type": "string" },
+              "status": { "type": "string", "enum": ["pass", "warn", "fail"] },
+              "label": { "type": "string" },
+              "detail": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "receiptHash": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{64}$"
+        },
+        "signature": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "party": {
+      "type": "object",
+      "required": ["address"],
+      "properties": {
+        "address": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$"
+        },
+        "label": { "type": "string", "maxLength": 120 },
+        "url": { "type": "string", "format": "uri" }
+      },
+      "additionalProperties": false
+    },
+    "assetAmount": {
+      "type": "object",
+      "required": ["symbol", "amount"],
+      "properties": {
+        "symbol": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "amount": { "type": "string" },
+        "decimals": { "type": "integer", "minimum": 0, "maximum": 36 },
+        "contract": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$"
+        },
+        "fiatValue": { "type": "string" },
+        "fiatCurrency": { "type": "string", "minLength": 3, "maxLength": 3 }
+      },
+      "additionalProperties": false
+    },
+    "fee": {
+      "type": "object",
+      "required": ["amount", "symbol"],
+      "properties": {
+        "amount": { "type": "string" },
+        "symbol": { "type": "string" },
+        "fiatValue": { "type": "string" },
+        "fiatCurrency": { "type": "string", "minLength": 3, "maxLength": 3 },
+        "recipient": { "$ref": "#/$defs/party" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

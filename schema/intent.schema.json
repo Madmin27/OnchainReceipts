@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onchainreceipts.org/schema/intent.schema.json",
+  "title": "OnchainReceipts Dapp Intent",
+  "type": "object",
+  "required": ["version", "chainId", "txHash", "user", "app", "intent"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "0.1"
+    },
+    "chainId": {
+      "type": "integer",
+      "const": 8453
+    },
+    "txHash": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{64}$"
+    },
+    "user": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{40}$"
+    },
+    "app": {
+      "type": "object",
+      "required": ["name", "url"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "url": { "type": "string", "format": "uri" },
+        "logoUrl": { "type": "string", "format": "uri" }
+      },
+      "additionalProperties": false
+    },
+    "intent": {
+      "type": "object",
+      "required": ["type", "description"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["transfer", "swap", "mint", "payment", "subscription", "bridge", "game_purchase", "creator_support"]
+        },
+        "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "expectedSent": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assetAmount" }
+        },
+        "expectedReceived": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assetAmount" }
+        },
+        "appFee": { "$ref": "#/$defs/fee" },
+        "protocolFee": { "$ref": "#/$defs/fee" },
+        "category": { "type": "string", "maxLength": 60 },
+        "merchantReference": { "type": "string", "maxLength": 120 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "assetAmount": {
+      "type": "object",
+      "required": ["symbol", "amount"],
+      "properties": {
+        "symbol": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "amount": { "type": "string" },
+        "contract": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fee": {
+      "type": "object",
+      "required": ["amount", "symbol"],
+      "properties": {
+        "amount": { "type": "string" },
+        "symbol": { "type": "string" },
+        "recipient": {
+          "type": "string",
+          "pattern": "^0x[a-fA-F0-9]{40}$"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
