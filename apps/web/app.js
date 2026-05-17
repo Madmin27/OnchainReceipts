@@ -6,18 +6,20 @@ const txStatus = document.querySelector("#txStatus");
 const connectWalletButton = document.querySelector("#connectWallet");
 const walletLabel = document.querySelector("#walletLabel");
 const networkSelect = document.querySelector("#networkSelect");
+const walletProviderSelect = document.querySelector("#walletProviderSelect");
 const loadMoreHistoryButton = document.querySelector("#loadMoreHistory");
 const historyStatus = document.querySelector("#historyStatus");
 const historyList = document.querySelector("#historyList");
 const historyTabs = document.querySelectorAll("[data-history-tab]");
 
-const BASE_RPC_URL = "https://mainnet.base.org";
-const BASE_BLOCKSCOUT_URL = "https://base.blockscout.com";
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETH_DECIMALS = 18n;
 const PAGE_SIZE = 20;
 const MAX_QR_BYTES = 80_000;
+const RECEIPT_WIDTH = 1720;
+const RECEIPT_HEIGHT = 1680;
+const networks = window.ONCHAIN_RECEIPTS_NETWORKS || [];
 
 const knownTokens = {
   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { symbol: "USDC", decimals: 6n },
@@ -27,6 +29,7 @@ const knownTokens = {
 };
 
 let connectedWallet = null;
+let walletProvider = null;
 let activeHistoryTab = "all";
 let visibleHistoryLimit = PAGE_SIZE;
 let historyState = {
@@ -36,93 +39,13 @@ let historyState = {
   transferNext: null,
 };
 
-function escapeXml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
 function safeDisplay(value, maxLength = 120) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
 }
 
-function rowsToSvg(rows) {
-  return rows
-    .slice(0, 4)
-    .map((row, index) => {
-      const y = 344 + index * 38;
-      return `<text x="56" y="${y}" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">${escapeXml(safeDisplay(row.label, 26))}</text>
-  <text x="184" y="${y}" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">${escapeXml(safeDisplay(row.value, 24))}</text>
-  <text x="340" y="${y}" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">${escapeXml(safeDisplay(row.detail, 54))}</text>`;
-    })
-    .join("\n  ");
-}
-
-function splitLong(value, first = 38) {
-  if (!value || value.length <= first) return [value || "", ""];
-  return [value.slice(0, first), value.slice(first)];
-}
-
-function buildReceiptSvg(data) {
-  const safe = Object.fromEntries(
-    Object.entries(data).map(([key, value]) => [key, escapeXml(safeDisplay(value, 160))]),
-  );
-  const rows = Array.isArray(data.transferRows) ? data.transferRows : [];
-  const [hashA, hashB] = splitLong(data.fullTxHash || data.tx || "");
-  const [fromA, fromB] = splitLong(data.fromFull || data.from || "", 28);
-  const [toA, toB] = splitLong(data.toFull || data.app || "", 28);
-  const qrImage = data.qrDataUrl
-    ? `<image x="684" y="156" width="92" height="92" href="${escapeXml(data.qrDataUrl)}"/>`
-    : `<rect x="684" y="156" width="92" height="92" rx="6" fill="#f4f7f4" stroke="#d7ddd4"/>
-  <text x="703" y="192" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">BaseScan</text>
-  <text x="699" y="216" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="11">tx details</text>`;
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="860" height="760" viewBox="0 0 860 760">
-  <rect width="860" height="760" fill="#ffffff"/>
-  <rect x="28" y="28" width="804" height="704" rx="8" fill="#ffffff" stroke="#d7ddd4"/>
-  <text x="56" y="72" fill="#0052ff" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="1.2">ONCHAINRECEIPTS</text>
-  <text x="56" y="112" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="760">${safe.title}</text>
-  <rect x="694" y="54" width="98" height="34" rx="17" fill="#e5f4ec"/>
-  <text x="718" y="76" fill="#0b7a45" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="760">${safe.status}</text>
-
-  <line x1="56" y1="148" x2="804" y2="148" stroke="#d7ddd4"/>
-  <text x="56" y="188" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="13">Sent</text>
-  <text x="56" y="222" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="760">${safe.sent}</text>
-  <line x1="306" y1="204" x2="394" y2="204" stroke="#d7ddd4" stroke-width="2"/>
-  <text x="438" y="188" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="13">Received</text>
-  <text x="438" y="222" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="760">${safe.received}</text>
-  ${qrImage}
-  <text x="682" y="262" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="10">${safe.tx}</text>
-  <line x1="56" y1="286" x2="804" y2="286" stroke="#d7ddd4"/>
-
-  <text x="56" y="326" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="760">Payment and fee breakdown</text>
-  ${rowsToSvg(rows)}
-
-  <line x1="56" y1="544" x2="804" y2="544" stroke="#d7ddd4"/>
-  <text x="56" y="576" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="760">Transaction details</text>
-  <text x="56" y="608" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Method</text>
-  <text x="128" y="608" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">${safe.method || "contract call"}</text>
-  <text x="250" y="608" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Status</text>
-  <text x="316" y="608" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">${safe.status}</text>
-  <text x="430" y="608" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Block</text>
-  <text x="488" y="608" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">${safe.block || "Pending"}</text>
-  <text x="610" y="608" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Time</text>
-  <text x="658" y="608" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">${safe.date}</text>
-  <text x="56" y="640" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">From</text>
-  <text x="128" y="640" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(fromA)}</text>
-  <text x="128" y="658" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(fromB)}</text>
-  <text x="430" y="640" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">To</text>
-  <text x="488" y="640" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(toA)}</text>
-  <text x="488" y="658" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(toB)}</text>
-  <text x="56" y="692" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Tx hash</text>
-  <text x="128" y="692" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(hashA)}</text>
-  <text x="128" y="710" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(hashB)}</text>
-  <text x="650" y="710" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">Verified on Base</text>
-</svg>`;
+function currentNetwork() {
+  return networks.find(network => network.id === networkSelect.value) || networks[0];
 }
 
 function setStatus(message, tone = "neutral") {
@@ -136,19 +59,20 @@ function setHistoryStatus(message, tone = "neutral") {
 }
 
 async function rpc(method, params) {
-  const response = await fetch(BASE_RPC_URL, {
+  const network = currentNetwork();
+  const response = await fetch(network.rpcUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
   });
 
   if (!response.ok) {
-    throw new Error(`Base RPC returned HTTP ${response.status}`);
+    throw new Error(`${network.name} RPC returned HTTP ${response.status}`);
   }
 
   const payload = await response.json();
   if (payload.error) {
-    throw new Error(payload.error.message || "Base RPC error");
+    throw new Error(payload.error.message || `${network.name} RPC error`);
   }
 
   return payload.result;
@@ -200,7 +124,8 @@ function formatDate(value) {
 }
 
 function buildUrl(path, params = null) {
-  const url = new URL(path, BASE_BLOCKSCOUT_URL);
+  const network = currentNetwork();
+  const url = new URL(path, network.blockscoutUrl);
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (value !== null && value !== undefined) url.searchParams.set(key, String(value));
@@ -292,7 +217,7 @@ function renderHistory() {
   historyList.textContent = "";
 
   if (!connectedWallet) {
-    setHistoryStatus("Connect a wallet to load the latest Base activity automatically.");
+    setHistoryStatus(`Connect a wallet to load the latest ${currentNetwork().name} activity automatically.`);
     loadMoreHistoryButton.hidden = true;
     return;
   }
@@ -306,27 +231,32 @@ function renderHistory() {
   setHistoryStatus(`Showing ${items.length} of ${allItems.length} ${activeHistoryTab === "all" ? "transaction" : activeHistoryTab} record${items.length === 1 ? "" : "s"}.`);
 
   for (const item of items) {
-    const button = document.createElement("button");
+    const row = document.createElement("div");
     const text = document.createElement("span");
     const title = document.createElement("strong");
     const meta = document.createElement("span");
     const value = document.createElement("span");
-    const receiptAction = document.createElement("span");
-    button.type = "button";
-    button.className = "history-item";
+    const receiptAction = document.createElement("button");
+    row.className = "history-item";
     title.textContent = safeDisplay(item.title);
     meta.className = "history-meta";
     meta.textContent = `${safeDisplay(item.subtitle, 100)} - ${formatDate(item.timestamp)}`;
     value.className = "history-value";
     value.textContent = safeDisplay(item.value, 48);
     receiptAction.className = "history-receipt-button";
+    receiptAction.type = "button";
     receiptAction.textContent = "Receipt";
     text.append(title, meta);
-    button.append(text, value, receiptAction);
-    button.addEventListener("click", async () => {
+    row.append(text, value, receiptAction);
+    row.addEventListener("click", () => {
+      txInput.value = item.hash;
+      setStatus("Transaction hash selected. Use Fetch receipt or the Receipt button to download.", "neutral");
+    });
+    receiptAction.addEventListener("click", async event => {
+      event.stopPropagation();
       await generateAndDownloadReceipt(item.hash);
     });
-    historyList.appendChild(button);
+    historyList.appendChild(row);
   }
 
   loadMoreHistoryButton.hidden = visibleHistoryLimit >= allItems.length && !historyState.txNext && !historyState.transferNext;
@@ -342,7 +272,7 @@ async function loadHistory({ more = false } = {}) {
     if (!more) {
       visibleHistoryLimit = PAGE_SIZE;
     }
-    setHistoryStatus(more ? "Loading older Base activity..." : "Loading latest Base activity...");
+    setHistoryStatus(more ? `Loading older ${currentNetwork().name} activity...` : `Loading latest ${currentNetwork().name} activity...`);
     const txParams = more ? pageParamsToQuery(historyState.txNext) : null;
     const transferParams = more ? pageParamsToQuery(historyState.transferNext) : null;
     const [txPayload, transferPayload] = await Promise.all([
@@ -462,17 +392,18 @@ function inferTitle(summary, tx) {
 
   if (summary.firstSent) return `${summary.firstSent.symbol} transfer`;
   if (hexToBigInt(tx.value) > 0n) return "ETH transfer";
-  return "Base transaction";
+  return `${currentNetwork().name} transaction`;
 }
 
 function buildReceiptFromChain(txHash, tx, txReceipt, block) {
+  const network = currentNetwork();
   const transfers = parseTransfers(txReceipt.logs || []);
   const summary = summarizeTransfers(tx, transfers);
   const gasFeeWei = hexToBigInt(txReceipt.gasUsed) * hexToBigInt(txReceipt.effectiveGasPrice || tx.gasPrice);
   const ethValue = hexToBigInt(tx.value);
   const success = txReceipt.status === "0x1";
   const sender = tx.from.toLowerCase();
-  const explorerUrl = `https://basescan.org/tx/${txHash}`;
+  const explorerUrl = `${network.explorerUrl}/tx/${txHash}`;
 
   const sentText = summary.firstSent
     ? transferText(summary.firstSent, "Observed token transfer")
@@ -500,15 +431,15 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block) {
     {
       label: "Gas paid",
       value: `${formatUnits(gasFeeWei, ETH_DECIMALS, 8)} ETH`,
-      detail: "Base network fee",
+      detail: `${network.name} network fee`,
     },
   ];
 
   return {
-    id: `or_base_${txHash.slice(2, 10)}`,
+    id: `or_${network.id}_${txHash.slice(2, 10)}`,
     title: inferTitle(summary, tx),
     app: tx.to ? shortHash(tx.to) : "Contract creation",
-    network: "Base",
+    network: network.name,
     date: block?.timestamp
       ? new Date(Number(hexToBigInt(block.timestamp)) * 1000).toLocaleString(undefined, {
           dateStyle: "medium",
@@ -550,34 +481,79 @@ function setWallet(address, chainId) {
   if (connectedWallet) {
     loadHistory();
   } else {
-    historyState = { transactions: [], transfers: [], txNext: null, transferNext: null };
-    renderHistory();
+    walletProvider = null;
+    resetHistory();
   }
 }
 
-async function ensureBaseNetwork() {
-  if (!window.ethereum) throw new Error("No injected wallet found.");
-  const chainId = await window.ethereum.request({ method: "eth_chainId" });
-  if (chainId === "0x2105") {
+function selectedProvider() {
+  const provider = window.OnchainReceiptsWallets?.get(walletProviderSelect.value)
+    || walletProvider
+    || window.OnchainReceiptsWallets?.firstProvider()
+    || window.ethereum;
+  return provider || null;
+}
+
+function resetHistory() {
+  historyState = { transactions: [], transfers: [], txNext: null, transferNext: null };
+  visibleHistoryLimit = PAGE_SIZE;
+  renderHistory();
+}
+
+function populateNetworks() {
+  networkSelect.textContent = "";
+  networks.forEach(network => {
+    const option = document.createElement("option");
+    option.value = network.id;
+    option.textContent = network.name;
+    networkSelect.appendChild(option);
+  });
+  networkSelect.value = networks[0]?.id || "";
+}
+
+function populateWalletProviders() {
+  walletProviderSelect.textContent = "";
+  const options = window.OnchainReceiptsWallets?.list() || [];
+  if (!options.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No wallet found";
+    walletProviderSelect.appendChild(option);
+    return;
+  }
+  options.forEach(wallet => {
+    const option = document.createElement("option");
+    option.value = wallet.id;
+    option.textContent = wallet.name;
+    walletProviderSelect.appendChild(option);
+  });
+  walletProviderSelect.value = options[0].id;
+}
+
+async function ensureSelectedNetwork(provider) {
+  if (!provider) throw new Error("No injected wallet found.");
+  const network = currentNetwork();
+  const chainId = await provider.request({ method: "eth_chainId" });
+  if (chainId === network.chainId) {
     return chainId;
   }
 
   try {
-    await window.ethereum.request({
+    await provider.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: "0x2105" }],
+      params: [{ chainId: network.chainId }],
     });
   } catch (error) {
     if (error && error.code === 4902) {
-      await window.ethereum.request({
+      await provider.request({
         method: "wallet_addEthereumChain",
         params: [
           {
-            chainId: "0x2105",
-            chainName: "Base",
-            nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-            rpcUrls: [BASE_RPC_URL],
-            blockExplorerUrls: ["https://basescan.org"],
+            chainId: network.chainId,
+            chainName: network.name,
+            nativeCurrency: network.nativeCurrency,
+            rpcUrls: [network.rpcUrl],
+            blockExplorerUrls: [network.explorerUrl],
           },
         ],
       });
@@ -586,7 +562,7 @@ async function ensureBaseNetwork() {
     }
   }
 
-  return window.ethereum.request({ method: "eth_chainId" });
+  return provider.request({ method: "eth_chainId" });
 }
 
 connectWalletButton.addEventListener("click", async () => {
@@ -597,16 +573,27 @@ connectWalletButton.addEventListener("click", async () => {
       return;
     }
 
-    if (!window.ethereum) {
+    const provider = selectedProvider();
+    if (!provider) {
       setStatus("No injected wallet found. Install MetaMask or a compatible wallet.", "error");
       return;
     }
 
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-    const chainId = await ensureBaseNetwork();
+    walletProvider = provider;
+    if (provider.request) {
+      try {
+        await provider.request({
+          method: "wallet_requestPermissions",
+          params: [{ eth_accounts: {} }],
+        });
+      } catch (error) {
+        if (error?.code !== -32601 && error?.code !== 4100) throw error;
+      }
+    }
+    const accounts = await provider.request({ method: "eth_requestAccounts" });
+    const chainId = await ensureSelectedNetwork(provider);
     setWallet(accounts[0], chainId);
-    networkSelect.value = "8453";
-    setStatus("Wallet connected and Base network selected.", "success");
+    setStatus(`Wallet connected and ${currentNetwork().name} selected.`, "success");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Could not connect wallet.", "error");
   }
@@ -631,16 +618,36 @@ historyTabs.forEach(tabButton => {
   });
 });
 
-if (window.ethereum) {
-  window.ethereum.request({ method: "eth_accounts" }).then(async accounts => {
-    if (accounts && accounts[0]) {
-      const chainId = await window.ethereum.request({ method: "eth_chainId" });
-      setWallet(accounts[0], chainId);
-    }
-  });
+networkSelect.addEventListener("change", async () => {
+  resetHistory();
+  txStatus.textContent = `Selected ${currentNetwork().name}. Paste a tx hash or connect a wallet.`;
+  if (!connectedWallet || !walletProvider) return;
+  try {
+    const chainId = await ensureSelectedNetwork(walletProvider);
+    setWallet(connectedWallet, chainId);
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "Could not switch wallet network.", "error");
+  }
+});
 
-  window.ethereum.on?.("accountsChanged", accounts => {
-    setWallet(accounts && accounts[0] ? accounts[0] : null, "0x0");
+walletProviderSelect.addEventListener("change", () => {
+  setWallet(null, "0x0");
+  setStatus("Wallet provider changed. Connect again to approve access.", "neutral");
+});
+
+if (window.ethereum) {
+  window.ethereum.on?.("accountsChanged", async accounts => {
+    if (!accounts || !accounts[0]) {
+      setWallet(null, "0x0");
+      return;
+    }
+    try {
+      const provider = walletProvider || selectedProvider();
+      const chainId = provider ? await provider.request({ method: "eth_chainId" }) : "0x0";
+      setWallet(accounts[0], chainId);
+    } catch {
+      setWallet(accounts[0], "0x0");
+    }
   });
 
   window.ethereum.on?.("chainChanged", chainId => {
@@ -662,7 +669,7 @@ async function generateReceipt(txHash, { download = false } = {}) {
   }
 
   try {
-    setStatus("Fetching transaction from Base RPC...");
+    setStatus(`Fetching transaction from ${currentNetwork().name} RPC...`);
     const [tx, txReceipt] = await Promise.all([
       rpc("eth_getTransactionByHash", [txHash]),
       rpc("eth_getTransactionReceipt", [txHash]),
@@ -680,12 +687,12 @@ async function generateReceipt(txHash, { download = false } = {}) {
     } catch {
       receipt.qrDataUrl = "";
     }
-    setStatus("Receipt generated from Base transaction data.", "success");
+    setStatus(`Receipt generated from ${currentNetwork().name} transaction data.`, "success");
     if (download) {
       await downloadReceiptPng();
     }
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : "Could not fetch Base transaction.", "error");
+    setStatus(error instanceof Error ? error.message : `Could not fetch ${currentNetwork().name} transaction.`, "error");
   }
 }
 
@@ -694,44 +701,154 @@ async function generateAndDownloadReceipt(txHash) {
   await generateReceipt(txHash, { download: true });
 }
 
-function downloadReceiptPng() {
-  if (!receipt) return Promise.resolve();
+function roundedRect(context, x, y, width, height, radius) {
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.arcTo(x + width, y, x + width, y + height, radius);
+  context.arcTo(x + width, y + height, x, y + height, radius);
+  context.arcTo(x, y + height, x, y, radius);
+  context.arcTo(x, y, x + width, y, radius);
+  context.closePath();
+}
+
+function drawText(context, text, x, y, options = {}) {
+  context.fillStyle = options.color || "#111412";
+  context.font = `${options.weight || 500} ${options.size || 28}px ${options.family || "Inter, Arial, sans-serif"}`;
+  context.textAlign = options.align || "left";
+  context.fillText(safeDisplay(text, options.maxLength || 180), x, y);
+}
+
+function drawDivider(context, y) {
+  context.strokeStyle = "#d7ddd4";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(112, y);
+  context.lineTo(1608, y);
+  context.stroke();
+}
+
+function loadImage(src) {
+  if (!src) return Promise.resolve(null);
   return new Promise(resolve => {
     const image = new Image();
-    const svg = buildReceiptSvg(receipt);
-    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-    image.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1720;
-      canvas.height = 1520;
-      const context = canvas.getContext("2d");
-      context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      canvas.toBlob(blob => {
-        if (!blob) {
-          setStatus("Could not create receipt PNG.", "error");
-          resolve();
-          return;
-        }
-        const pngUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = pngUrl;
-        link.download = `${receipt.id || "onchain-receipt"}.png`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(pngUrl);
-        setStatus("Receipt PNG downloaded.", "success");
-        resolve();
-      }, "image/png");
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      setStatus("Could not render receipt PNG.", "error");
-      resolve();
-    };
-    image.src = url;
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = src;
   });
 }
+
+async function renderReceiptCanvas(data) {
+  const canvas = document.createElement("canvas");
+  canvas.width = RECEIPT_WIDTH;
+  canvas.height = RECEIPT_HEIGHT;
+  const context = canvas.getContext("2d");
+  const qrImage = await loadImage(data.qrDataUrl);
+  const rows = Array.isArray(data.transferRows) ? data.transferRows.slice(0, 5) : [];
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  roundedRect(context, 64, 64, 1592, 1552, 18);
+  context.fillStyle = "#ffffff";
+  context.fill();
+  context.strokeStyle = "#d7ddd4";
+  context.lineWidth = 2;
+  context.stroke();
+
+  drawText(context, "ONCHAINRECEIPTS", 112, 150, { color: "#0052ff", size: 24, weight: 800, maxLength: 24 });
+  drawText(context, data.title, 112, 228, { size: 64, weight: 800, maxLength: 42 });
+  roundedRect(context, 1408, 114, 180, 68, 34);
+  context.fillStyle = data.status === "Verified" ? "#e5f4ec" : "#ffe4e4";
+  context.fill();
+  drawText(context, data.status, 1498, 158, {
+    align: "center",
+    color: data.status === "Verified" ? "#0b7a45" : "#9f1d1d",
+    size: 24,
+    weight: 800,
+    maxLength: 18,
+  });
+
+  drawDivider(context, 300);
+  drawText(context, "Sent", 112, 380, { color: "#5c655f", size: 26 });
+  drawText(context, data.sent, 112, 440, { size: 52, weight: 800, maxLength: 28 });
+  drawText(context, "Received", 880, 380, { color: "#5c655f", size: 26 });
+  drawText(context, data.received, 880, 440, { size: 52, weight: 800, maxLength: 28 });
+  context.strokeStyle = "#d7ddd4";
+  context.lineWidth = 4;
+  context.beginPath();
+  context.moveTo(680, 414);
+  context.lineTo(800, 414);
+  context.stroke();
+
+  roundedRect(context, 1368, 320, 188, 188, 14);
+  context.fillStyle = "#f4f7f4";
+  context.fill();
+  context.strokeStyle = "#d7ddd4";
+  context.stroke();
+  if (qrImage) {
+    context.drawImage(qrImage, 1382, 334, 160, 160);
+  } else {
+    drawText(context, "Explorer", 1462, 398, { align: "center", size: 26, weight: 800, maxLength: 12 });
+    drawText(context, "tx details", 1462, 438, { align: "center", color: "#5c655f", size: 20, maxLength: 12 });
+  }
+  drawText(context, "Scan for transaction details", 1462, 540, { align: "center", color: "#5c655f", size: 18, maxLength: 36 });
+
+  drawDivider(context, 590);
+  drawText(context, "Payment and fee breakdown", 112, 670, { size: 34, weight: 800, maxLength: 40 });
+  rows.forEach((row, index) => {
+    const y = 735 + index * 64;
+    drawText(context, row.label, 112, y, { color: "#5c655f", size: 24, maxLength: 28 });
+    drawText(context, row.value, 376, y, { size: 28, weight: 800, maxLength: 30 });
+    drawText(context, row.detail, 720, y, { color: "#5c655f", size: 24, maxLength: 70 });
+  });
+
+  drawDivider(context, 1084);
+  drawText(context, "Transaction details", 112, 1160, { size: 34, weight: 800, maxLength: 28 });
+  drawText(context, "Method", 112, 1225, { color: "#5c655f", size: 22 });
+  drawText(context, data.method || "contract call", 240, 1225, { size: 24, weight: 800, maxLength: 28 });
+  drawText(context, "Status", 560, 1225, { color: "#5c655f", size: 22 });
+  drawText(context, data.status, 680, 1225, { size: 24, weight: 800, maxLength: 18 });
+  drawText(context, "Block", 890, 1225, { color: "#5c655f", size: 22 });
+  drawText(context, data.block || "Pending", 1000, 1225, { size: 24, weight: 800, maxLength: 18 });
+  drawText(context, "Time", 1200, 1225, { color: "#5c655f", size: 22 });
+  drawText(context, data.date, 1290, 1225, { size: 24, weight: 800, maxLength: 30 });
+
+  drawText(context, "From", 112, 1305, { color: "#5c655f", size: 22 });
+  drawText(context, data.fromFull, 112, 1345, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 24, weight: 800, maxLength: 66 });
+  drawText(context, "To", 112, 1405, { color: "#5c655f", size: 22 });
+  drawText(context, data.toFull, 112, 1445, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 24, weight: 800, maxLength: 66 });
+  drawText(context, "Tx hash", 112, 1505, { color: "#5c655f", size: 22 });
+  drawText(context, data.fullTxHash, 112, 1545, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 24, weight: 800, maxLength: 66 });
+  drawText(context, `Receipt ${data.id} - ${data.network}`, 112, 1592, { color: "#5c655f", size: 20, maxLength: 54 });
+  drawText(context, `Verified on ${data.network}`, 1540, 1592, { align: "right", size: 24, weight: 800, maxLength: 28 });
+
+  return canvas;
+}
+
+async function downloadReceiptPng() {
+  if (!receipt) return;
+  const canvas = await renderReceiptCanvas(receipt);
+  return new Promise(resolve => {
+    canvas.toBlob(blob => {
+      if (!blob) {
+        setStatus("Could not create receipt PNG.", "error");
+        resolve();
+        return;
+      }
+      const pngUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = pngUrl;
+      link.download = `${receipt.id || "onchain-receipt"}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(pngUrl);
+      setStatus("Receipt PNG downloaded.", "success");
+      resolve();
+    }, "image/png");
+  });
+}
+
+populateNetworks();
+populateWalletProviders();
+setTimeout(populateWalletProviders, 300);
+resetHistory();

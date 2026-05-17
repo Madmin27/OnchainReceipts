@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://mainnet.base.org https://base.blockscout.com https://api.qrserver.com"
+      content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://mainnet.base.org https://base.blockscout.com https://ethereum-rpc.publicnode.com https://eth.blockscout.com https://mainnet.optimism.io https://optimism.blockscout.com https://arb1.arbitrum.io https://arbitrum.blockscout.com https://polygon-rpc.com https://polygon.blockscout.com https://api.qrserver.com"
     />
     <title>OnchainReceipts</title>
     <meta
@@ -97,8 +97,8 @@
           <article>
             <h3>User receipt inbox</h3>
             <p>
-              Users connect a wallet, browse Base transactions by date, generate receipts, and
-              download SVG or PNG files for monthly reconciliation.
+              Users connect a wallet, browse network transactions by date, generate receipts, and
+              download PNG files for monthly reconciliation.
             </p>
           </article>
           <article>
@@ -145,7 +145,7 @@
           <article>
             <h3>Users</h3>
             <strong>Free</strong>
-            <p>100 receipts per wallet per month, 90-day Base history, SVG/PNG download.</p>
+            <p>100 receipts per wallet per month, 90-day network history, PNG download.</p>
           </article>
           <article>
             <h3>Starter</h3>
@@ -164,9 +164,9 @@
         <div class="demo-panel">
           <div>
             <p class="eyebrow">Prototype</p>
-            <h2>Generate a Base receipt artifact.</h2>
+            <h2>Generate a network receipt artifact.</h2>
             <p>
-              Paste a Base transaction hash to fetch the transaction receipt from public Base RPC,
+              Paste a transaction hash to fetch the transaction receipt from the selected network RPC,
               parse token transfers, estimate gas paid, and render a downloadable receipt.
             </p>
           </div>
@@ -178,16 +178,18 @@
           </div>
           <div>
             <label for="networkSelect">Network</label>
-            <select id="networkSelect">
-              <option value="8453" selected>Base</option>
-            </select>
+            <select id="networkSelect"></select>
+          </div>
+          <div>
+            <label for="walletProviderSelect">Wallet</label>
+            <select id="walletProviderSelect"></select>
           </div>
           <button id="connectWallet" class="button primary wallet-button" type="button">
             Connect wallet
           </button>
         </div>
         <form id="txForm" class="tx-form">
-          <label for="txHash">Base transaction hash</label>
+          <label for="txHash">Transaction hash</label>
           <div class="tx-row">
             <input
               id="txHash"
@@ -200,14 +202,14 @@
             <button class="button primary" type="submit">Fetch receipt</button>
           </div>
           <p id="txStatus" class="form-status" role="status">
-            Choose a wallet activity or paste a Base transaction hash.
+            Choose a wallet activity or paste a transaction hash.
           </p>
         </form>
         <section class="history-panel" aria-label="Wallet transaction history">
           <div class="history-head">
             <div>
               <p class="eyebrow">Wallet history</p>
-              <h3>Recent Base activity</h3>
+              <h3>Recent network activity</h3>
             </div>
           </div>
           <div class="history-tabs" role="tablist" aria-label="History filters">
@@ -218,7 +220,7 @@
             <button class="history-tab" type="button" data-history-tab="nfts">NFTs</button>
           </div>
           <div id="historyStatus" class="form-status">
-            Connect a wallet to load the latest Base activity automatically.
+            Connect a wallet to load the latest network activity automatically.
           </div>
           <div id="historyList" class="history-list"></div>
           <button id="loadMoreHistory" class="button secondary load-more" type="button" hidden>
@@ -233,6 +235,8 @@
       <a href="../../docs/security-model.md">Security model</a>
     </footer>
 
+    <script src="./networks.js"></script>
+    <script src="./wallets.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

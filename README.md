@@ -36,17 +36,17 @@ The receipt engine then checks Base onchain data:
 - observed fees
 - whether the actual result matches the submitted intent
 
-The output is a signed receipt JSON plus SVG/PNG/PDF render targets.
+The output is a signed receipt JSON plus a PNG receipt render target.
 
 ## Launch scope
 
 V1 is intentionally narrow:
 
-- Base mainnet only
+- Base mainnet first, with experimental multi-network lookup in the demo
 - wallet-connected user receipt inbox
 - transaction timeline
 - receipt generation from transaction hash
-- SVG/PNG receipt export
+- PNG receipt export
 - monthly summary
 - open receipt schema
 - dapp intent schema and SDK draft
@@ -83,7 +83,7 @@ https://madmin27.github.io/OnchainReceipts/
 
 ![OnchainReceipts demo walkthrough](apps/web/assets/onchainreceipts-demo.gif)
 
-The first live demo can fetch a Base transaction hash through public Base RPC, parse receipt logs for token transfers, estimate gas paid, and render a downloadable SVG/PNG receipt artifact.
+The first live demo can fetch a transaction hash through the selected network RPC, parse receipt logs for token transfers, estimate gas paid, and render a downloadable PNG receipt artifact.
 
 ## Why not just a block explorer?
 
@@ -94,7 +94,7 @@ OnchainReceipts is designed for a different job:
 - turn transaction outcomes into accounting-friendly receipt artifacts
 - separate sent assets, received assets, gas, app fees, and protocol fees
 - let dapps submit intent metadata that can be checked against observed onchain results
-- produce signed, downloadable receipt JSON/SVG/PNG artifacts
+- produce signed, downloadable receipt JSON/PNG artifacts
 - give users a monthly receipt box rather than a list of hashes
 
 The core question is not only "what happened onchain?" It is "what did the app say would happen, what actually happened, and can the user keep a trustworthy receipt?"

@@ -6,18 +6,18 @@ OnchainReceipts
 
 ## Positioning
 
-Open-source receipt infrastructure for human-readable, verified Base transactions.
+Open-source receipt infrastructure for human-readable, verified Base-first transactions.
 
 ## User app
 
-The user app starts with Base mainnet only.
+The user app starts Base-first, with experimental multi-network lookup for receipt generation.
 
 Core jobs:
 
 - connect wallet
-- see recent Base transactions by date
+- see recent network transactions by date
 - generate a receipt for any supported transaction
-- download SVG/PNG receipt
+- download PNG receipt
 - view monthly summary
 - export JSON or CSV later
 
@@ -50,7 +50,6 @@ The platform verifies:
 Each receipt should have:
 
 - JSON canonical form
-- SVG renderer
 - PNG export
 - future PDF export
 - OnchainReceipts signature
@@ -68,11 +67,11 @@ Each receipt should have:
 
 ### V1
 
-- Base RPC transaction fetch
+- selected network RPC transaction fetch
 - receipt engine
 - wallet login
 - user dashboard
-- SVG/PNG export
+- PNG export
 - rate limits and cache
 
 ### V2

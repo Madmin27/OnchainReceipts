@@ -344,7 +344,7 @@ dd {
   color: var(--paper);
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(0, 1fr) 220px minmax(170px, auto);
+  grid-template-columns: minmax(0, 1fr) 180px 220px minmax(170px, auto);
   margin-bottom: 16px;
   padding: 18px;
 }
@@ -483,6 +483,7 @@ dd {
   border: 1px solid #f6f8f4;
   border-radius: 7px;
   color: #090d0f;
+  cursor: pointer;
   display: inline-flex;
   font-size: 13px;
   font-weight: 760;
@@ -517,26 +518,6 @@ dd {
   min-height: 46px;
   min-width: 0;
   padding: 10px 12px;
-}
-
-.empty-receipt {
-  align-items: center;
-  background: rgba(141, 177, 255, 0.12);
-  border: 1px solid rgba(141, 177, 255, 0.35);
-  border-radius: 8px;
-  color: #dbe6ff;
-  display: grid;
-  gap: 8px;
-  margin: 0 auto;
-  max-width: 780px;
-  min-height: 220px;
-  place-content: center;
-  text-align: center;
-  width: min(100%, 780px);
-}
-
-.empty-receipt span {
-  color: #b8c5c0;
 }
 
 .form-status {

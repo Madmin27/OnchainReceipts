@@ -41,7 +41,7 @@ Dapp intent metadata is untrusted until checked.
 
 Verification steps:
 
-1. Fetch transaction and receipt from a trusted Base RPC/indexer.
+1. Fetch transaction and receipt from a trusted network RPC/indexer.
 2. Confirm chain id 8453.
 3. Confirm transaction success.
 4. Parse logs for ERC-20 transfers and known event types.
@@ -82,6 +82,6 @@ Default stance:
 
 ## Rendering safety
 
-Receipt renderers must escape all untrusted text. Dapp-provided names, notes, URLs, and labels must never be inserted as raw HTML.
+Receipt renderers must treat all untrusted text as inert text. Dapp-provided names, notes, URLs, and labels must never be inserted as raw HTML.
 
-SVG output must avoid script execution and external resource loads.
+The browser demo renders receipts directly to canvas PNG output instead of interpreting receipt data as executable markup.
