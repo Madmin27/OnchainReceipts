@@ -53,6 +53,12 @@ function networkByFamily(family) {
   return networks.find(network => network.family === family) || networks[0];
 }
 
+function networkRpcUrls(network) {
+  return Array.isArray(network.rpcUrls) && network.rpcUrls.length > 0
+    ? network.rpcUrls
+    : [network.rpcUrl];
+}
+
 function selectedWalletInfo() {
   return window.TxReceiptsWallets?.getInfo(walletProviderSelect.value) || null;
 }
@@ -73,7 +79,7 @@ function setHistoryStatus(message, tone = "neutral") {
 
 async function rpc(method, params) {
   const network = currentNetwork();
-  const response = await fetch(network.rpcUrl, {
+  const response = await fetch(networkRpcUrls(network)[0], {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
@@ -93,15 +99,25 @@ async function rpc(method, params) {
 
 async function solanaRpc(method, params) {
   const network = currentNetwork();
-  const response = await fetch(network.rpcUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
-  });
-  if (!response.ok) throw new Error(`${network.name} RPC returned HTTP ${response.status}`);
-  const payload = await response.json();
-  if (payload.error) throw new Error(payload.error.message || `${network.name} RPC error`);
-  return payload.result;
+  let lastError = null;
+
+  for (const rpcUrl of networkRpcUrls(network)) {
+    try {
+      const response = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
+      });
+      if (!response.ok) throw new Error(`${network.name} RPC returned HTTP ${response.status}`);
+      const payload = await response.json();
+      if (payload.error) throw new Error(payload.error.message || `${network.name} RPC error`);
+      return payload.result;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error(`${network.name} RPC unavailable`);
 }
 
 function hexToBigInt(value) {
@@ -706,7 +722,7 @@ async function ensureSelectedNetwork(provider) {
             chainId: network.chainId,
             chainName: network.name,
             nativeCurrency: network.nativeCurrency,
-            rpcUrls: [network.rpcUrl],
+            rpcUrls: networkRpcUrls(network),
             blockExplorerUrls: [network.explorerUrl],
           },
         ],
