@@ -79,6 +79,58 @@ Live demo:
 
 https://madmin27.github.io/OnchainReceipts/
 
+## Demo walkthrough
+
+![OnchainReceipts demo walkthrough](apps/web/assets/onchainreceipts-demo.gif)
+
+The first live demo can fetch a Base transaction hash through public Base RPC, parse receipt logs for token transfers, estimate gas paid, and render a downloadable SVG/PNG receipt artifact.
+
+## Why not just a block explorer?
+
+Block explorers are essential, but they are optimized for technical inspection. Most users still have to interpret raw logs, token movements, router contracts, internal calls, gas fields, and contract labels by themselves.
+
+OnchainReceipts is designed for a different job:
+
+- turn transaction outcomes into accounting-friendly receipt artifacts
+- separate sent assets, received assets, gas, app fees, and protocol fees
+- let dapps submit intent metadata that can be checked against observed onchain results
+- produce signed, downloadable receipt JSON/SVG/PNG artifacts
+- give users a monthly receipt box rather than a list of hashes
+
+The core question is not only "what happened onchain?" It is "what did the app say would happen, what actually happened, and can the user keep a trustworthy receipt?"
+
+## How dapps integrate
+
+Dapps can integrate by submitting intent metadata after a Base transaction lands. The API verifies the transaction against Base onchain data before issuing a receipt.
+
+```ts
+import { OnchainReceipts } from '@onchainreceipts/sdk';
+
+const receipts = new OnchainReceipts({
+  apiKey: process.env.ONCHAIN_RECEIPTS_API_KEY,
+});
+
+const receipt = await receipts.create({
+  version: '0.1',
+  chainId: 8453,
+  txHash: '0x...',
+  user: '0x...',
+  app: {
+    name: 'ExampleSwap',
+    url: 'https://example.com',
+  },
+  intent: {
+    type: 'swap',
+    description: 'Swap 25 USDC for ETH',
+    expectedSent: [{ symbol: 'USDC', amount: '25.00' }],
+    expectedReceived: [{ symbol: 'ETH', amount: '0.0068' }],
+    appFee: { symbol: 'USDC', amount: '0.03' },
+  },
+});
+```
+
+The receipt engine returns a `verified`, `partial`, `mismatch`, or `failed` status with downloadable artifacts and machine-readable verification checks.
+
 ## Security posture
 
 OnchainReceipts should never ask for private keys, seed phrases, token approvals, or spending permissions. Wallet signatures are only for login/session ownership. Receipt generation reads public Base data and optionally accepts signed dapp intent metadata.
