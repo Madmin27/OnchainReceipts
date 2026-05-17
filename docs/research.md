@@ -2,13 +2,13 @@
 
 ## Adjacent products
 
-The market already contains human-readable transaction tools and wallet safety products. OnchainReceipts should not compete as a generic transaction hash beautifier.
+The market already contains human-readable transaction tools and wallet safety products. TxReceipts should not compete as a generic transaction hash beautifier.
 
 ### TxLens
 
 TxLens positions itself as a way to make any onchain transaction human-readable and shareable. It supports Base and other chains and focuses on instant receipts from explorer URLs or transaction hashes.
 
-Implication: OnchainReceipts should avoid "paste a hash, get a pretty receipt" as the only value proposition.
+Implication: TxReceipts should avoid "paste a hash, get a pretty receipt" as the only value proposition.
 
 Source: https://txlens.xyz/
 
@@ -16,7 +16,7 @@ Source: https://txlens.xyz/
 
 txplain is an open-source AI-powered blockchain transaction analysis service. It focuses on RPC-first transaction explanation and human-readable summaries.
 
-Implication: The open-source angle is not enough by itself. OnchainReceipts needs a clearer standard, dapp intent model, and accounting-ready receipt artifacts.
+Implication: The open-source angle is not enough by itself. TxReceipts needs a clearer standard, dapp intent model, and accounting-ready receipt artifacts.
 
 Source: https://github.com/txplain/txplain
 
@@ -30,7 +30,7 @@ Implication: The receipt model should include both verified onchain outcomes and
 
 Chain Receipt presents itself as professional blockchain intelligence and audit-grade documentation. It appears closer to deterministic transaction interpretation and documentation than a casual explorer view.
 
-Implication: OnchainReceipts must keep the Base-first and dapp-intent verification angle strong, rather than becoming a broad transaction intelligence product.
+Implication: TxReceipts must keep the Base-first and dapp-intent verification angle strong, rather than becoming a broad transaction intelligence product.
 
 Source: https://chainreceipt.vercel.app/
 
@@ -38,7 +38,7 @@ Source: https://chainreceipt.vercel.app/
 
 Proof of Pain creates shareable onchain receipts based on wallet history and social storytelling. It is expressive and consumer-facing rather than accounting-focused.
 
-Implication: OnchainReceipts should avoid novelty/social receipt positioning. The visual language should remain serious, itemized, and reconciliation-friendly.
+Implication: TxReceipts should avoid novelty/social receipt positioning. The visual language should remain serious, itemized, and reconciliation-friendly.
 
 Source: https://www.proofofpain.com/
 
@@ -60,7 +60,7 @@ Base is well suited for receipts because it has:
 - OnchainKit components
 - USDC payments, creator support, mints, swaps, subscriptions, and game purchases
 
-Official Base docs highlight OnchainKit as a toolkit for wallet, transaction, checkout, fund, token, swap, and mint flows. That gives OnchainReceipts a clear integration path for builders.
+Official Base docs highlight OnchainKit as a toolkit for wallet, transaction, checkout, fund, token, swap, and mint flows. That gives TxReceipts a clear integration path for builders.
 
 Sources:
 
@@ -69,7 +69,7 @@ Sources:
 
 ## Product wedge
 
-OnchainReceipts should be:
+TxReceipts should be:
 
 1. User-facing enough to be useful without dapp integrations.
 2. Developer-facing enough to become infrastructure.

@@ -1,14 +1,14 @@
-# OnchainReceipts
+# TxReceipts
 
 Open-source receipt infrastructure for human-readable, verified Base transactions.
 
-OnchainReceipts turns complex onchain activity into receipts people can read, download, reconcile, and trust. The long-term goal is not just to decode a transaction hash. It is to compare what a dapp said it was doing with what actually happened onchain, then produce a signed receipt that works for users, builders, and accountants.
+TxReceipts turns complex onchain activity into receipts people can read, download, reconcile, and trust. The long-term goal is not just to decode a transaction hash. It is to compare what a dapp said it was doing with what actually happened onchain, then produce a signed receipt that works for users, builders, and accountants.
 
 ## Why this exists
 
 Block explorers are precise, but most people cannot read raw logs, internal calls, router paths, gas accounting, and token transfers with confidence. Wallet previews help before signing, but after the transaction users still need a clear record of what happened.
 
-OnchainReceipts is designed for:
+TxReceipts is designed for:
 
 - Users who want a monthly receipt box for Base activity.
 - Dapps that want to give users verified receipts after swaps, mints, payments, subscriptions, games, and creator support.
@@ -16,7 +16,7 @@ OnchainReceipts is designed for:
 
 ## What makes it different
 
-There are already products that make transaction hashes more readable. OnchainReceipts focuses on a different primitive:
+There are already products that make transaction hashes more readable. TxReceipts focuses on a different primitive:
 
 **Intent plus verification.**
 
@@ -81,7 +81,7 @@ https://madmin27.github.io/OnchainReceipts/
 
 ## Demo walkthrough
 
-![OnchainReceipts demo walkthrough](apps/web/assets/onchainreceipts-demo.gif)
+![TxReceipts demo walkthrough](apps/web/assets/txreceipts-demo.gif)
 
 The first live demo can fetch a transaction hash through the selected network RPC, parse receipt logs for token transfers, estimate gas paid, and render a downloadable PNG receipt artifact.
 
@@ -89,7 +89,7 @@ The first live demo can fetch a transaction hash through the selected network RP
 
 Block explorers are essential, but they are optimized for technical inspection. Most users still have to interpret raw logs, token movements, router contracts, internal calls, gas fields, and contract labels by themselves.
 
-OnchainReceipts is designed for a different job:
+TxReceipts is designed for a different job:
 
 - turn transaction outcomes into accounting-friendly receipt artifacts
 - separate sent assets, received assets, gas, app fees, and protocol fees
@@ -104,10 +104,10 @@ The core question is not only "what happened onchain?" It is "what did the app s
 Dapps can integrate by submitting intent metadata after a Base transaction lands. The API verifies the transaction against Base onchain data before issuing a receipt.
 
 ```ts
-import { OnchainReceipts } from '@onchainreceipts/sdk';
+import { TxReceipts } from '@txreceipts/sdk';
 
-const receipts = new OnchainReceipts({
-  apiKey: process.env.ONCHAIN_RECEIPTS_API_KEY,
+const receipts = new TxReceipts({
+  apiKey: process.env.TX_RECEIPTS_API_KEY,
 });
 
 const receipt = await receipts.create({
@@ -133,7 +133,7 @@ The receipt engine returns a `verified`, `partial`, `mismatch`, or `failed` stat
 
 ## Security posture
 
-OnchainReceipts should never ask for private keys, seed phrases, token approvals, or spending permissions. Wallet signatures are only for login/session ownership. Receipt generation reads public Base data and optionally accepts signed dapp intent metadata.
+TxReceipts should never ask for private keys, seed phrases, token approvals, or spending permissions. Wallet signatures are only for login/session ownership. Receipt generation reads public Base data and optionally accepts signed dapp intent metadata.
 
 See [docs/security-model.md](docs/security-model.md).
 

@@ -1,6 +1,6 @@
 # Security Policy
 
-OnchainReceipts handles public blockchain data, user wallet addresses, optional wallet login signatures, and dapp-submitted receipt metadata. It must never request or store seed phrases, private keys, token approvals, or spending permissions.
+TxReceipts handles public blockchain data, user wallet addresses, optional wallet login signatures, and dapp-submitted receipt metadata. It must never request or store seed phrases, private keys, token approvals, or spending permissions.
 
 ## Reporting vulnerabilities
 

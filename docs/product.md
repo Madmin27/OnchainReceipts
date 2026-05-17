@@ -2,7 +2,7 @@
 
 ## Name
 
-OnchainReceipts
+TxReceipts
 
 ## Positioning
 
@@ -52,7 +52,7 @@ Each receipt should have:
 - JSON canonical form
 - PNG export
 - future PDF export
-- OnchainReceipts signature
+- TxReceipts signature
 - optional daily anchoring proof
 
 ## Roadmap

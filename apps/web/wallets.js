@@ -26,7 +26,7 @@ window.addEventListener("eip6963:announceProvider", event => {
 window.dispatchEvent(new Event("eip6963:requestProvider"));
 discoverLegacyWallets();
 
-window.OnchainReceiptsWallets = {
+window.TxReceiptsWallets = {
   list() {
     discoverLegacyWallets();
     return [...discoveredWallets.values()].map(({ id, name }) => ({ id, name }));

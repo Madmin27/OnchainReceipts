@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping build OnchainReceipts.
+Thanks for helping build TxReceipts.
 
 ## Useful areas
 

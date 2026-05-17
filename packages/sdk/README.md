@@ -1,14 +1,14 @@
-# @onchainreceipts/sdk
+# @txreceipts/sdk
 
 Planned SDK for dapps that want to issue verified receipts after Base transactions.
 
 ## Draft API
 
 ```ts
-import { OnchainReceipts } from '@onchainreceipts/sdk';
+import { TxReceipts } from '@txreceipts/sdk';
 
-const receipts = new OnchainReceipts({
-  apiKey: process.env.ONCHAIN_RECEIPTS_API_KEY,
+const receipts = new TxReceipts({
+  apiKey: process.env.TX_RECEIPTS_API_KEY,
 });
 
 const result = await receipts.create({

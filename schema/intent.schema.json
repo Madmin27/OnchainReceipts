@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://onchainreceipts.org/schema/intent.schema.json",
-  "title": "OnchainReceipts Dapp Intent",
+  "$id": "https://txreceipts.org/schema/intent.schema.json",
+  "title": "TxReceipts Dapp Intent",
   "type": "object",
   "required": ["version", "chainId", "txHash", "user", "app", "intent"],
   "properties": {

@@ -2,7 +2,7 @@
 
 ## Threat model
 
-OnchainReceipts is a read-mostly product, but it still touches sensitive user trust surfaces:
+TxReceipts is a read-mostly product, but it still touches sensitive user trust surfaces:
 
 - wallet login signatures
 - transaction interpretation
@@ -13,7 +13,7 @@ OnchainReceipts is a read-mostly product, but it still touches sensitive user tr
 
 ## Non-goals
 
-OnchainReceipts must not:
+TxReceipts must not:
 
 - custody assets
 - request token approvals

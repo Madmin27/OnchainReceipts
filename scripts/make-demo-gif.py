@@ -4,7 +4,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "apps" / "web" / "assets" / "onchainreceipts-demo.gif"
+OUT = ROOT / "apps" / "web" / "assets" / "txreceipts-demo.gif"
 
 
 def font(size, bold=False):
@@ -21,7 +21,7 @@ def font(size, bold=False):
 
 def draw_receipt(draw, x, y, title, sent, received, status):
     draw.rounded_rectangle((x, y, x + 520, y + 330), radius=10, fill="#ffffff", outline="#d7ddd4", width=2)
-    draw.text((x + 28, y + 28), "ONCHAINRECEIPTS", fill="#0052ff", font=font(14, True))
+    draw.text((x + 28, y + 28), "TXRECEIPTS", fill="#0052ff", font=font(14, True))
     draw.text((x + 28, y + 66), title, fill="#111412", font=font(30, True))
     draw.rounded_rectangle((x + 390, y + 30, x + 488, y + 62), radius=16, fill="#e5f4ec")
     draw.text((x + 414, y + 38), status, fill="#0b7a45", font=font(14, True))
@@ -37,7 +37,7 @@ def draw_receipt(draw, x, y, title, sent, received, status):
 def frame(step, subtitle, tx_text, receipt_title, sent, received):
     image = Image.new("RGB", (960, 540), "#f6f7f2")
     draw = ImageDraw.Draw(image)
-    draw.text((54, 48), "OnchainReceipts", fill="#111412", font=font(34, True))
+    draw.text((54, 48), "TxReceipts", fill="#111412", font=font(34, True))
     draw.text((54, 92), "Human-readable, verified Base transaction receipts", fill="#5c655f", font=font(18))
 
     draw.rounded_rectangle((54, 142, 520, 220), radius=10, fill="#ffffff", outline="#d7ddd4", width=2)

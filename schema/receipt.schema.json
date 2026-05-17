@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://onchainreceipts.org/schema/receipt.schema.json",
-  "title": "OnchainReceipts Receipt",
+  "$id": "https://txreceipts.org/schema/receipt.schema.json",
+  "title": "TxReceipts Receipt",
   "type": "object",
   "required": [
     "version",

@@ -8,7 +8,7 @@ const requiredFiles = [
   'apps/web/index.html',
   'apps/web/styles.css',
   'apps/web/app.js',
-  'apps/web/assets/onchainreceipts-demo.gif',
+  'apps/web/assets/txreceipts-demo.gif',
   'schema/receipt.schema.json',
   'schema/intent.schema.json',
   'examples/sample-receipt.json',

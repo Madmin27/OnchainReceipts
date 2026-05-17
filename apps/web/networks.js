@@ -1,4 +1,4 @@
-window.ONCHAIN_RECEIPTS_NETWORKS = [
+window.TX_RECEIPTS_NETWORKS = [
   {
     id: "base",
     name: "Base",

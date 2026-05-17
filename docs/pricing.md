@@ -27,7 +27,7 @@ Low launch pricing designed to cover infrastructure and encourage integration.
 ```txt
 Free
 - 250 verified receipts / month
-- OnchainReceipts watermark
+- TxReceipts watermark
 - community support
 
 Starter - $9 / month

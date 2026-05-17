@@ -19,7 +19,7 @@ const PAGE_SIZE = 20;
 const MAX_QR_BYTES = 80_000;
 const RECEIPT_WIDTH = 1720;
 const RECEIPT_HEIGHT = 1680;
-const networks = window.ONCHAIN_RECEIPTS_NETWORKS || [];
+const networks = window.TX_RECEIPTS_NETWORKS || [];
 
 const knownTokens = {
   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { symbol: "USDC", decimals: 6n },
@@ -487,9 +487,9 @@ function setWallet(address, chainId) {
 }
 
 function selectedProvider() {
-  const provider = window.OnchainReceiptsWallets?.get(walletProviderSelect.value)
+  const provider = window.TxReceiptsWallets?.get(walletProviderSelect.value)
     || walletProvider
-    || window.OnchainReceiptsWallets?.firstProvider()
+    || window.TxReceiptsWallets?.firstProvider()
     || window.ethereum;
   return provider || null;
 }
@@ -513,7 +513,7 @@ function populateNetworks() {
 
 function populateWalletProviders() {
   walletProviderSelect.textContent = "";
-  const options = window.OnchainReceiptsWallets?.list() || [];
+  const options = window.TxReceiptsWallets?.list() || [];
   if (!options.length) {
     const option = document.createElement("option");
     option.value = "";
@@ -754,7 +754,7 @@ async function renderReceiptCanvas(data) {
   context.lineWidth = 2;
   context.stroke();
 
-  drawText(context, "ONCHAINRECEIPTS", 112, 150, { color: "#0052ff", size: 24, weight: 800, maxLength: 24 });
+  drawText(context, "TXRECEIPTS", 112, 150, { color: "#0052ff", size: 24, weight: 800, maxLength: 24 });
   drawText(context, data.title, 112, 228, { size: 64, weight: 800, maxLength: 42 });
   roundedRect(context, 1408, 114, 180, 68, 34);
   context.fillStyle = data.status === "Verified" ? "#e5f4ec" : "#ffe4e4";
@@ -837,7 +837,7 @@ async function downloadReceiptPng() {
       const pngUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = pngUrl;
-      link.download = `${receipt.id || "onchain-receipt"}.png`;
+      link.download = `${receipt.id || "tx-receipt"}.png`;
       document.body.appendChild(link);
       link.click();
       link.remove();

@@ -1,4 +1,4 @@
-# @onchainreceipts/engine
+# @txreceipts/engine
 
 Planned transaction parser and receipt verification engine.
 

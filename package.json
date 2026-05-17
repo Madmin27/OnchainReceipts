@@ -1,5 +1,5 @@
 {
-  "name": "onchainreceipts",
+  "name": "txreceipts",
   "private": true,
   "version": "0.1.0",
   "description": "Open-source receipt infrastructure for human-readable, verified Base transactions.",
