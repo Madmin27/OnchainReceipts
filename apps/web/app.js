@@ -56,6 +56,10 @@ function selectedWalletInfo() {
   return window.TxReceiptsWallets?.getInfo(walletProviderSelect.value) || null;
 }
 
+function walletOptions() {
+  return window.TxReceiptsWallets?.list() || [];
+}
+
 function setStatus(message, tone = "neutral") {
   txStatus.textContent = message;
   txStatus.dataset.tone = tone;
@@ -587,11 +591,13 @@ function setWallet(address, chainId) {
 }
 
 function selectedProvider() {
-  const provider = window.TxReceiptsWallets?.get(walletProviderSelect.value)
-    || walletProvider
-    || window.TxReceiptsWallets?.firstProvider()
-    || window.ethereum;
-  return provider || null;
+  const family = currentNetwork().family;
+  const selectedInfo = selectedWalletInfo();
+  const selectedCompatible = selectedInfo?.family === family;
+  const provider = selectedCompatible ? window.TxReceiptsWallets?.get(walletProviderSelect.value) : null;
+  const fallback = window.TxReceiptsWallets?.firstByFamily(family)
+    || (family === "evm" ? window.ethereum : window.solana);
+  return provider || walletProvider || fallback || null;
 }
 
 function resetHistory() {
@@ -601,6 +607,7 @@ function resetHistory() {
 }
 
 function populateNetworks() {
+  const previousValue = networkSelect.value;
   networkSelect.textContent = "";
   networks.forEach(network => {
     const option = document.createElement("option");
@@ -608,12 +615,15 @@ function populateNetworks() {
     option.textContent = network.name;
     networkSelect.appendChild(option);
   });
-  networkSelect.value = networks[0]?.id || "";
+  networkSelect.value = networks.some(network => network.id === previousValue) ? previousValue : networks[0]?.id || "";
 }
 
-function populateWalletProviders() {
+function populateWalletProviders({ preserveSelection = true } = {}) {
+  const previousValue = walletProviderSelect.value;
   walletProviderSelect.textContent = "";
-  const options = window.TxReceiptsWallets?.list() || [];
+  const network = currentNetwork();
+  const options = walletOptions();
+  const compatible = options.filter(wallet => wallet.family === network.family);
   if (!options.length) {
     const option = document.createElement("option");
     option.value = "";
@@ -621,23 +631,42 @@ function populateWalletProviders() {
     walletProviderSelect.appendChild(option);
     return;
   }
-  options.forEach(wallet => {
+  if (!compatible.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = `No ${network.family} wallet found`;
+    walletProviderSelect.appendChild(option);
+    return;
+  }
+  compatible.forEach(wallet => {
     const option = document.createElement("option");
     option.value = wallet.id;
     option.textContent = `${wallet.name} (${wallet.family})`;
     walletProviderSelect.appendChild(option);
   });
-  walletProviderSelect.value = options[0].id;
-  syncNetworkToSelectedWallet();
+  const previousStillValid = preserveSelection && compatible.some(wallet => wallet.id === previousValue);
+  walletProviderSelect.value = previousStillValid ? previousValue : compatible[0].id;
 }
 
-function syncNetworkToSelectedWallet() {
+function syncNetworkToSelectedWallet({ preserveNetwork = false } = {}) {
   const info = selectedWalletInfo();
   if (!info) return;
+  if (preserveNetwork && info.family === currentNetwork().family) return;
   const targetNetwork = networkByFamily(info.family);
   if (targetNetwork && networkSelect.value !== targetNetwork.id) {
     networkSelect.value = targetNetwork.id;
+    populateWalletProviders();
     resetHistory();
+  }
+}
+
+function syncWalletToSelectedNetwork() {
+  const network = currentNetwork();
+  const info = selectedWalletInfo();
+  if (info?.family === network.family) return;
+  const replacement = window.TxReceiptsWallets?.firstInfoByFamily(network.family);
+  if (replacement) {
+    walletProviderSelect.value = replacement.id;
   }
 }
 
@@ -698,10 +727,13 @@ connectWalletButton.addEventListener("click", async () => {
     }
 
     walletProvider = provider;
-    syncNetworkToSelectedWallet();
+    syncNetworkToSelectedWallet({ preserveNetwork: true });
     if (info?.family === "solana") {
       const response = await provider.connect();
-      const address = response?.publicKey?.toString() || provider.publicKey?.toString();
+      const address = response?.publicKey?.toString()
+        || response?.account?.address
+        || provider.publicKey?.toString()
+        || provider.publicKey?.toBase58?.();
       if (!address) throw new Error("Could not read Phantom Solana public key.");
       setWallet(address, currentNetwork().cluster);
       setStatus(`Wallet connected and ${currentNetwork().name} selected.`, "success");
@@ -747,6 +779,8 @@ historyTabs.forEach(tabButton => {
 });
 
 networkSelect.addEventListener("change", async () => {
+  populateWalletProviders({ preserveSelection: false });
+  syncWalletToSelectedNetwork();
   resetHistory();
   txStatus.textContent = `Selected ${currentNetwork().name}. Paste a tx hash or connect a wallet.`;
   if (!connectedWallet || !walletProvider) return;
@@ -763,9 +797,13 @@ networkSelect.addEventListener("change", async () => {
 });
 
 walletProviderSelect.addEventListener("change", () => {
-  syncNetworkToSelectedWallet();
+  syncNetworkToSelectedWallet({ preserveNetwork: false });
   setWallet(null, "0x0");
   setStatus("Wallet provider changed. Connect again to approve access.", "neutral");
+});
+
+window.addEventListener("txreceipts:walletsChanged", () => {
+  populateWalletProviders();
 });
 
 if (window.ethereum) {
@@ -1017,6 +1055,6 @@ async function downloadReceiptPng() {
 }
 
 populateNetworks();
-populateWalletProviders();
-setTimeout(populateWalletProviders, 300);
+populateWalletProviders({ preserveSelection: false });
+setTimeout(() => populateWalletProviders(), 300);
 resetHistory();
