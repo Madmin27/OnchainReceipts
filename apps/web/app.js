@@ -1,14 +1,12 @@
 let receipt = null;
 
 const artifact = document.querySelector("#receiptArtifact");
-const emptyReceipt = document.querySelector("#emptyReceipt");
 const txForm = document.querySelector("#txForm");
 const txInput = document.querySelector("#txHash");
 const txStatus = document.querySelector("#txStatus");
 const connectWalletButton = document.querySelector("#connectWallet");
 const walletLabel = document.querySelector("#walletLabel");
 const networkSelect = document.querySelector("#networkSelect");
-const loadHistoryButton = document.querySelector("#loadHistory");
 const loadMoreHistoryButton = document.querySelector("#loadMoreHistory");
 const historyStatus = document.querySelector("#historyStatus");
 const historyList = document.querySelector("#historyList");
@@ -30,6 +28,7 @@ const knownTokens = {
 
 let connectedWallet = null;
 let activeHistoryTab = "all";
+let visibleHistoryLimit = PAGE_SIZE;
 let historyState = {
   transactions: [],
   transfers: [],
@@ -66,13 +65,26 @@ function rowsToSvg(rows) {
     .join("\n  ");
 }
 
+function splitLong(value, first = 38) {
+  if (!value || value.length <= first) return [value || "", ""];
+  return [value.slice(0, first), value.slice(first)];
+}
+
 function buildReceiptSvg(data) {
   const safe = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, escapeXml(value)]));
   const rows = Array.isArray(data.transferRows) ? data.transferRows : [];
+  const [hashA, hashB] = splitLong(data.fullTxHash || data.tx || "");
+  const [fromA, fromB] = splitLong(data.fromFull || data.from || "", 28);
+  const [toA, toB] = splitLong(data.toFull || data.app || "", 28);
+  const qrImage = data.qrDataUrl
+    ? `<image x="684" y="156" width="92" height="92" href="${escapeXml(data.qrDataUrl)}"/>`
+    : `<rect x="684" y="156" width="92" height="92" rx="6" fill="#f4f7f4" stroke="#d7ddd4"/>
+  <text x="703" y="192" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">BaseScan</text>
+  <text x="699" y="216" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="11">tx details</text>`;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="860" height="620" viewBox="0 0 860 620">
-  <rect width="860" height="620" fill="#ffffff"/>
-  <rect x="28" y="28" width="804" height="564" rx="8" fill="#ffffff" stroke="#d7ddd4"/>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="860" height="760" viewBox="0 0 860 760">
+  <rect width="860" height="760" fill="#ffffff"/>
+  <rect x="28" y="28" width="804" height="704" rx="8" fill="#ffffff" stroke="#d7ddd4"/>
   <text x="56" y="72" fill="#0052ff" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700" letter-spacing="1.2">ONCHAINRECEIPTS</text>
   <text x="56" y="112" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="760">${safe.title}</text>
   <rect x="694" y="54" width="98" height="34" rx="17" fill="#e5f4ec"/>
@@ -84,39 +96,41 @@ function buildReceiptSvg(data) {
   <line x1="306" y1="204" x2="394" y2="204" stroke="#d7ddd4" stroke-width="2"/>
   <text x="438" y="188" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="13">Received</text>
   <text x="438" y="222" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="760">${safe.received}</text>
-  <rect x="684" y="156" width="92" height="92" rx="6" fill="#f4f7f4" stroke="#d7ddd4"/>
-  <text x="703" y="192" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">BaseScan</text>
-  <text x="699" y="216" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="11">tx details</text>
+  ${qrImage}
   <text x="682" y="262" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="10">${safe.tx}</text>
   <line x1="56" y1="286" x2="804" y2="286" stroke="#d7ddd4"/>
 
   <text x="56" y="326" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="760">Payment and fee breakdown</text>
   ${rowsToSvg(rows)}
 
-  <line x1="56" y1="508" x2="804" y2="508" stroke="#d7ddd4"/>
-  <text x="56" y="536" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">App</text>
-  <text x="56" y="560" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">${safe.app}</text>
-  <text x="212" y="536" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Network</text>
-  <text x="212" y="560" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">${safe.network}</text>
-  <text x="356" y="536" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Wallet</text>
-  <text x="356" y="560" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">${safe.from}</text>
-  <text x="518" y="536" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Block</text>
-  <text x="518" y="560" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">${safe.block || "Pending"}</text>
-
-  <text x="56" y="586" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Receipt ${safe.id} - ${safe.date} - ${safe.tx}</text>
-  <text x="650" y="586" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">Verified on Base</text>
+  <line x1="56" y1="544" x2="804" y2="544" stroke="#d7ddd4"/>
+  <text x="56" y="576" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="760">Transaction details</text>
+  <text x="56" y="608" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Method</text>
+  <text x="128" y="608" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">${safe.method || "contract call"}</text>
+  <text x="250" y="608" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Status</text>
+  <text x="316" y="608" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">${safe.status}</text>
+  <text x="430" y="608" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Block</text>
+  <text x="488" y="608" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">${safe.block || "Pending"}</text>
+  <text x="610" y="608" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Time</text>
+  <text x="658" y="608" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">${safe.date}</text>
+  <text x="56" y="640" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">From</text>
+  <text x="128" y="640" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(fromA)}</text>
+  <text x="128" y="658" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(fromB)}</text>
+  <text x="430" y="640" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">To</text>
+  <text x="488" y="640" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(toA)}</text>
+  <text x="488" y="658" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(toB)}</text>
+  <text x="56" y="692" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Tx hash</text>
+  <text x="128" y="692" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(hashA)}</text>
+  <text x="128" y="710" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="700">${escapeXml(hashB)}</text>
+  <text x="650" y="710" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">Verified on Base</text>
 </svg>`;
 }
 
 function renderArtifact() {
   if (!receipt) {
-    artifact.hidden = true;
-    emptyReceipt.hidden = false;
     return;
   }
   artifact.innerHTML = buildReceiptSvg(receipt);
-  artifact.hidden = false;
-  emptyReceipt.hidden = true;
 }
 
 function setStatus(message, tone = "neutral") {
@@ -255,7 +269,7 @@ function normalizeTransfer(item) {
   };
 }
 
-function combinedHistoryItems() {
+function allHistoryItems() {
   const normalized = [
     ...historyState.transactions.map(normalizeTx),
     ...historyState.transfers.map(normalizeTransfer),
@@ -273,12 +287,16 @@ function combinedHistoryItems() {
       if (activeHistoryTab === "nfts") return item.kind === "nft";
       return item.direction === activeHistoryTab;
     })
-    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
-    .slice(0, PAGE_SIZE);
+    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+}
+
+function combinedHistoryItems() {
+  return allHistoryItems().slice(0, visibleHistoryLimit);
 }
 
 function renderHistory() {
   const items = combinedHistoryItems();
+  const allItems = allHistoryItems();
   historyList.innerHTML = "";
 
   if (!connectedWallet) {
@@ -293,7 +311,7 @@ function renderHistory() {
     return;
   }
 
-  setHistoryStatus(`Showing ${items.length} recent ${activeHistoryTab === "all" ? "transaction" : activeHistoryTab} record${items.length === 1 ? "" : "s"}.`);
+  setHistoryStatus(`Showing ${items.length} of ${allItems.length} ${activeHistoryTab === "all" ? "transaction" : activeHistoryTab} record${items.length === 1 ? "" : "s"}.`);
 
   for (const item of items) {
     const button = document.createElement("button");
@@ -306,7 +324,7 @@ function renderHistory() {
     historyList.appendChild(button);
   }
 
-  loadMoreHistoryButton.hidden = !historyState.txNext && !historyState.transferNext;
+  loadMoreHistoryButton.hidden = visibleHistoryLimit >= allItems.length && !historyState.txNext && !historyState.transferNext;
 }
 
 async function loadHistory({ more = false } = {}) {
@@ -316,6 +334,9 @@ async function loadHistory({ more = false } = {}) {
   }
 
   try {
+    if (!more) {
+      visibleHistoryLimit = PAGE_SIZE;
+    }
     setHistoryStatus(more ? "Loading older Base activity..." : "Loading latest Base activity...");
     const txParams = more ? pageParamsToQuery(historyState.txNext) : null;
     const transferParams = more ? pageParamsToQuery(historyState.transferNext) : null;
@@ -332,6 +353,9 @@ async function loadHistory({ more = false } = {}) {
       : transferPayload.items || [];
     historyState.txNext = txPayload.next_page_params || null;
     historyState.transferNext = transferPayload.next_page_params || null;
+    if (more) {
+      visibleHistoryLimit += PAGE_SIZE;
+    }
     renderHistory();
   } catch (error) {
     setHistoryStatus(error instanceof Error ? error.message : "Could not load wallet history.", "error");
@@ -383,6 +407,41 @@ function transferDetail(item, sender) {
   return direction;
 }
 
+function inferMethod(tx) {
+  if (!tx.input || tx.input === "0x") return "native transfer";
+  return `${tx.input.slice(0, 10)} call`;
+}
+
+function topObservedTransferRows(transfers, sender, existingRows) {
+  const used = new Set(existingRows.map(row => `${row.value}:${row.detail}`));
+  return transfers
+    .map(item => ({
+      label: item.from === sender ? "Token out" : item.to === sender ? "Token in" : "Token movement",
+      value: transferText(item, "Token transfer"),
+      detail: transferDetail(item, sender),
+    }))
+    .filter(row => {
+      const key = `${row.value}:${row.detail}`;
+      if (used.has(key)) return false;
+      used.add(key);
+      return true;
+    })
+    .slice(0, 2);
+}
+
+async function fetchQrDataUrl(value) {
+  const url = `https://api.qrserver.com/v1/create-qr-code/?size=184x184&margin=1&data=${encodeURIComponent(value)}`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("QR service unavailable");
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
 function inferTitle(summary, tx) {
   if (summary.firstSent && summary.firstReceived) {
     return `${summary.firstSent.symbol} to ${summary.firstReceived.symbol} activity`;
@@ -393,12 +452,14 @@ function inferTitle(summary, tx) {
   return "Base transaction";
 }
 
-function buildReceiptFromChain(txHash, tx, txReceipt) {
+function buildReceiptFromChain(txHash, tx, txReceipt, block) {
   const transfers = parseTransfers(txReceipt.logs || []);
   const summary = summarizeTransfers(tx, transfers);
   const gasFeeWei = hexToBigInt(txReceipt.gasUsed) * hexToBigInt(txReceipt.effectiveGasPrice || tx.gasPrice);
   const ethValue = hexToBigInt(tx.value);
   const success = txReceipt.status === "0x1";
+  const sender = tx.from.toLowerCase();
+  const explorerUrl = `https://basescan.org/tx/${txHash}`;
 
   const sentText = summary.firstSent
     ? transferText(summary.firstSent, "Observed token transfer")
@@ -412,43 +473,59 @@ function buildReceiptFromChain(txHash, tx, txReceipt) {
       ? `${transfers.length} token transfer${transfers.length === 1 ? "" : "s"}`
       : "No token receipt detected";
 
+  const baseRows = [
+    {
+      label: "User paid",
+      value: sentText,
+      detail: summary.firstSent ? transferDetail(summary.firstSent, sender) : "Native value or contract call",
+    },
+    {
+      label: "User received",
+      value: receivedText,
+      detail: summary.firstReceived ? transferDetail(summary.firstReceived, sender) : "No direct wallet receipt",
+    },
+    {
+      label: "Gas paid",
+      value: `${formatUnits(gasFeeWei, ETH_DECIMALS, 8)} ETH`,
+      detail: "Base network fee",
+    },
+  ];
+
   return {
     id: `or_base_${txHash.slice(2, 10)}`,
     title: inferTitle(summary, tx),
     app: tx.to ? shortHash(tx.to) : "Contract creation",
     network: "Base",
-    date: new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
+    date: block?.timestamp
+      ? new Date(Number(hexToBigInt(block.timestamp)) * 1000).toLocaleString(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        })
+      : new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
     tx: shortHash(txHash),
+    fullTxHash: txHash,
     from: shortHash(tx.from),
+    fromFull: tx.from,
+    toFull: tx.to || "Contract creation",
     sent: sentText,
     received: receivedText,
     gas: `${formatUnits(gasFeeWei, ETH_DECIMALS, 8)} ETH`,
     appFee: summary.sent.length > 1 ? "Detected in transfers" : "Not detected",
     protocolFee: "Not detected",
     status: success ? "Verified" : "Failed",
-    explorerUrl: `https://basescan.org/tx/${txHash}`,
+    explorerUrl,
     block: String(parseInt(txReceipt.blockNumber, 16)),
+    method: inferMethod(tx),
     transferRows: [
-      {
-        label: "User paid",
-        value: sentText,
-        detail: summary.firstSent ? transferDetail(summary.firstSent, tx.from.toLowerCase()) : "Native value or contract call",
-      },
-      {
-        label: "User received",
-        value: receivedText,
-        detail: summary.firstReceived ? transferDetail(summary.firstReceived, tx.from.toLowerCase()) : "No direct wallet receipt",
-      },
-      {
-        label: "Gas paid",
-        value: `${formatUnits(gasFeeWei, ETH_DECIMALS, 8)} ETH`,
-        detail: "Base network fee",
-      },
-      {
-        label: "Other transfers",
-        value: `${Math.max(transfers.length - 2, 0)} observed`,
-        detail: "Potential router, fee, or protocol movement",
-      },
+      ...baseRows,
+      ...topObservedTransferRows(transfers, sender, baseRows),
+      ...(transfers.length > 2
+        ? [{
+            label: "Other transfers",
+            value: `${Math.max(transfers.length - 2, 0)} observed`,
+            detail: "Potential router, fee, or protocol movement",
+          }]
+        : []),
     ],
   };
 }
@@ -522,12 +599,20 @@ connectWalletButton.addEventListener("click", async () => {
   }
 });
 
-loadHistoryButton.addEventListener("click", () => loadHistory());
-loadMoreHistoryButton.addEventListener("click", () => loadHistory({ more: true }));
+loadMoreHistoryButton.addEventListener("click", () => {
+  const allItems = allHistoryItems();
+  if (visibleHistoryLimit < allItems.length) {
+    visibleHistoryLimit += PAGE_SIZE;
+    renderHistory();
+    return;
+  }
+  loadHistory({ more: true });
+});
 
 historyTabs.forEach(tabButton => {
   tabButton.addEventListener("click", () => {
     activeHistoryTab = tabButton.dataset.historyTab;
+    visibleHistoryLimit = PAGE_SIZE;
     historyTabs.forEach(button => button.classList.toggle("active", button === tabButton));
     renderHistory();
   });
@@ -554,7 +639,7 @@ if (window.ethereum) {
 txForm.addEventListener("submit", async event => {
   event.preventDefault();
   const txHash = txInput.value.trim();
-  await generateReceipt(txHash, { download: false });
+  await generateReceipt(txHash, { download: true });
 });
 
 async function generateReceipt(txHash, { download = false } = {}) {
@@ -575,7 +660,13 @@ async function generateReceipt(txHash, { download = false } = {}) {
       return;
     }
 
-    receipt = buildReceiptFromChain(txHash, tx, txReceipt);
+    const block = await rpc("eth_getBlockByNumber", [txReceipt.blockNumber, false]);
+    receipt = buildReceiptFromChain(txHash, tx, txReceipt, block);
+    try {
+      receipt.qrDataUrl = await fetchQrDataUrl(receipt.explorerUrl);
+    } catch {
+      receipt.qrDataUrl = "";
+    }
     renderArtifact();
     setStatus("Receipt generated from Base transaction data.", "success");
     if (download) {
@@ -600,7 +691,7 @@ function downloadReceiptPng() {
     image.onload = () => {
       const canvas = document.createElement("canvas");
       canvas.width = 1720;
-      canvas.height = 1240;
+      canvas.height = 1520;
       const context = canvas.getContext("2d");
       context.fillStyle = "#ffffff";
       context.fillRect(0, 0, canvas.width, canvas.height);

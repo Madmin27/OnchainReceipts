@@ -553,19 +553,6 @@ dd {
   color: #9f1d1d;
 }
 
-.artifact-wrap {
-  display: flex;
-  justify-content: center;
-  overflow-x: auto;
-}
-
-.artifact {
-  background: #ffffff;
-  min-height: 520px;
-  overflow: hidden;
-  width: min(100%, 780px);
-}
-
 .footer {
   border-top: 1px solid var(--line);
   color: var(--muted);
@@ -601,11 +588,6 @@ dd {
   .wallet-panel,
   .history-item {
     grid-template-columns: 1fr;
-  }
-
-  .empty-receipt {
-    align-items: flex-start;
-    text-align: left;
   }
 
   .history-value {
