@@ -75,6 +75,10 @@ packages/sdk/      Planned dapp SDK
 
 Open `apps/web/index.html` in a browser. The first prototype is dependency-free so the project can be reviewed without a build step.
 
+Live demo:
+
+https://madmin27.github.io/OnchainReceipts/
+
 ## Security posture
 
 OnchainReceipts should never ask for private keys, seed phrases, token approvals, or spending permissions. Wallet signatures are only for login/session ownership. Receipt generation reads public Base data and optionally accepts signed dapp intent metadata.
