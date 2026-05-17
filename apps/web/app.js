@@ -2,8 +2,6 @@ let receipt = null;
 
 const artifact = document.querySelector("#receiptArtifact");
 const emptyReceipt = document.querySelector("#emptyReceipt");
-const svgButton = document.querySelector("#downloadSvg");
-const pngButton = document.querySelector("#downloadPng");
 const txForm = document.querySelector("#txForm");
 const txInput = document.querySelector("#txHash");
 const txStatus = document.querySelector("#txStatus");
@@ -47,6 +45,15 @@ function escapeText(value) {
     .replace(/"/g, "&quot;");
 }
 
+function escapeXml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 function qrUrl(value) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=1&data=${encodeURIComponent(value)}`;
 }
@@ -56,15 +63,15 @@ function rowsToSvg(rows) {
     .slice(0, 4)
     .map((row, index) => {
       const y = 344 + index * 38;
-      return `<text x="56" y="${y}" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">${escapeText(row.label)}</text>
-  <text x="184" y="${y}" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">${escapeText(row.value)}</text>
-  <text x="340" y="${y}" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">${escapeText(row.detail)}</text>`;
+      return `<text x="56" y="${y}" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">${escapeXml(row.label)}</text>
+  <text x="184" y="${y}" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">${escapeXml(row.value)}</text>
+  <text x="340" y="${y}" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">${escapeXml(row.detail)}</text>`;
     })
     .join("\n  ");
 }
 
 function buildReceiptSvg(data) {
-  const safe = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, escapeText(value)]));
+  const safe = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, escapeXml(value)]));
   const rows = Array.isArray(data.transferRows) ? data.transferRows : [];
   const qr = qrUrl(data.explorerUrl || "https://basescan.org/");
 
@@ -99,7 +106,7 @@ function buildReceiptSvg(data) {
   <text x="518" y="536" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Block</text>
   <text x="518" y="560" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">${safe.block || "Pending"}</text>
 
-  <text x="56" y="586" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Receipt ${safe.id} · ${safe.date} · ${safe.tx}</text>
+  <text x="56" y="586" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">Receipt ${safe.id} - ${safe.date} - ${safe.tx}</text>
   <text x="650" y="586" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700">Verified on Base</text>
 </svg>`;
 }
@@ -108,15 +115,11 @@ function renderArtifact() {
   if (!receipt) {
     artifact.hidden = true;
     emptyReceipt.hidden = false;
-    svgButton.disabled = true;
-    pngButton.disabled = true;
     return;
   }
   artifact.innerHTML = buildReceiptSvg(receipt);
   artifact.hidden = false;
   emptyReceipt.hidden = true;
-  svgButton.disabled = false;
-  pngButton.disabled = false;
 }
 
 function setStatus(message, tone = "neutral") {
@@ -299,10 +302,9 @@ function renderHistory() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "history-item";
-    button.innerHTML = `<span><strong>${escapeText(item.title)}</strong><span class="history-meta">${escapeText(item.subtitle)} · ${escapeText(formatDate(item.timestamp))}</span></span><span class="history-value">${escapeText(item.value)}</span><span class="history-receipt-button">Receipt</span>`;
-    button.addEventListener("click", () => {
-      txInput.value = item.hash;
-      txForm.requestSubmit();
+    button.innerHTML = `<span><strong>${escapeText(item.title)}</strong><span class="history-meta">${escapeText(item.subtitle)} · ${escapeText(formatDate(item.timestamp))}</span></span><span class="history-value">${escapeText(item.value)}</span><span class="history-receipt-button">Receipt PNG</span>`;
+    button.addEventListener("click", async () => {
+      await generateAndDownloadReceipt(item.hash);
     });
     historyList.appendChild(button);
   }
@@ -549,7 +551,10 @@ if (window.ethereum) {
 txForm.addEventListener("submit", async event => {
   event.preventDefault();
   const txHash = txInput.value.trim();
+  await generateReceipt(txHash, { download: false });
+});
 
+async function generateReceipt(txHash, { download = false } = {}) {
   if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
     setStatus("Enter a valid 0x transaction hash.", "error");
     return;
@@ -570,53 +575,57 @@ txForm.addEventListener("submit", async event => {
     receipt = buildReceiptFromChain(txHash, tx, txReceipt);
     renderArtifact();
     setStatus("Receipt generated from Base transaction data.", "success");
+    if (download) {
+      await downloadReceiptPng();
+    }
   } catch (error) {
     setStatus(error instanceof Error ? error.message : "Could not fetch Base transaction.", "error");
   }
-});
-
-function downloadBlob(filename, mimeType, content) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
 }
 
-svgButton.addEventListener("click", () => {
-  downloadBlob("onchain-receipt-demo.svg", "image/svg+xml", buildReceiptSvg(receipt));
-});
+async function generateAndDownloadReceipt(txHash) {
+  txInput.value = txHash;
+  await generateReceipt(txHash, { download: true });
+}
 
-pngButton.addEventListener("click", () => {
-  const image = new Image();
-  const svg = buildReceiptSvg(receipt);
-  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-  image.onload = () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1560;
-    canvas.height = 1040;
-    const context = canvas.getContext("2d");
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    URL.revokeObjectURL(url);
-    canvas.toBlob(blob => {
-      if (!blob) return;
-      const pngUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = pngUrl;
-      link.download = "onchain-receipt-demo.png";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(pngUrl);
-    }, "image/png");
-  };
-  image.src = url;
-});
+function downloadReceiptPng() {
+  if (!receipt) return Promise.resolve();
+  return new Promise(resolve => {
+    const image = new Image();
+    const svg = buildReceiptSvg(receipt);
+    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1720;
+      canvas.height = 1240;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => {
+        if (!blob) {
+          resolve();
+          return;
+        }
+        const pngUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = pngUrl;
+        link.download = `${receipt.id || "onchain-receipt"}.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(pngUrl);
+        resolve();
+      }, "image/png");
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      setStatus("Could not render receipt PNG.", "error");
+      resolve();
+    };
+    image.src = url;
+  });
+}
 
 renderArtifact();
