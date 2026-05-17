@@ -327,6 +327,47 @@ dd {
   margin-bottom: 28px;
 }
 
+.wallet-panel {
+  align-items: center;
+  background: #101412;
+  border: 1px solid #26312a;
+  border-radius: 8px;
+  color: var(--paper);
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 220px auto;
+  margin-bottom: 16px;
+  padding: 18px;
+}
+
+.wallet-panel .mini-label,
+.wallet-panel label {
+  color: #9db5ff;
+  display: block;
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.wallet-panel strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.wallet-panel select {
+  appearance: none;
+  background: #ffffff;
+  border: 1px solid #d7ddd4;
+  border-radius: 7px;
+  color: var(--ink);
+  font: inherit;
+  min-height: 46px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
 .tx-form {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -414,7 +455,8 @@ dd {
   .hero,
   .feature-grid,
   .pricing-grid,
-  .tx-row {
+  .tx-row,
+  .wallet-panel {
     grid-template-columns: 1fr;
   }
 

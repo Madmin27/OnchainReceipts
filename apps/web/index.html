@@ -171,6 +171,19 @@
             <button id="downloadPng" class="button secondary" type="button">Download PNG</button>
           </div>
         </div>
+        <div class="wallet-panel">
+          <div>
+            <span class="mini-label">Wallet</span>
+            <strong id="walletLabel">Not connected</strong>
+          </div>
+          <div>
+            <label for="networkSelect">Network</label>
+            <select id="networkSelect">
+              <option value="8453" selected>Base</option>
+            </select>
+          </div>
+          <button id="connectWallet" class="button secondary" type="button">Connect wallet</button>
+        </div>
         <form id="txForm" class="tx-form">
           <label for="txHash">Base transaction hash</label>
           <div class="tx-row">
