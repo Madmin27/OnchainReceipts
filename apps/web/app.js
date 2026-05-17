@@ -1,6 +1,5 @@
 let receipt = null;
 
-const artifact = document.querySelector("#receiptArtifact");
 const txForm = document.querySelector("#txForm");
 const txInput = document.querySelector("#txHash");
 const txStatus = document.querySelector("#txStatus");
@@ -18,6 +17,7 @@ const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ETH_DECIMALS = 18n;
 const PAGE_SIZE = 20;
+const MAX_QR_BYTES = 80_000;
 
 const knownTokens = {
   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { symbol: "USDC", decimals: 6n },
@@ -36,14 +36,6 @@ let historyState = {
   transferNext: null,
 };
 
-function escapeText(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 function escapeXml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -53,14 +45,19 @@ function escapeXml(value) {
     .replace(/'/g, "&apos;");
 }
 
+function safeDisplay(value, maxLength = 120) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+}
+
 function rowsToSvg(rows) {
   return rows
     .slice(0, 4)
     .map((row, index) => {
       const y = 344 + index * 38;
-      return `<text x="56" y="${y}" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">${escapeXml(row.label)}</text>
-  <text x="184" y="${y}" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">${escapeXml(row.value)}</text>
-  <text x="340" y="${y}" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">${escapeXml(row.detail)}</text>`;
+      return `<text x="56" y="${y}" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">${escapeXml(safeDisplay(row.label, 26))}</text>
+  <text x="184" y="${y}" fill="#111412" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">${escapeXml(safeDisplay(row.value, 24))}</text>
+  <text x="340" y="${y}" fill="#5c655f" font-family="Inter, Arial, sans-serif" font-size="12">${escapeXml(safeDisplay(row.detail, 54))}</text>`;
     })
     .join("\n  ");
 }
@@ -71,7 +68,9 @@ function splitLong(value, first = 38) {
 }
 
 function buildReceiptSvg(data) {
-  const safe = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, escapeXml(value)]));
+  const safe = Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [key, escapeXml(safeDisplay(value, 160))]),
+  );
   const rows = Array.isArray(data.transferRows) ? data.transferRows : [];
   const [hashA, hashB] = splitLong(data.fullTxHash || data.tx || "");
   const [fromA, fromB] = splitLong(data.fromFull || data.from || "", 28);
@@ -126,13 +125,6 @@ function buildReceiptSvg(data) {
 </svg>`;
 }
 
-function renderArtifact() {
-  if (!receipt) {
-    return;
-  }
-  artifact.innerHTML = buildReceiptSvg(receipt);
-}
-
 function setStatus(message, tone = "neutral") {
   txStatus.textContent = message;
   txStatus.dataset.tone = tone;
@@ -183,7 +175,7 @@ function shortHash(value) {
 
 function labelAddress(entity) {
   if (!entity) return "Unknown";
-  return entity.ens_domain_name || entity.name || shortHash(entity.hash || entity);
+  return safeDisplay(entity.ens_domain_name || entity.name || shortHash(entity.hash || entity), 48);
 }
 
 function sameAddress(a, b) {
@@ -236,11 +228,11 @@ function normalizeTx(item) {
   const method = item.method || item.decoded_input?.method_call?.split("(")[0] || "transaction";
   return {
     kind: "tx",
-    hash: item.hash,
-    title: `${isIncoming ? "Incoming" : isOutgoing ? "Outgoing" : "Contract"} ${method}`,
+    hash: safeDisplay(item.hash, 66),
+    title: `${isIncoming ? "Incoming" : isOutgoing ? "Outgoing" : "Contract"} ${safeDisplay(method, 40)}`,
     subtitle: `${labelAddress(item.from)} -> ${labelAddress(item.to)}`,
     timestamp: item.timestamp,
-    value: item.value && item.value !== "0" ? formatEthValue(item.value) : item.status || item.result || "ok",
+    value: item.value && item.value !== "0" ? formatEthValue(item.value) : safeDisplay(item.status || item.result || "ok", 48),
     direction: isIncoming ? "incoming" : isOutgoing ? "outgoing" : "other",
   };
 }
@@ -251,7 +243,7 @@ function normalizeTransfer(item) {
   const tokenType = item.token_type || item.token?.type || "token";
   const isNft = tokenType === "ERC-721" || tokenType === "ERC-1155";
   const decimals = item.total?.decimals ?? item.token?.decimals ?? (isNft ? 0 : 18);
-  const symbol = item.token?.symbol || item.token?.name || tokenType;
+  const symbol = safeDisplay(item.token?.symbol || item.token?.name || tokenType, 24);
   const amount = isNft
     ? `#${item.total?.token_id || "token"}`
     : `${formatDecimalUnits(item.total?.value || "0", decimals)} ${symbol}`;
@@ -260,7 +252,7 @@ function normalizeTransfer(item) {
 
   return {
     kind: isNft ? "nft" : "token",
-    hash: item.transaction_hash,
+    hash: safeDisplay(item.transaction_hash, 66),
     title: `${isIncoming ? "Incoming" : isOutgoing ? "Outgoing" : "Observed"} ${tokenType}`,
     subtitle: `${labelAddress(item.from)} -> ${labelAddress(item.to)}`,
     timestamp: item.timestamp,
@@ -297,7 +289,7 @@ function combinedHistoryItems() {
 function renderHistory() {
   const items = combinedHistoryItems();
   const allItems = allHistoryItems();
-  historyList.innerHTML = "";
+  historyList.textContent = "";
 
   if (!connectedWallet) {
     setHistoryStatus("Connect a wallet to load the latest Base activity automatically.");
@@ -315,9 +307,22 @@ function renderHistory() {
 
   for (const item of items) {
     const button = document.createElement("button");
+    const text = document.createElement("span");
+    const title = document.createElement("strong");
+    const meta = document.createElement("span");
+    const value = document.createElement("span");
+    const receiptAction = document.createElement("span");
     button.type = "button";
     button.className = "history-item";
-    button.innerHTML = `<span><strong>${escapeText(item.title)}</strong><span class="history-meta">${escapeText(item.subtitle)} · ${escapeText(formatDate(item.timestamp))}</span></span><span class="history-value">${escapeText(item.value)}</span><span class="history-receipt-button">Receipt</span>`;
+    title.textContent = safeDisplay(item.title);
+    meta.className = "history-meta";
+    meta.textContent = `${safeDisplay(item.subtitle, 100)} - ${formatDate(item.timestamp)}`;
+    value.className = "history-value";
+    value.textContent = safeDisplay(item.value, 48);
+    receiptAction.className = "history-receipt-button";
+    receiptAction.textContent = "Receipt";
+    text.append(title, meta);
+    button.append(text, value, receiptAction);
     button.addEventListener("click", async () => {
       await generateAndDownloadReceipt(item.hash);
     });
@@ -433,7 +438,15 @@ async function fetchQrDataUrl(value) {
   const url = `https://api.qrserver.com/v1/create-qr-code/?size=184x184&margin=1&data=${encodeURIComponent(value)}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error("QR service unavailable");
+  const contentType = response.headers.get("content-type") || "";
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  if (!contentType.startsWith("image/png") || contentLength > MAX_QR_BYTES) {
+    throw new Error("QR service returned an invalid image");
+  }
   const blob = await response.blob();
+  if (blob.size > MAX_QR_BYTES || blob.type !== "image/png") {
+    throw new Error("QR service returned an invalid image");
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
@@ -532,7 +545,7 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block) {
 
 function setWallet(address, chainId) {
   connectedWallet = address || null;
-  walletLabel.textContent = address ? `${shortHash(address)} · chain ${parseInt(chainId || "0x0", 16)}` : "Not connected";
+  walletLabel.textContent = address ? `${shortHash(address)} - chain ${parseInt(chainId || "0x0", 16)}` : "Not connected";
   connectWalletButton.textContent = address ? "Wallet connected" : "Connect wallet";
   if (connectedWallet) {
     loadHistory();
@@ -631,8 +644,8 @@ if (window.ethereum) {
   });
 
   window.ethereum.on?.("chainChanged", chainId => {
-    const current = walletLabel.textContent.split(" · ")[0];
-    walletLabel.textContent = `${current} · chain ${parseInt(chainId, 16)}`;
+    const current = walletLabel.textContent.split(" - ")[0];
+    walletLabel.textContent = `${current} - chain ${parseInt(chainId, 16)}`;
   });
 }
 
@@ -667,7 +680,6 @@ async function generateReceipt(txHash, { download = false } = {}) {
     } catch {
       receipt.qrDataUrl = "";
     }
-    renderArtifact();
     setStatus("Receipt generated from Base transaction data.", "success");
     if (download) {
       await downloadReceiptPng();
@@ -723,5 +735,3 @@ function downloadReceiptPng() {
     image.src = url;
   });
 }
-
-renderArtifact();
