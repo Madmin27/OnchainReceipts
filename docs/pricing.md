@@ -80,3 +80,18 @@ Each project has a monthly ledger:
 Invoices should include CSV export with tx hashes and receipt ids.
 
 See [sdk-billing.md](sdk-billing.md) for the SDK credit states, idempotency rules, payment flow, and ledger model.
+
+## Base USDC top-ups
+
+At launch, dapps can prepay credits with native USDC on Base.
+
+```txt
+Accepted token: USDC on Base
+Contract: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+Minimum top-up: 5 USDC
+Launch conversion: 1 USDC = 1,000 verified receipt credits
+```
+
+Organization projects can register billing wallets. When native Base USDC arrives from a registered wallet to the TxReceipts treasury wallet, credits are added after confirmation.
+
+See [usdc-payments.md](usdc-payments.md).

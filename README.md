@@ -131,6 +131,19 @@ const receipt = await receipts.createReceipt({
 
 The receipt engine returns a `verified`, `partial`, `mismatch`, or `failed` status with downloadable artifacts, machine-readable verification checks, and credit accounting details. One dapp tx credit is counted only once for each `project_id + chain_id + tx_hash`.
 
+## Payments and tx credits
+
+Dapp credits start as prepaid native USDC on Base. A project can register billing wallets, send USDC to the TxReceipts treasury wallet, and receive credits after the transfer is confirmed and reconciled.
+
+The launch rule is simple:
+
+```txt
+1 USDC = 1,000 verified receipt credits
+minimum top-up: 5 USDC
+```
+
+See [docs/usdc-payments.md](docs/usdc-payments.md) and [docs/sdk-billing.md](docs/sdk-billing.md).
+
 ## Security posture
 
 TxReceipts should never ask for private keys, seed phrases, token approvals, or spending permissions. Wallet signatures are only for login/session ownership. Receipt generation reads public Base data and optionally accepts signed dapp intent metadata.

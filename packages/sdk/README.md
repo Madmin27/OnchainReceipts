@@ -51,6 +51,23 @@ project_id:chain_id:tx_hash
 
 Retries for the same transaction should return the same receipt and should not spend another credit.
 
+## Base USDC credit top-ups
+
+Dapps can create a credit top-up intent and pay with native USDC on Base.
+
+```ts
+const topUp = await txReceipts.createCreditTopUp({
+  amountUsdc: "10.00",
+  billingWallet: "0x...",
+});
+
+console.log(topUp.receivingAddress);
+console.log(topUp.token.address);
+console.log(topUp.creditAmount);
+```
+
+The API credits the project only after it observes a native Base USDC transfer from the registered billing wallet to the returned receiving address.
+
 ## Response shape
 
 ```ts

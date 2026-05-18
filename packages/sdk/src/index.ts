@@ -58,6 +58,30 @@ export type CreateReceiptResponse = {
   };
 };
 
+export type CreateCreditTopUpRequest = {
+  projectId?: string;
+  amountUsdc: string;
+  billingWallet?: string;
+};
+
+export type CreditTopUp = {
+  paymentId: string;
+  status: "created" | "waiting_for_payment" | "detected" | "confirmed" | "credited" | "expired" | "rejected";
+  network: "base";
+  chainId: 8453;
+  token: {
+    symbol: "USDC";
+    address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+    decimals: 6;
+  };
+  amountUsdc: string;
+  creditAmount: number;
+  receivingAddress: string;
+  billingWallet?: string;
+  expiresAt: string;
+  txHash?: string;
+};
+
 export type TxReceiptsOptions = {
   apiKey: string;
   baseUrl?: string;
@@ -111,6 +135,43 @@ export class TxReceipts {
     }
 
     return response.json() as Promise<CreateReceiptResponse>;
+  }
+
+  async createCreditTopUp(request: CreateCreditTopUpRequest): Promise<CreditTopUp> {
+    const response = await fetch(`${this.baseUrl}/v1/credits/topups`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        projectId: request.projectId || this.projectId,
+        amountUsdc: request.amountUsdc,
+        billingWallet: request.billingWallet,
+      }),
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(`TxReceipts API error ${response.status}: ${message}`);
+    }
+
+    return response.json() as Promise<CreditTopUp>;
+  }
+
+  async getCreditTopUp(paymentId: string): Promise<CreditTopUp> {
+    const response = await fetch(`${this.baseUrl}/v1/credits/topups/${encodeURIComponent(paymentId)}`, {
+      headers: {
+        "Authorization": `Bearer ${this.apiKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(`TxReceipts API error ${response.status}: ${message}`);
+    }
+
+    return response.json() as Promise<CreditTopUp>;
   }
 
   private defaultIdempotencyKey(request: CreateReceiptRequest): string {

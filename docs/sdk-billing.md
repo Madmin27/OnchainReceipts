@@ -97,12 +97,14 @@ For launch, use hosted billing instead of building payment custody.
 
 Recommended first implementation:
 
-- Stripe Checkout for card payments;
-- Stripe Customer Portal for plan changes and invoices;
-- optional Coinbase Commerce/Base USDC later for crypto-native dapps;
+- prepaid Base USDC top-ups for dapp credits;
+- Stripe Checkout later only if non-crypto teams ask for card billing;
+- optional Coinbase Commerce later if direct invoicing becomes useful;
 - backend stores `project_id`, plan, monthly included credits, used credits, and billing period.
 
 The frontend should not contain payment secrets. API keys and billing webhooks must live in the backend.
+
+See [usdc-payments.md](usdc-payments.md) for the Base USDC payment and credit top-up model.
 
 ## Ledger model
 
@@ -131,6 +133,8 @@ Monthly usage is derived from ledger rows, not mutable counters. Cached counters
 POST /v1/receipts
 GET  /v1/receipts/:id
 GET  /v1/projects/:id/usage
+POST /v1/credits/topups
+GET  /v1/credits/topups/:id
 POST /v1/webhooks/test
 ```
 

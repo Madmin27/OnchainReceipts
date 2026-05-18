@@ -47,6 +47,8 @@ The platform verifies:
 
 The first SDK surface is documented in [../packages/sdk](../packages/sdk). Billing is based on one idempotent tx credit per `project_id + chain_id + tx_hash`; detailed rules are in [sdk-billing.md](sdk-billing.md).
 
+Payments start with prepaid native USDC on Base. Organizations can register billing wallets; confirmed USDC transfers from those wallets add credits to the project ledger. See [usdc-payments.md](usdc-payments.md).
+
 ## Receipt artifacts
 
 Each receipt should have:
