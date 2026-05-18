@@ -68,7 +68,7 @@ docs/              Research, product design, security, pricing
 schema/            Receipt and dapp intent JSON schemas
 examples/          Sample receipt payloads
 packages/engine/   Planned parser and verification engine
-packages/sdk/      Planned dapp SDK
+packages/sdk/      Dapp SDK draft
 ```
 
 ## Current prototype
@@ -101,35 +101,35 @@ The core question is not only "what happened onchain?" It is "what did the app s
 
 ## How dapps integrate
 
-Dapps can integrate by submitting intent metadata after a Base transaction lands. The API verifies the transaction against Base onchain data before issuing a receipt.
+Dapps can integrate by submitting intent metadata after a Base transaction lands. The API verifies the transaction against Base onchain data before issuing a receipt. The SDK draft lives in [packages/sdk](packages/sdk), and the credit/billing design lives in [docs/sdk-billing.md](docs/sdk-billing.md).
 
 ```ts
 import { TxReceipts } from '@txreceipts/sdk';
 
 const receipts = new TxReceipts({
   apiKey: process.env.TX_RECEIPTS_API_KEY,
+  projectId: 'example-swap',
 });
 
-const receipt = await receipts.create({
-  version: '0.1',
+const receipt = await receipts.createReceipt({
   chainId: 8453,
   txHash: '0x...',
   user: '0x...',
-  app: {
-    name: 'ExampleSwap',
-    url: 'https://example.com',
-  },
   intent: {
     type: 'swap',
-    description: 'Swap 25 USDC for ETH',
-    expectedSent: [{ symbol: 'USDC', amount: '25.00' }],
-    expectedReceived: [{ symbol: 'ETH', amount: '0.0068' }],
-    appFee: { symbol: 'USDC', amount: '0.03' },
+    summary: 'Swap 25 USDC for ETH',
+    sent: [{ symbol: 'USDC', amount: '25.00' }],
+    received: [{ symbol: 'ETH', amount: '0.0068' }],
+    fees: [{ type: 'app', symbol: 'USDC', amount: '0.03' }],
+  },
+  merchant: {
+    name: 'ExampleSwap',
+    reference: 'swap_123',
   },
 });
 ```
 
-The receipt engine returns a `verified`, `partial`, `mismatch`, or `failed` status with downloadable artifacts and machine-readable verification checks.
+The receipt engine returns a `verified`, `partial`, `mismatch`, or `failed` status with downloadable artifacts, machine-readable verification checks, and credit accounting details. One dapp tx credit is counted only once for each `project_id + chain_id + tx_hash`.
 
 ## Security posture
 

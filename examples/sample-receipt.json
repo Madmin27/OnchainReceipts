@@ -102,5 +102,12 @@
     ],
     "receiptHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
     "signature": "demo-signature-placeholder"
+  },
+  "credit": {
+    "counted": true,
+    "amount": 1,
+    "reason": "first verified receipt for project + chain + tx hash",
+    "remaining": 4999,
+    "idempotencyKey": "example-swap:8453:0x1111111111111111111111111111111111111111111111111111111111111111"
   }
 }

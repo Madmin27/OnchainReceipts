@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://txreceipts.org/schema/intent.schema.json",
+  "$id": "https://txreceipts.com.tr/schema/intent.schema.json",
   "title": "TxReceipts Dapp Intent",
   "type": "object",
-  "required": ["version", "chainId", "txHash", "user", "app", "intent"],
+  "required": ["version", "chainId", "txHash", "intent"],
   "properties": {
     "version": {
       "type": "string",
@@ -21,37 +21,41 @@
       "type": "string",
       "pattern": "^0x[a-fA-F0-9]{40}$"
     },
-    "app": {
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "merchant": {
       "type": "object",
-      "required": ["name", "url"],
       "properties": {
         "name": { "type": "string", "minLength": 1, "maxLength": 80 },
         "url": { "type": "string", "format": "uri" },
-        "logoUrl": { "type": "string", "format": "uri" }
+        "reference": { "type": "string", "maxLength": 120 }
       },
       "additionalProperties": false
     },
     "intent": {
       "type": "object",
-      "required": ["type", "description"],
+      "required": ["type", "summary"],
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["transfer", "swap", "mint", "payment", "subscription", "bridge", "game_purchase", "creator_support"]
+          "enum": ["transfer", "swap", "mint", "payment", "subscription", "bridge", "approval", "unknown"]
         },
-        "description": { "type": "string", "minLength": 1, "maxLength": 500 },
-        "expectedSent": {
+        "summary": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "sent": {
           "type": "array",
           "items": { "$ref": "#/$defs/assetAmount" }
         },
-        "expectedReceived": {
+        "received": {
           "type": "array",
           "items": { "$ref": "#/$defs/assetAmount" }
         },
-        "appFee": { "$ref": "#/$defs/fee" },
-        "protocolFee": { "$ref": "#/$defs/fee" },
-        "category": { "type": "string", "maxLength": 60 },
-        "merchantReference": { "type": "string", "maxLength": 120 }
+        "fees": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/fee" }
+        }
       },
       "additionalProperties": false
     }
@@ -64,17 +68,22 @@
       "properties": {
         "symbol": { "type": "string", "minLength": 1, "maxLength": 20 },
         "amount": { "type": "string" },
-        "contract": {
+        "address": {
           "type": "string",
           "pattern": "^0x[a-fA-F0-9]{40}$"
-        }
+        },
+        "decimals": { "type": "integer", "minimum": 0, "maximum": 36 }
       },
       "additionalProperties": false
     },
     "fee": {
       "type": "object",
-      "required": ["amount", "symbol"],
+      "required": ["type", "amount", "symbol"],
       "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["app", "protocol", "network", "merchant", "other"]
+        },
         "amount": { "type": "string" },
         "symbol": { "type": "string" },
         "recipient": {

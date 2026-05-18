@@ -78,3 +78,5 @@ Each project has a monthly ledger:
 - estimated invoice total
 
 Invoices should include CSV export with tx hashes and receipt ids.
+
+See [sdk-billing.md](sdk-billing.md) for the SDK credit states, idempotency rules, payment flow, and ledger model.

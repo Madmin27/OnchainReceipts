@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://txreceipts.org/schema/receipt.schema.json",
+  "$id": "https://txreceipts.com.tr/schema/receipt.schema.json",
   "title": "TxReceipts Receipt",
   "type": "object",
   "required": [
@@ -14,7 +14,8 @@
     "participants",
     "assets",
     "fees",
-    "verification"
+    "verification",
+    "credit"
   ],
   "properties": {
     "version": {
@@ -129,6 +130,18 @@
         "signature": {
           "type": "string"
         }
+      },
+      "additionalProperties": false
+    },
+    "credit": {
+      "type": "object",
+      "required": ["counted", "amount", "reason"],
+      "properties": {
+        "counted": { "type": "boolean" },
+        "amount": { "type": "integer", "minimum": 0 },
+        "reason": { "type": "string", "maxLength": 160 },
+        "remaining": { "type": "integer", "minimum": 0 },
+        "idempotencyKey": { "type": "string", "maxLength": 160 }
       },
       "additionalProperties": false
     }

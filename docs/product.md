@@ -45,6 +45,8 @@ The platform verifies:
 - fees match declared app/protocol fee where observable
 - receipt has not already been counted for billing
 
+The first SDK surface is documented in [../packages/sdk](../packages/sdk). Billing is based on one idempotent tx credit per `project_id + chain_id + tx_hash`; detailed rules are in [sdk-billing.md](sdk-billing.md).
+
 ## Receipt artifacts
 
 Each receipt should have:
