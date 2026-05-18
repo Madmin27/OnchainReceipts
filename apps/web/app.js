@@ -1099,7 +1099,7 @@ function drawText(context, text, x, y, options = {}) {
 }
 
 function drawDivider(context, y) {
-  context.strokeStyle = "#d7ddd4";
+  context.strokeStyle = "#ded6cc";
   context.lineWidth = 2;
   context.beginPath();
   context.moveTo(112, y);
@@ -1130,22 +1130,22 @@ async function renderReceiptCanvas(data) {
   roundedRect(context, 64, 64, 1592, 1772, 18);
   context.fillStyle = "#ffffff";
   context.fill();
-  context.strokeStyle = "#d7ddd4";
+  context.strokeStyle = "#ded6cc";
   context.lineWidth = 2;
   context.stroke();
 
-  drawText(context, "TXRECEIPTS", 112, 150, { color: "#0052ff", size: 24, weight: 800, maxLength: 24 });
+  drawText(context, "TXRECEIPTS", 112, 150, { color: "#21c7bd", size: 24, weight: 800, maxLength: 24 });
   drawText(context, data.title, 112, 228, { size: 64, weight: 800, maxLength: 42 });
   drawText(context, "Purpose", 112, 278, { color: "#5c655f", size: 20, maxLength: 12 });
   drawText(context, data.purpose || "Transaction record", 212, 278, { size: 22, weight: 800, maxLength: 36 });
   drawText(context, "Receipt ID", 660, 278, { color: "#5c655f", size: 20, maxLength: 12 });
   drawText(context, data.id, 780, 278, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 22, weight: 800, maxLength: 32 });
   roundedRect(context, 1408, 114, 180, 68, 34);
-  context.fillStyle = data.status === "Verified" ? "#e5f4ec" : "#ffe4e4";
+  context.fillStyle = data.status === "Verified" ? "#fff0c6" : "#ffe4e4";
   context.fill();
   drawText(context, data.status, 1498, 158, {
     align: "center",
-    color: data.status === "Verified" ? "#0b7a45" : "#9f1d1d",
+    color: data.status === "Verified" ? "#946300" : "#9f1d1d",
     size: 24,
     weight: 800,
     maxLength: 18,
@@ -1160,7 +1160,7 @@ async function renderReceiptCanvas(data) {
     weight: 800,
     maxLength: 22,
   });
-  context.strokeStyle = "#d7ddd4";
+  context.strokeStyle = "#ded6cc";
   context.lineWidth = 4;
   context.beginPath();
   context.moveTo(680, 439);
@@ -1168,9 +1168,9 @@ async function renderReceiptCanvas(data) {
   context.stroke();
 
   roundedRect(context, 1368, 346, 188, 188, 14);
-  context.fillStyle = "#f4f7f4";
+  context.fillStyle = "#fffaf0";
   context.fill();
-  context.strokeStyle = "#d7ddd4";
+  context.strokeStyle = "#ded6cc";
   context.stroke();
   if (qrImage) {
     context.drawImage(qrImage, 1382, 360, 160, 160);

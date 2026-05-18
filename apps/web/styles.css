@@ -1,15 +1,16 @@
 :root {
-  --bg: #090d0f;
-  --paper: #111719;
-  --ink: #f6f8f4;
-  --muted: #9ba7a0;
-  --line: #263034;
-  --blue: #0052ff;
-  --blue-soft: #8db1ff;
-  --green: #0b7a45;
-  --green-bg: #e5f4ec;
+  --bg: #111111;
+  --paper: #1b1918;
+  --ink: #fffaf0;
+  --muted: #b7ada4;
+  --line: #3a3330;
+  --blue: #21c7bd;
+  --blue-soft: #8de8df;
+  --green: #946300;
+  --green-bg: #fff0c6;
+  --gold: #ffc75a;
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  --app-bg: #0d1214;
+  --app-bg: #151312;
   --field: #ffffff;
 }
 
@@ -37,7 +38,7 @@ a {
 
 .topbar {
   align-items: center;
-  background: rgba(9, 13, 15, 0.92);
+  background: rgba(17, 17, 17, 0.94);
   border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
@@ -60,10 +61,11 @@ nav {
 }
 
 .brand-mark {
-  border-radius: 6px;
-  height: 34px;
-  object-fit: contain;
-  width: 34px;
+  border: 1px solid rgba(255, 250, 240, 0.22);
+  border-radius: 8px;
+  height: 38px;
+  object-fit: cover;
+  width: 38px;
 }
 
 nav {
@@ -136,7 +138,7 @@ h3 {
 }
 
 .button {
-  border: 1px solid #f6f8f4;
+  border: 1px solid var(--ink);
   border-radius: 7px;
   cursor: pointer;
   display: inline-flex;
@@ -154,13 +156,18 @@ h3 {
 }
 
 .button.primary {
-  background: #f6f8f4;
-  color: #090d0f;
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #111111;
 }
 
 .button.secondary {
   background: transparent;
   color: var(--ink);
+}
+
+.button.secondary:hover {
+  border-color: var(--blue);
 }
 
 .receipt-card,
@@ -176,6 +183,18 @@ h3 {
   align-self: center;
   box-shadow: var(--shadow);
   padding: 28px;
+}
+
+.brand-art {
+  aspect-ratio: 1;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: block;
+  margin: 0 auto 24px;
+  max-width: 240px;
+  object-fit: cover;
+  width: min(58%, 240px);
 }
 
 .receipt-head,
@@ -255,7 +274,7 @@ dd {
 
 .receipt-checks span::before,
 .checklist li::before {
-  background: var(--green);
+  background: var(--blue);
   border-radius: 999px;
   content: "";
   display: inline-block;
@@ -303,7 +322,7 @@ dd {
 }
 
 .checklist {
-  background: #101719;
+  background: #1c1917;
   border: 1px solid var(--line);
   border-radius: 8px;
   list-style: none;
@@ -322,7 +341,8 @@ dd {
 }
 
 .demo-section {
-  background: radial-gradient(circle at top left, rgba(0, 82, 255, 0.2), transparent 30%),
+  background: radial-gradient(circle at top left, rgba(33, 199, 189, 0.22), transparent 30%),
+    radial-gradient(circle at top right, rgba(255, 199, 90, 0.14), transparent 32%),
     var(--app-bg);
 }
 
@@ -333,8 +353,8 @@ dd {
 
 .wallet-panel {
   align-items: center;
-  background: #101719;
-  border: 1px solid #2b373b;
+  background: #1c1917;
+  border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--paper);
   display: grid;
@@ -346,7 +366,7 @@ dd {
 
 .wallet-panel .mini-label,
 .wallet-panel label {
-  color: #9db5ff;
+  color: var(--blue-soft);
   display: block;
   font-size: 12px;
   font-weight: 760;
@@ -363,7 +383,7 @@ dd {
 .wallet-panel select {
   appearance: none;
   background: var(--field);
-  border: 1px solid #d7ddd4;
+  border: 1px solid #ded6cc;
   border-radius: 7px;
   color: #111412;
   font: inherit;
@@ -412,7 +432,7 @@ dd {
 }
 
 .history-tab {
-  background: #172023;
+  background: #211e1c;
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
@@ -424,9 +444,9 @@ dd {
 }
 
 .history-tab.active {
-  background: #f6f8f4;
-  border-color: #f6f8f4;
-  color: #090d0f;
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #111111;
 }
 
 .history-list {
@@ -437,7 +457,7 @@ dd {
 
 .history-item {
   align-items: center;
-  background: #0d1214;
+  background: #151312;
   border: 1px solid var(--line);
   border-radius: 8px;
   cursor: pointer;
@@ -450,7 +470,7 @@ dd {
 }
 
 .history-item:hover {
-  border-color: #aeb8af;
+  border-color: var(--blue);
 }
 
 .history-item strong,
@@ -474,10 +494,10 @@ dd {
 }
 
 .history-receipt-button {
-  background: #f6f8f4;
-  border: 1px solid #f6f8f4;
+  background: var(--gold);
+  border: 1px solid var(--gold);
   border-radius: 7px;
-  color: #090d0f;
+  color: #111111;
   cursor: pointer;
   display: inline-flex;
   font-size: 13px;
