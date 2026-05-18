@@ -27,10 +27,16 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      - name: Prepare Pages artifact
+        run: |
+          mkdir -p dist
+          cp -R apps/web/. dist/
+          cp -R docs dist/docs
+
       - name: Upload static demo
         uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/web
+          path: dist
 
       - name: Deploy to GitHub Pages
         id: deployment
