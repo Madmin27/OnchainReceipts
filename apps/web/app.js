@@ -1098,6 +1098,22 @@ function drawText(context, text, x, y, options = {}) {
   context.fillText(safeDisplay(text, options.maxLength || 180), x, y);
 }
 
+function drawFitText(context, text, x, y, maxWidth, options = {}) {
+  const size = options.size || 28;
+  let maxLength = options.maxLength || 180;
+  let displayText = safeDisplay(text, maxLength);
+  context.fillStyle = options.color || "#111412";
+  context.font = `${options.weight || 500} ${size}px ${options.family || "Inter, Arial, sans-serif"}`;
+  context.textAlign = options.align || "left";
+
+  while (context.measureText(displayText).width > maxWidth && maxLength > 6) {
+    maxLength -= 1;
+    displayText = safeDisplay(text, maxLength);
+  }
+
+  context.fillText(displayText, x, y);
+}
+
 function drawDivider(context, y) {
   context.strokeStyle = "#ded6cc";
   context.lineWidth = 2;
@@ -1155,10 +1171,10 @@ async function renderReceiptCanvas(data) {
   drawText(context, "Sent", 112, 405, { color: "#5c655f", size: 26 });
   drawText(context, data.sent, 112, 465, { size: 52, weight: 800, maxLength: 28 });
   drawText(context, "Received", 880, 405, { color: "#5c655f", size: 26 });
-  drawText(context, data.received, 880, 465, {
-    size: String(data.received || "").length > 14 ? 44 : 52,
+  drawFitText(context, data.received, 880, 465, 430, {
+    size: String(data.received || "").length > 14 ? 38 : 46,
     weight: 800,
-    maxLength: 22,
+    maxLength: 24,
   });
   context.strokeStyle = "#ded6cc";
   context.lineWidth = 4;
@@ -1178,7 +1194,7 @@ async function renderReceiptCanvas(data) {
     drawText(context, "Explorer", 1462, 424, { align: "center", size: 26, weight: 800, maxLength: 12 });
     drawText(context, "tx details", 1462, 464, { align: "center", color: "#5c655f", size: 20, maxLength: 12 });
   }
-  drawText(context, "Scan for transaction details", 1462, 566, { align: "center", color: "#5c655f", size: 18, maxLength: 36 });
+  drawText(context, "Scan for transaction details", 1462, 586, { align: "center", color: "#5c655f", size: 14, maxLength: 36 });
 
   drawDivider(context, 620);
   drawText(context, "Payment, fees, and token path", 112, 700, { size: 34, weight: 800, maxLength: 40 });
