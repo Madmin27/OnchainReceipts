@@ -148,11 +148,35 @@ h3 {
   min-height: 46px;
   min-width: 148px;
   padding: 12px 18px;
+  transform: translateY(0);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease,
+    transform 140ms ease;
 }
 
 .button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.button:not(:disabled):hover {
+  box-shadow: 0 10px 24px rgba(33, 199, 189, 0.18);
+  transform: translateY(-1px);
+}
+
+.button:not(:disabled):active {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+  transform: translateY(1px) scale(0.99);
+}
+
+.button:focus-visible,
+.history-tab:focus-visible,
+.history-receipt-button:focus-visible {
+  outline: 3px solid rgba(255, 199, 90, 0.65);
+  outline-offset: 3px;
 }
 
 .button.primary {
@@ -441,6 +465,22 @@ dd {
   font-size: 13px;
   font-weight: 720;
   padding: 8px 12px;
+  transform: translateY(0);
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 140ms ease;
+}
+
+.history-tab:hover {
+  border-color: var(--blue);
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.history-tab:active {
+  transform: translateY(1px) scale(0.98);
 }
 
 .history-tab.active {
@@ -506,6 +546,19 @@ dd {
   min-height: 38px;
   min-width: 82px;
   padding: 8px 12px;
+  transform: translateY(0);
+  transition:
+    box-shadow 150ms ease,
+    transform 140ms ease;
+}
+
+.history-receipt-button:hover {
+  box-shadow: 0 8px 18px rgba(255, 199, 90, 0.18);
+  transform: translateY(-1px);
+}
+
+.history-receipt-button:active {
+  transform: translateY(1px) scale(0.98);
 }
 
 .load-more {
