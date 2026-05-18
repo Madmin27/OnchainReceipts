@@ -12,6 +12,9 @@ const requiredFiles = [
   'schema/receipt.schema.json',
   'schema/intent.schema.json',
   'examples/sample-receipt.json',
+  'docs/usdc-payments.md',
+  'packages/billing/usdc-credits.js',
+  'scripts/test-usdc-credits.js',
 ];
 
 for (const file of requiredFiles) {

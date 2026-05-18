@@ -5,7 +5,8 @@
   "description": "Open-source receipt infrastructure for human-readable, verified Base transactions.",
   "license": "MIT",
   "scripts": {
-    "check": "node scripts/check-static.js"
+    "check": "node scripts/check-static.js",
+    "test:billing": "node scripts/test-usdc-credits.js"
   },
   "keywords": [
     "base",

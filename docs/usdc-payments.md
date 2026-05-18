@@ -61,6 +61,7 @@ Launch conversion can be simple and transparent:
 ```txt
 1 USDC = 1,000 verified receipt credits
 minimum top-up: 5 USDC
+maximum automatic top-up: 10,000 USDC
 ```
 
 This implies:
@@ -144,6 +145,8 @@ required confirmations: 3
 
 For high-value top-ups, require manual review or a higher confirmation threshold.
 
+Automatic crediting should reject or hold transfers above 10,000 USDC for manual review.
+
 ## API surface
 
 ```txt
@@ -168,3 +171,27 @@ Wallet connect payment can be added as a convenience layer later.
 - Reconcile payments daily against Base logs.
 - Export CSV for payments and credit usage.
 - Keep a manual admin override for legitimate payments that require review.
+
+## Validation test coverage
+
+The repository includes a small dependency-free validator in `packages/billing/usdc-credits.js` and tests in `scripts/test-usdc-credits.js`.
+
+Covered scenarios:
+
+- valid Base USDC top-up from a registered billing wallet;
+- wrong chain id;
+- wrong token contract;
+- wrong recipient;
+- unregistered sender wallet;
+- amount below the minimum top-up;
+- amount above the automatic top-up limit;
+- insufficient confirmations;
+- invalid transaction hash;
+- duplicate transaction hash;
+- multiple simultaneous rejection reasons.
+
+Run:
+
+```sh
+npm run test:billing
+```
