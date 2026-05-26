@@ -11,6 +11,15 @@ const loadMoreHistoryButton = document.querySelector("#loadMoreHistory");
 const historyStatus = document.querySelector("#historyStatus");
 const historyList = document.querySelector("#historyList");
 const historyTabs = document.querySelectorAll("[data-history-tab]");
+const projectIdInput = document.querySelector("#projectIdInput");
+const apiKeyInput = document.querySelector("#apiKeyInput");
+const checkCreditsButton = document.querySelector("#checkCredits");
+const creditBalance = document.querySelector("#creditBalance");
+const creditStatus = document.querySelector("#creditStatus");
+const topUpAmountInput = document.querySelector("#topUpAmountInput");
+const billingWalletInput = document.querySelector("#billingWalletInput");
+const createTopUpButton = document.querySelector("#createTopUp");
+const topUpInstructions = document.querySelector("#topUpInstructions");
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -20,6 +29,7 @@ const SOLANA_HISTORY_PAGE_ATTEMPTS = 5;
 const MAX_QR_BYTES = 80_000;
 const RECEIPT_WIDTH = 1720;
 const RECEIPT_HEIGHT = 1900;
+const API_BASE_URL = "https://api.txreceipts.com.tr";
 const networks = window.TX_RECEIPTS_NETWORKS || [];
 
 const knownTokens = {
@@ -75,6 +85,28 @@ function setStatus(message, tone = "neutral") {
 function setHistoryStatus(message, tone = "neutral") {
   historyStatus.textContent = message;
   historyStatus.dataset.tone = tone;
+}
+
+function setCreditStatus(message, tone = "neutral") {
+  if (!creditStatus) return;
+  creditStatus.textContent = message;
+  creditStatus.dataset.tone = tone;
+}
+
+function apiAuthInputs() {
+  return {
+    projectId: projectIdInput?.value.trim() || "",
+    apiKey: apiKeyInput?.value.trim() || "",
+  };
+}
+
+function requireApiAuthInputs() {
+  const inputs = apiAuthInputs();
+  if (!inputs.projectId || !inputs.apiKey) {
+    setCreditStatus("Enter a project ID and API key.", "error");
+    return null;
+  }
+  return inputs;
 }
 
 async function rpc(method, params) {
@@ -752,6 +784,9 @@ function setWallet(address, chainId) {
   const chainLabel = currentNetwork().family === "solana" ? currentNetwork().name : `chain ${parseInt(chainId || "0x0", 16)}`;
   walletLabel.textContent = address ? `${shortHash(address)} - ${chainLabel}` : "Not connected";
   connectWalletButton.textContent = address ? "Wallet connected" : "Connect wallet";
+  if (address && currentNetwork().family === "evm" && billingWalletInput && !billingWalletInput.value.trim()) {
+    billingWalletInput.value = address;
+  }
   if (connectedWallet) {
     loadHistory();
   } else {
@@ -970,6 +1005,62 @@ walletProviderSelect.addEventListener("change", () => {
   syncNetworkToSelectedWallet({ preserveNetwork: false });
   setWallet(null, "0x0");
   setStatus("Wallet provider changed. Connect again to approve access.", "neutral");
+});
+
+checkCreditsButton?.addEventListener("click", async () => {
+  const inputs = requireApiAuthInputs();
+  if (!inputs) return;
+  setCreditStatus("Checking credit balance...");
+  try {
+    const response = await fetch(`${API_BASE_URL}/v1/projects/${encodeURIComponent(inputs.projectId)}/credits`, {
+      headers: { Authorization: `Bearer ${inputs.apiKey}` },
+    });
+    if (!response.ok) throw new Error(`API returned HTTP ${response.status}`);
+    const payload = await response.json();
+    creditBalance.textContent = `${payload.balance} credits`;
+    setCreditStatus(`Overdraft tolerance: ${payload.overdraftLimit} credits. Receipts used: ${payload.receipts}.`, "success");
+  } catch (error) {
+    creditBalance.textContent = "Unavailable";
+    setCreditStatus(error instanceof Error ? error.message : "Could not load credit balance.", "error");
+  }
+});
+
+createTopUpButton?.addEventListener("click", async () => {
+  const inputs = requireApiAuthInputs();
+  if (!inputs) return;
+  const amountUsdc = topUpAmountInput.value.trim();
+  const billingWallet = billingWalletInput.value.trim();
+  if (!amountUsdc || !billingWallet) {
+    setCreditStatus("Enter a Base USDC amount and sender wallet.", "error");
+    return;
+  }
+  setCreditStatus("Creating Base USDC top-up intent...");
+  if (topUpInstructions) topUpInstructions.hidden = true;
+  try {
+    const response = await fetch(`${API_BASE_URL}/v1/credits/topups`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${inputs.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ amountUsdc, billingWallet }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `API returned HTTP ${response.status}`);
+    if (topUpInstructions) {
+      topUpInstructions.hidden = false;
+      topUpInstructions.textContent = [
+        `Send exactly ${payload.amountUsdc} USDC on Base.`,
+        `From: ${payload.billingWallet}`,
+        `To: ${payload.receivingAddress}`,
+        `Payment ID: ${payload.paymentId}`,
+        `Credits after confirmation: +${payload.creditAmount}`,
+      ].join("\n");
+    }
+    setCreditStatus("Top-up created. The watcher credits it after the Base USDC transfer confirms.", "success");
+  } catch (error) {
+    setCreditStatus(error instanceof Error ? error.message : "Could not create top-up.", "error");
+  }
 });
 
 window.addEventListener("txreceipts:walletsChanged", () => {

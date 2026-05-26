@@ -13,8 +13,15 @@ const requiredFiles = [
   'schema/intent.schema.json',
   'examples/sample-receipt.json',
   'docs/usdc-payments.md',
+  'docs/ai-assistant.md',
   'packages/billing/usdc-credits.js',
+  'apps/api/src/billing.mjs',
+  'apps/api/src/worker.mjs',
+  'apps/api/schema.sql',
+  'apps/api/wrangler.toml.example',
+  'docs/backend-deployment.md',
   'scripts/test-usdc-credits.js',
+  'scripts/test-api-billing.mjs',
 ];
 
 for (const file of requiredFiles) {

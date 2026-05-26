@@ -20,6 +20,7 @@ Core jobs:
 - download PNG receipt
 - view monthly summary
 - export JSON or CSV later
+- ask read-only questions about verified receipt history later
 
 Supported first categories:
 
@@ -59,6 +60,12 @@ Each receipt should have:
 - TxReceipts signature
 - optional daily anchoring proof
 
+## AI assistant layer
+
+Base MCP belongs in a later assistant layer, not in the core verification path. The assistant should answer read-only questions over receipt history, labels, and monthly summaries, then link back to the underlying receipt artifacts and transaction hashes.
+
+See [ai-assistant.md](ai-assistant.md).
+
 ## Roadmap
 
 ### V0
@@ -86,10 +93,12 @@ Each receipt should have:
 - branded receipts
 - webhooks
 - developer dashboard
+- Ask your Base wallet assistant for read-only receipt questions
 
 ### V3
 
 - receipt hash anchoring on Base
 - advanced reports
 - accounting exports
+- optional Base MCP powered assistant actions, gated by explicit user confirmation
 - multi-chain support only if it does not weaken Base-first focus

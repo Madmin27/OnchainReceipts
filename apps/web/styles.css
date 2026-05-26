@@ -197,6 +197,7 @@ h3 {
 .receipt-card,
 .feature-grid article,
 .pricing-grid article,
+.assistant-console,
 .artifact {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -364,6 +365,66 @@ dd {
   margin-bottom: 12px;
 }
 
+.assistant-section {
+  align-items: stretch;
+  display: grid;
+  gap: 28px;
+  grid-template-columns: minmax(0, 0.92fr) minmax(320px, 0.72fr);
+}
+
+.assistant-copy {
+  max-width: 740px;
+}
+
+.assistant-copy p,
+.assistant-console p {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.assistant-console {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+}
+
+.assistant-prompt,
+.assistant-response {
+  background: #151312;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.assistant-prompt span,
+.assistant-response span {
+  color: var(--blue-soft);
+  display: block;
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.assistant-prompt p,
+.assistant-response p {
+  margin-bottom: 0;
+}
+
+.assistant-rules {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.assistant-rules li {
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .demo-section {
   background: radial-gradient(circle at top left, rgba(33, 199, 189, 0.22), transparent 30%),
     radial-gradient(circle at top right, rgba(255, 199, 90, 0.14), transparent 32%),
@@ -427,6 +488,71 @@ dd {
   border-radius: 8px;
   margin-bottom: 24px;
   padding: 18px;
+}
+
+.credit-panel {
+  align-items: end;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 0.65fr) minmax(230px, 0.65fr) minmax(210px, 0.45fr);
+  margin-bottom: 16px;
+  padding: 18px;
+}
+
+.credit-panel h3,
+.credit-panel p {
+  margin-bottom: 0;
+}
+
+.credit-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.credit-fields label {
+  color: var(--blue-soft);
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.credit-fields input {
+  background: var(--field);
+  border: 1px solid #ded6cc;
+  border-radius: 7px;
+  color: #111412;
+  font: inherit;
+  min-height: 42px;
+  min-width: 0;
+  padding: 9px 12px;
+}
+
+.credit-balance {
+  background: #151312;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.credit-balance strong {
+  display: block;
+  font-size: 24px;
+  margin-top: 6px;
+}
+
+.topup-instructions {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 14px;
+  overflow-wrap: anywhere;
+  padding-top: 12px;
+  white-space: pre-line;
 }
 
 .history-panel {
@@ -631,9 +757,11 @@ dd {
   }
 
   .hero,
+  .assistant-section,
   .feature-grid,
   .pricing-grid,
   .tx-row,
+  .credit-panel,
   .wallet-panel,
   .history-item {
     grid-template-columns: 1fr;

@@ -50,6 +50,7 @@ V1 is intentionally narrow:
 - monthly summary
 - open receipt schema
 - dapp intent schema and SDK draft
+- AI assistant plan for read-only Base wallet questions
 
 V2 adds:
 
@@ -64,6 +65,7 @@ V2 adds:
 
 ```txt
 apps/web/          Static product prototype and receipt renderer
+apps/api/          Cloudflare Worker API draft for credits, top-ups, and receipt usage
 docs/              Research, product design, security, pricing
 schema/            Receipt and dapp intent JSON schemas
 examples/          Sample receipt payloads
@@ -98,6 +100,12 @@ TxReceipts is designed for a different job:
 - give users a monthly receipt box rather than a list of hashes
 
 The core question is not only "what happened onchain?" It is "what did the app say would happen, what actually happened, and can the user keep a trustworthy receipt?"
+
+## AI assistant layer
+
+The receipt engine stays first. Base MCP is planned as an opt-in assistant layer for questions like "what did I spend USDC on this month?" or "which creator payments did I receive?" rather than as the canonical verification backend.
+
+See [docs/ai-assistant.md](docs/ai-assistant.md).
 
 ## How dapps integrate
 
@@ -143,6 +151,8 @@ minimum top-up: 5 USDC
 ```
 
 See [docs/usdc-payments.md](docs/usdc-payments.md) and [docs/sdk-billing.md](docs/sdk-billing.md).
+
+The backend deployment path is documented in [docs/backend-deployment.md](docs/backend-deployment.md). The API draft uses Cloudflare Workers and D1 to automate project credits, Base USDC top-ups, scheduled payment confirmation, and receipt credit usage.
 
 ## Security posture
 

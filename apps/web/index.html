@@ -6,7 +6,7 @@
     <meta name="base:app_id" content="6a0ad7e4e317310c39c9c18a" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://mainnet.base.org https://base.blockscout.com https://ethereum-rpc.publicnode.com https://eth.blockscout.com https://mainnet.optimism.io https://optimism.blockscout.com https://arb1.arbitrum.io https://arbitrum.blockscout.com https://polygon-rpc.com https://polygon.blockscout.com https://solana-rpc.debridge.finance https://solana-rpc.publicnode.com https://api.qrserver.com"
+      content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://api.txreceipts.com.tr https://mainnet.base.org https://base.blockscout.com https://ethereum-rpc.publicnode.com https://eth.blockscout.com https://mainnet.optimism.io https://optimism.blockscout.com https://arb1.arbitrum.io https://arbitrum.blockscout.com https://polygon-rpc.com https://polygon.blockscout.com https://solana-rpc.debridge.finance https://solana-rpc.publicnode.com https://api.qrserver.com"
     />
     <title>TxReceipts</title>
     <meta
@@ -26,6 +26,7 @@
       </a>
       <nav aria-label="Primary navigation">
         <a href="#product">Product</a>
+        <a href="#assistant">AI</a>
         <a href="#security">Security</a>
         <a href="#pricing">Pricing</a>
         <a href="#demo">Demo</a>
@@ -127,6 +128,37 @@
         </div>
       </section>
 
+      <section id="assistant" class="section assistant-section">
+        <div class="assistant-copy">
+          <p class="eyebrow">AI layer</p>
+          <h2>Ask your Base wallet, after the receipt engine has done the hard work.</h2>
+          <p>
+            The first product remains a verified receipt inbox. Base MCP fits as the next layer:
+            a read-focused assistant that explains wallet activity, monthly spend, creator income,
+            and subscriptions using receipt data the user can inspect.
+          </p>
+        </div>
+        <div class="assistant-console" aria-label="Ask your Base wallet preview">
+          <div class="assistant-prompt">
+            <span>You</span>
+            <p>What did I spend USDC on this month?</p>
+          </div>
+          <div class="assistant-response">
+            <span>TxReceipts</span>
+            <p>
+              You spent 84.25 USDC across 11 Base transactions: 42.00 creator support,
+              25.00 swaps, 9.99 subscriptions, and 7.26 app fees. Three receipts are verified,
+              two need dapp intent metadata, and one subscription renews next week.
+            </p>
+          </div>
+          <ul class="assistant-rules">
+            <li>Read-only wallet analysis first</li>
+            <li>No approvals or spending permissions</li>
+            <li>Base MCP only for opt-in assistant workflows</li>
+          </ul>
+        </div>
+      </section>
+
       <section id="security" class="section split">
         <div>
           <p class="eyebrow">Security</p>
@@ -214,6 +246,36 @@
             Choose a wallet activity or paste a transaction hash.
           </p>
         </form>
+        <section class="credit-panel" aria-label="Developer credit balance">
+          <div>
+            <p class="eyebrow">Developer credits</p>
+            <h3>API balance</h3>
+            <p>
+              Check project credits before issuing API receipts. Usage can continue down to -10
+              credits to avoid breaking live dapp flows.
+            </p>
+          </div>
+          <div class="credit-fields">
+            <label for="projectIdInput">Project ID</label>
+            <input id="projectIdInput" autocomplete="off" placeholder="project_..." />
+            <label for="apiKeyInput">API key</label>
+            <input id="apiKeyInput" autocomplete="off" placeholder="txr_..." type="password" />
+            <button id="checkCredits" class="button secondary" type="button">Check credits</button>
+          </div>
+          <div class="credit-fields">
+            <label for="topUpAmountInput">Base USDC amount</label>
+            <input id="topUpAmountInput" autocomplete="off" inputmode="decimal" placeholder="5.00" />
+            <label for="billingWalletInput">Sender wallet</label>
+            <input id="billingWalletInput" autocomplete="off" placeholder="0x..." />
+            <button id="createTopUp" class="button secondary" type="button">Create top-up</button>
+          </div>
+          <div class="credit-balance">
+            <span class="mini-label">Balance</span>
+            <strong id="creditBalance">Not connected</strong>
+            <p id="creditStatus" class="form-status" role="status">API backend is ready for Cloudflare deployment.</p>
+            <div id="topUpInstructions" class="topup-instructions" hidden></div>
+          </div>
+        </section>
         <section class="history-panel" aria-label="Wallet transaction history">
           <div class="history-head">
             <div>

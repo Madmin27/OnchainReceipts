@@ -1,0 +1,17 @@
+name = "txreceipts-api"
+main = "src/worker.mjs"
+compatibility_date = "2026-05-18"
+
+[vars]
+TREASURY_ADDRESS = "0x0000000000000000000000000000000000000000"
+ALLOWED_ORIGIN = "https://txreceipts.com.tr"
+# Set ADMIN_TOKEN as a Cloudflare secret, not in this file:
+# wrangler secret put ADMIN_TOKEN
+
+[[d1_databases]]
+binding = "DB"
+database_name = "txreceipts"
+database_id = "replace-with-cloudflare-d1-id"
+
+[triggers]
+crons = ["*/10 * * * *"]
