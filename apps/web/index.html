@@ -160,80 +160,12 @@
             Connect wallet
           </button>
         </div>
-        <form id="txForm" class="tx-form">
-          <label for="txHash">Transaction hash</label>
-          <div class="tx-row">
-            <input
-              id="txHash"
-              name="txHash"
-              inputmode="text"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="0x..."
-            />
-            <button class="button primary" type="submit">Fetch receipt</button>
-          </div>
-          <p id="txStatus" class="form-status" role="status">
-            Choose a wallet activity or paste a transaction hash.
-          </p>
-        </form>
-        <section class="credit-panel" aria-label="Developer credit balance">
-          <div>
-            <p class="eyebrow">Developer credits</p>
-            <h3>API balance</h3>
-            <p>
-              Check project credits before issuing API receipts. Usage can continue down to -10
-              credits to avoid breaking live dapp flows.
-            </p>
-          </div>
-          <div class="credit-fields">
-            <label for="projectIdInput">Project ID</label>
-            <input id="projectIdInput" autocomplete="off" placeholder="project_..." />
-            <label for="apiKeyInput">API key</label>
-            <input id="apiKeyInput" autocomplete="off" placeholder="txr_..." type="password" />
-            <button id="checkCredits" class="button secondary" type="button">Check credits</button>
-          </div>
-          <div class="credit-fields">
-            <label for="topUpAmountInput">Base USDC amount</label>
-            <input id="topUpAmountInput" autocomplete="off" inputmode="decimal" placeholder="5.00" />
-            <label for="billingWalletInput">Sender wallet</label>
-            <input id="billingWalletInput" autocomplete="off" placeholder="0x..." />
-            <button id="createTopUp" class="button secondary" type="button">Create top-up</button>
-          </div>
-          <div class="credit-balance">
-            <span class="mini-label">Balance</span>
-            <strong id="creditBalance">Not connected</strong>
-            <p id="creditStatus" class="form-status" role="status">API backend is ready for Cloudflare deployment.</p>
-            <div id="topUpInstructions" class="topup-instructions" hidden></div>
-          </div>
-        </section>
-        <section class="history-panel" aria-label="Wallet transaction history">
-          <div class="history-head">
-            <div>
-              <p class="eyebrow">Wallet history</p>
-              <h3>Recent network activity</h3>
-            </div>
-          </div>
-          <div class="history-tabs" role="tablist" aria-label="History filters">
-            <button class="history-tab active" type="button" data-history-tab="all">All</button>
-            <button class="history-tab" type="button" data-history-tab="incoming">Incoming</button>
-            <button class="history-tab" type="button" data-history-tab="outgoing">Outgoing</button>
-            <button class="history-tab" type="button" data-history-tab="tokens">Tokens</button>
-            <button class="history-tab" type="button" data-history-tab="nfts">NFTs</button>
-          </div>
-          <div id="historyStatus" class="form-status">
-            Connect a wallet to load the latest network activity automatically.
-          </div>
-          <div id="historyList" class="history-list"></div>
-          <button id="loadMoreHistory" class="button secondary load-more" type="button" hidden>
-            Load more
-          </button>
-        </section>
         <section class="qa-panel" aria-label="Wallet accounting assistant">
           <div class="qa-head">
             <div>
               <p class="eyebrow">Wallet accounting</p>
-              <h3>Ask from the selected network only</h3>
+              <h3>Ask about the selected transaction</h3>
+              <p id="qaContext" class="form-status">No transaction selected yet.</p>
             </div>
             <div class="qa-actions">
               <button id="downloadMonthlyCsv" class="button secondary" type="button">
@@ -264,14 +196,83 @@
               <input
                 id="qaQuestion"
                 autocomplete="off"
-                placeholder="Ask about this receipt or current wallet report"
+                placeholder="Ask about the selected transaction or wallet report"
               />
               <button class="button primary" type="submit">Answer</button>
             </div>
           </form>
           <div id="qaAnswer" class="qa-answer">
-            Ready questions use template answers first. AI fallback is logged but disabled in this
-            static prototype.
+            Select a transaction row or paste a tx hash. Ready questions answer immediately from
+            the selected network data.
+          </div>
+        </section>
+        <form id="txForm" class="tx-form">
+          <label for="txHash">Transaction hash</label>
+          <div class="tx-row">
+            <input
+              id="txHash"
+              name="txHash"
+              inputmode="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="0x..."
+            />
+            <button class="button primary" type="submit">Fetch receipt</button>
+          </div>
+          <p id="txStatus" class="form-status" role="status">
+            Choose a wallet activity or paste a transaction hash.
+          </p>
+        </form>
+        <section class="history-panel" aria-label="Wallet transaction history">
+          <div class="history-head">
+            <div>
+              <p class="eyebrow">Wallet history</p>
+              <h3>Recent network activity</h3>
+            </div>
+          </div>
+          <div class="history-tabs" role="tablist" aria-label="History filters">
+            <button class="history-tab active" type="button" data-history-tab="all">All</button>
+            <button class="history-tab" type="button" data-history-tab="incoming">Incoming</button>
+            <button class="history-tab" type="button" data-history-tab="outgoing">Outgoing</button>
+            <button class="history-tab" type="button" data-history-tab="tokens">Tokens</button>
+            <button class="history-tab" type="button" data-history-tab="nfts">NFTs</button>
+          </div>
+          <div id="historyStatus" class="form-status">
+            Connect a wallet to load the latest network activity automatically.
+          </div>
+          <div id="historyList" class="history-list"></div>
+          <button id="loadMoreHistory" class="button secondary load-more" type="button" hidden>
+            Load more
+          </button>
+        </section>
+        <section class="credit-panel" aria-label="Developer credit balance">
+          <div>
+            <p class="eyebrow">Developer credits</p>
+            <h3>API balance</h3>
+            <p>
+              Check project credits before issuing API receipts. Usage can continue down to -10
+              credits to avoid breaking live dapp flows.
+            </p>
+          </div>
+          <div class="credit-fields">
+            <label for="projectIdInput">Project ID</label>
+            <input id="projectIdInput" autocomplete="off" placeholder="project_..." />
+            <label for="apiKeyInput">API key</label>
+            <input id="apiKeyInput" autocomplete="off" placeholder="txr_..." type="password" />
+            <button id="checkCredits" class="button secondary" type="button">Check credits</button>
+          </div>
+          <div class="credit-fields">
+            <label for="topUpAmountInput">Base USDC amount</label>
+            <input id="topUpAmountInput" autocomplete="off" inputmode="decimal" placeholder="5.00" />
+            <label for="billingWalletInput">Sender wallet</label>
+            <input id="billingWalletInput" autocomplete="off" placeholder="0x..." />
+            <button id="createTopUp" class="button secondary" type="button">Create top-up</button>
+          </div>
+          <div class="credit-balance">
+            <span class="mini-label">Balance</span>
+            <strong id="creditBalance">Not connected</strong>
+            <p id="creditStatus" class="form-status" role="status">API backend is ready for Cloudflare deployment.</p>
+            <div id="topUpInstructions" class="topup-instructions" hidden></div>
           </div>
         </section>
       </section>

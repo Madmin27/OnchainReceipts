@@ -23,6 +23,7 @@ const topUpInstructions = document.querySelector("#topUpInstructions");
 const qaForm = document.querySelector("#qaForm");
 const qaQuestionInput = document.querySelector("#qaQuestion");
 const qaAnswer = document.querySelector("#qaAnswer");
+const qaContext = document.querySelector("#qaContext");
 const quickQuestionButtons = document.querySelectorAll("[data-question]");
 const downloadMonthlyCsvButton = document.querySelector("#downloadMonthlyCsv");
 const printMonthlyReportButton = document.querySelector("#printMonthlyReport");
@@ -104,6 +105,12 @@ function setQaAnswer(message, source = "template") {
   if (!qaAnswer) return;
   qaAnswer.textContent = message;
   qaAnswer.dataset.source = source;
+}
+
+function setQaContext(message, tone = "neutral") {
+  if (!qaContext) return;
+  qaContext.textContent = message;
+  qaContext.dataset.tone = tone;
 }
 
 function currentNetworkScopeText() {
@@ -354,9 +361,8 @@ function renderHistory() {
     receiptAction.textContent = "Receipt";
     text.append(title, meta);
     row.append(text, value, receiptAction);
-    row.addEventListener("click", () => {
-      txInput.value = item.hash;
-      setStatus("Transaction hash selected. Use Fetch receipt or the Receipt button to download.", "neutral");
+    row.addEventListener("click", async () => {
+      await selectTransaction(item.hash);
     });
     receiptAction.addEventListener("click", async event => {
       event.stopPropagation();
@@ -366,6 +372,13 @@ function renderHistory() {
   }
 
   loadMoreHistoryButton.hidden = visibleHistoryLimit >= allItems.length && !historyState.txNext && !historyState.transferNext;
+}
+
+async function selectTransaction(txHash) {
+  txInput.value = txHash;
+  setQaContext(`Selected ${currentNetwork().name} tx: ${shortHash(txHash)}`);
+  setStatus("Transaction selected. Receipt context is being prepared.", "neutral");
+  await generateReceipt(txHash, { download: false, quiet: true });
 }
 
 async function loadHistory({ more = false } = {}) {
@@ -879,6 +892,25 @@ function buildMonthlyReport() {
   };
 }
 
+function selectedTxText() {
+  const tx = receipt?.fullTxHash || txInput?.value.trim() || "";
+  return tx ? shortHash(tx) : "No transaction selected";
+}
+
+function receiptMatchesInput() {
+  const txHash = txInput?.value.trim();
+  return Boolean(txHash && receipt?.fullTxHash === txHash);
+}
+
+function accountingBlock(title, rows) {
+  return [
+    `Accounting report - ${title}`,
+    `Network: ${currentNetwork().name}`,
+    `Transaction: ${selectedTxText()}`,
+    ...rows.map(([label, value]) => `${label}: ${value || "Not available"}`),
+  ].join("\n");
+}
+
 function detectIntent(question) {
   const text = String(question || "").toLowerCase();
   const rules = [
@@ -898,25 +930,65 @@ function templateAnswer(intent) {
   const data = compactReceipt();
   const report = buildMonthlyReport();
   if (intent === "MONTHLY_SPENDING") {
-    return `${currentNetworkScopeText()}\nLoaded records: ${report.totalRecords}. Outgoing: ${report.outgoingCount}. Incoming: ${report.incomingCount}. Estimated outgoing numeric total from visible rows: ${report.estimatedOutgoingValue.toFixed(6)}.`;
+    return accountingBlock("monthly wallet summary", [
+      ["Scope", currentNetworkScopeText()],
+      ["Wallet", report.wallet],
+      ["Loaded records", report.totalRecords],
+      ["Outgoing records", report.outgoingCount],
+      ["Incoming records", report.incomingCount],
+      ["Estimated outgoing numeric total", report.estimatedOutgoingValue.toFixed(6)],
+    ]);
   }
   if (intent === "DAPP_USAGE") {
-    return `${currentNetworkScopeText()}\nTop visible activity: ${report.topActivity}.`;
+    return accountingBlock("top wallet activity", [
+      ["Scope", currentNetworkScopeText()],
+      ["Top visible activity", report.topActivity],
+      ["Loaded records", report.totalRecords],
+    ]);
   }
   if (intent === "DOWNLOAD_RECEIPT") {
-    return "Use Download CSV for an Excel-readable wallet report, Print PDF for a report page, or Fetch receipt to download a PNG receipt for a transaction.";
+    return accountingBlock("available exports", [
+      ["Excel report", "Use Download CSV"],
+      ["PDF report", "Use Print PDF"],
+      ["Single tx receipt", "Use Fetch receipt to download a PNG receipt"],
+    ]);
   }
-  if (!data) return "Generate or select a receipt first. This data is not available yet.";
-  if (intent === "GAS_FEE") return `${currentNetworkScopeText()}\nGas paid: ${data.gas || "This data is not available"}.`;
+  if (!data) {
+    return accountingBlock("missing transaction context", [
+      ["Status", "Select a transaction row or paste a tx hash first"],
+      ["Data availability", "Receipt data is not available yet"],
+    ]);
+  }
+  if (intent === "GAS_FEE") {
+    return accountingBlock("network fee", [
+      ["Status", data.status],
+      ["Gas paid", data.gas],
+      ["Accounting note", receipt.accountingNote],
+    ]);
+  }
   if (intent === "TOKEN_TRANSFERS") {
-    const rows = data.rows.map(row => `${row.label}: ${row.value}`).join("\n");
-    return `${currentNetworkScopeText()}\n${rows || "This data is not available."}`;
+    return accountingBlock("token movement", [
+      ["Sent", data.sent],
+      ["Received", data.received],
+      ["Rows", data.rows.map(row => `${row.label}=${row.value}`).join("; ")],
+    ]);
   }
   if (intent === "TRANSACTION_STATUS" || intent === "VERIFY_RECEIPT") {
-    return `${currentNetworkScopeText()}\nReceipt status: ${data.status}. Evidence: ${receipt.evidence || "This data is not available"}.`;
+    return accountingBlock("verification status", [
+      ["Receipt status", data.status],
+      ["Evidence", receipt.evidence],
+      ["Method", data.method],
+    ]);
   }
   if (intent === "EXPLAIN_TRANSACTION") {
-    return `${currentNetworkScopeText()}\n${data.title}. Purpose: ${data.purpose}. Sent: ${data.sent}. Received: ${data.received}. Status: ${data.status}.`;
+    return accountingBlock("transaction summary", [
+      ["Title", data.title],
+      ["Purpose", data.purpose],
+      ["Sent", data.sent],
+      ["Received", data.received],
+      ["Status", data.status],
+      ["Date", data.date],
+    ]);
   }
   return null;
 }
@@ -1233,9 +1305,14 @@ createTopUpButton?.addEventListener("click", async () => {
 });
 
 quickQuestionButtons.forEach(button => {
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     const question = button.dataset.question || button.textContent;
     if (qaQuestionInput) qaQuestionInput.value = question;
+    const txHash = txInput?.value.trim();
+    if (txHash && !receiptMatchesInput()) {
+      setQaContext(`Preparing ${currentNetwork().name} tx: ${shortHash(txHash)}`);
+      await generateReceipt(txHash, { download: false, quiet: true });
+    }
     const result = answerQuestion(question);
     setQaAnswer(result.answer, result.source);
   });
@@ -1243,13 +1320,20 @@ quickQuestionButtons.forEach(button => {
 
 qaForm?.addEventListener("submit", event => {
   event.preventDefault();
+  (async () => {
   const question = qaQuestionInput?.value.trim() || "";
   if (!question) {
     setQaAnswer("Ask a question or use one of the ready questions.", "template");
     return;
   }
+  const txHash = txInput?.value.trim();
+  if (txHash && !receiptMatchesInput()) {
+    setQaContext(`Preparing ${currentNetwork().name} tx: ${shortHash(txHash)}`);
+    await generateReceipt(txHash, { download: false, quiet: true });
+  }
   const result = answerQuestion(question);
   setQaAnswer(result.answer, result.source);
+  })();
 });
 
 downloadMonthlyCsvButton?.addEventListener("click", downloadMonthlyCsv);
@@ -1291,7 +1375,13 @@ txForm.addEventListener("submit", async event => {
   await generateReceipt(txHash, { download: true });
 });
 
-async function generateReceipt(txHash, { download = false } = {}) {
+txInput.addEventListener("input", () => {
+  if (!receiptMatchesInput()) {
+    setQaContext(txInput.value.trim() ? `Pending tx: ${shortHash(txInput.value.trim())}` : "No transaction selected yet.");
+  }
+});
+
+async function generateReceipt(txHash, { download = false, quiet = false } = {}) {
   const network = currentNetwork();
   const isValidHash = network.family === "solana"
     ? /^[1-9A-HJ-NP-Za-km-z]{64,96}$/.test(txHash)
@@ -1303,10 +1393,10 @@ async function generateReceipt(txHash, { download = false } = {}) {
 
   try {
     if (network.family === "solana") {
-      await generateSolanaReceipt(txHash, { download });
+      await generateSolanaReceipt(txHash, { download, quiet });
       return;
     }
-    setStatus(`Fetching transaction from ${network.name} RPC...`);
+    if (!quiet) setStatus(`Fetching transaction from ${network.name} RPC...`);
     const [tx, txReceipt] = await Promise.all([
       rpc("eth_getTransactionByHash", [txHash]),
       rpc("eth_getTransactionReceipt", [txHash]),
@@ -1323,6 +1413,7 @@ async function generateReceipt(txHash, { download = false } = {}) {
       fetchExplorerInternalTransfers(txHash),
     ]);
     receipt = buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers, internalTransfers);
+    setQaContext(`Selected ${network.name} tx: ${shortHash(txHash)} - ${receipt.status}`);
     try {
       receipt.qrDataUrl = await fetchQrDataUrl(receipt.explorerUrl);
     } catch {
@@ -1337,8 +1428,8 @@ async function generateReceipt(txHash, { download = false } = {}) {
   }
 }
 
-async function generateSolanaReceipt(signature, { download = false } = {}) {
-  setStatus("Fetching transaction from Solana RPC...");
+async function generateSolanaReceipt(signature, { download = false, quiet = false } = {}) {
+  if (!quiet) setStatus("Fetching transaction from Solana RPC...");
   const tx = await solanaRpc("getTransaction", [
     signature,
     { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 },
@@ -1348,6 +1439,7 @@ async function generateSolanaReceipt(signature, { download = false } = {}) {
     return;
   }
   receipt = buildSolanaReceipt(signature, tx);
+  setQaContext(`Selected ${network.name} tx: ${shortHash(signature)} - ${receipt.status}`);
   try {
     receipt.qrDataUrl = await fetchQrDataUrl(receipt.explorerUrl);
   } catch {
