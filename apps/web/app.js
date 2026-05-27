@@ -64,7 +64,7 @@ const SOLANA_HISTORY_PAGE_ATTEMPTS = 5;
 const MAX_QR_BYTES = 80_000;
 const RECEIPT_WIDTH = 1720;
 const RECEIPT_HEIGHT = 1900;
-const API_BASE_URL = "https://api.txreceipts.com.tr";
+const API_BASE_URLS = ["https://api.txreceipts.com.tr", "https://txreceipts-api.evpc77.workers.dev"];
 const QUESTION_LOG_KEY = "txreceipts_question_logs_v1";
 const AI_ALLOWED_INTENTS = new Set(["WALLET_SUMMARY", "MONTHLY_SPENDING", "WEEKLY_FEES", "ACCOUNTANT_SUMMARY", "EXPLAIN_TRANSACTION", "UNCATEGORIZED", "DAPP_USAGE", "TOKEN_TRANSFERS"]);
 const networks = window.TX_RECEIPTS_NETWORKS || [];
@@ -90,6 +90,18 @@ let historyState = {
 function safeDisplay(value, maxLength = 120) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+}
+
+async function apiFetch(path, options = {}) {
+  let lastError = null;
+  for (const baseUrl of API_BASE_URLS) {
+    try {
+      return await fetch(`${baseUrl}${path}`, options);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("API is unreachable.");
 }
 
 function currentNetwork() {
@@ -1517,7 +1529,7 @@ async function answerQuestion(question, options = {}) {
     return { answer, source: "template" };
   }
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/ai/accounting-answer`, {
+    const response = await apiFetch(`/v1/ai/accounting-answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question: normalizedQuestion, context: compactAccountingContext() }),
@@ -1789,7 +1801,7 @@ checkCreditsButton?.addEventListener("click", async () => {
   if (!inputs) return;
   setCreditStatus("Checking credit balance...");
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/projects/${encodeURIComponent(inputs.projectId)}/credits`, {
+    const response = await apiFetch(`/v1/projects/${encodeURIComponent(inputs.projectId)}/credits`, {
       headers: { Authorization: `Bearer ${inputs.apiKey}` },
     });
     if (!response.ok) throw new Error(`API returned HTTP ${response.status}`);
@@ -1814,7 +1826,7 @@ createTopUpButton?.addEventListener("click", async () => {
   setCreditStatus("Creating Base USDC top-up intent...");
   if (topUpInstructions) topUpInstructions.hidden = true;
   try {
-    const response = await fetch(`${API_BASE_URL}/v1/credits/topups`, {
+    const response = await apiFetch(`/v1/credits/topups`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${inputs.apiKey}`,
