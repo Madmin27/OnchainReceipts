@@ -72,6 +72,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "WALLET_SUMMARY",
   "WEEKLY_FEES",
   "RECENT_TRANSACTION_FEES",
+  "MONTHLY_NATIVE_SENT",
   "INCOME_EXPENSE",
   "MONTHLY_SPENDING",
   "DAPP_USAGE",
@@ -1181,7 +1182,7 @@ function deterministicBlock(title, rows, fieldsUsed) {
 function parseRequestedTransactionCount(question) {
   const text = String(question || "").toLowerCase();
   const digitMatch = text.match(/(?:top|last|son|en)\s*(\d{1,2})/i) || text.match(/(\d{1,2})\s*(?:transactions?|islem|işlem|tx)/i);
-  if (digitMatch) return Math.max(1, Math.min(10, Number(digitMatch[1])));
+  if (digitMatch) return Math.max(1, Math.min(99, Number(digitMatch[1])));
   if (/last transaction|son islem|son işlem/.test(text)) return 1;
   return 3;
 }
@@ -1196,6 +1197,9 @@ function isRecentTransactionFeeQuestion(question) {
 function detectIntent(question) {
   const text = String(question || "").toLowerCase();
   if (isRecentTransactionFeeQuestion(text)) return "RECENT_TRANSACTION_FEES";
+  if (/(bu ay|this month|monthly|ay).*(eth|base|native).*(gonder|gönder|sent|send)|(eth|base|native).*(gonder|gönder|sent|send).*(bu ay|this month|monthly|ay)/.test(text)) {
+    return "MONTHLY_NATIVE_SENT";
+  }
   const rules = [
     ["WALLET_SUMMARY", ["wallet summary", "summarize this wallet", "wallet report", "cuzdan", "cuzdani ozetle"]],
     ["WEEKLY_FEES", ["son 1 hafta", "son bir hafta", "1 haftada", "bir haftada", "last 7", "last week", "weekly fee", "weekly gas", "feeleri", "fee'leri"]],
@@ -1252,6 +1256,24 @@ function templateAnswer(intent) {
       ["Last 7 days network fees", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
       ["Estimated outgoing numeric total", report.estimatedOutgoingValue.toFixed(6)],
     ], "loaded rows, expense direction counts, estimated outgoing numeric values, current network scope");
+  }
+  if (intent === "MONTHLY_NATIVE_SENT") {
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const asset = currentNetwork().nativeCurrency?.symbol || "ETH";
+    const monthlyNativeRows = report.items
+      .filter(item => item.kind === "tx" && item.direction === "outgoing")
+      .filter(item => itemTimestampMs(item) >= monthStart.getTime())
+      .filter(item => String(item.value || "").includes(` ${asset}`));
+    const totalSent = monthlyNativeRows.reduce((sum, item) => sum + parseAmount(item.value), 0);
+    return deterministicBlock(`monthly ${asset} sent`, [
+      ["Scope", currentNetworkScopeText()],
+      ["Wallet", report.wallet],
+      ["Transactions reviewed", monthlyNativeRows.length],
+      ["Total native asset sent", `${totalSent.toFixed(8)} ${asset}`],
+      ["Accounting note", monthlyNativeRows.length ? `Calculated from outgoing native-value transactions loaded for this calendar month.` : `No outgoing ${asset} value transfers are loaded for this calendar month.`],
+    ], "loaded outgoing native-value transaction rows for the current calendar month, transaction timestamps, network native asset values");
   }
   if (intent === "WEEKLY_FEES") {
     return deterministicBlock("last 7 days network fees", [
@@ -1434,6 +1456,10 @@ function isInScopeAccountingQuestion(question) {
     "expense",
     "fee",
     "gas",
+    "sent",
+    "send",
+    "eth",
+    "base",
     "token",
     "transfer",
     "swap",
@@ -1464,6 +1490,10 @@ function isInScopeAccountingQuestion(question) {
     "mutabakat",
     "gelir",
     "gider",
+    "gonder",
+    "gönder",
+    "gonderdim",
+    "gönderdim",
     "ucret",
     "ücret",
     "komisyon",
