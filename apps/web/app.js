@@ -68,6 +68,22 @@ const RECEIPT_HEIGHT = 1900;
 const API_BASE_URLS = ["https://api.txreceipts.com.tr", "https://txreceipts-api.evpc77.workers.dev"];
 const QUESTION_LOG_KEY = "txreceipts_question_logs_v1";
 const AI_ALLOWED_INTENTS = new Set(["WALLET_SUMMARY", "MONTHLY_SPENDING", "WEEKLY_FEES", "ACCOUNTANT_SUMMARY", "EXPLAIN_TRANSACTION", "UNCATEGORIZED", "DAPP_USAGE", "TOKEN_TRANSFERS"]);
+const DETERMINISTIC_INTENTS = new Set([
+  "WALLET_SUMMARY",
+  "WEEKLY_FEES",
+  "RECENT_TRANSACTION_FEES",
+  "INCOME_EXPENSE",
+  "MONTHLY_SPENDING",
+  "DAPP_USAGE",
+  "UNCATEGORIZED",
+  "ACCOUNTANT_SUMMARY",
+  "DOWNLOAD_RECEIPT",
+  "GAS_FEE",
+  "TOKEN_TRANSFERS",
+  "TRANSACTION_STATUS",
+  "VERIFY_RECEIPT",
+  "EXPLAIN_TRANSACTION",
+]);
 const networks = window.TX_RECEIPTS_NETWORKS || [];
 
 const knownTokens = {
@@ -1539,8 +1555,8 @@ async function answerQuestion(question, options = {}) {
   }
 
   const answer = templateAnswer(intent, normalizedQuestion);
-  if (answer && preferTemplate) {
-    logQuestion(normalizedQuestion, intent, "template");
+  if (answer && (preferTemplate || DETERMINISTIC_INTENTS.has(intent))) {
+    logQuestion(normalizedQuestion, intent, preferTemplate ? "template" : "template_auto");
     return { answer, source: "template" };
   }
   try {
