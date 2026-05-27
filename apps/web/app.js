@@ -1075,7 +1075,7 @@ function answerQuestion(question) {
     logQuestion(question, intent, "template");
     return { answer, source: "template" };
   }
-  const fallback = `${currentNetworkScopeText()}\nAI fallback is disabled in this static prototype. Your question was logged as a ready-question candidate.`;
+  const fallback = `${currentNetworkScopeText()}\nAI fallback handoff is preserved for the server app. This static prototype logged your question as a ready-question candidate.`;
   logQuestion(question, intent, "ai_candidate");
   return { answer: fallback, source: "ai" };
 }

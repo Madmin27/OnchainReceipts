@@ -45,4 +45,22 @@ Avoid sending:
 7. Use browser print as the first PDF path.
 8. Log unknown questions as future ready-question candidates.
 
-AI remains fallback-only. The default path should be deterministic templates.
+## AI role
+
+AI should remain available, but it should not become the main accounting engine.
+
+Use AI for:
+
+- questions that do not match a ready template;
+- short accountant-friendly explanations from compact receipt JSON;
+- grouping repeated unknown questions into future ready-question candidates;
+- optional narrative summaries after deterministic totals are already prepared.
+
+Do not use AI for:
+
+- calculating balances;
+- deciding verified receipt status;
+- reading unrelated chains;
+- processing raw MCP or RPC output.
+
+The default path should be deterministic templates. AI is the fallback and learning layer.

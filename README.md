@@ -116,11 +116,11 @@ The current prototype uses a zero-token assistant pattern:
 - template answers for gas fees, token movements, status, verification, monthly spend, and top activity;
 - selected-network scope, so answers focus only on the connected network's loaded data;
 - local logging of unknown questions as future ready-question candidates;
-- AI fallback disabled in the static prototype to avoid unnecessary token usage.
+- AI fallback preserved as a controlled server-side layer for questions that templates cannot answer.
 
 See [docs/ai-assistant.md](docs/ai-assistant.md).
 
-The accounting MCP plan is documented in [docs/accounting-mcp.md](docs/accounting-mcp.md). MCP should act as a selected-network data collection layer, while reports remain deterministic and template-first.
+The accounting MCP plan is documented in [docs/accounting-mcp.md](docs/accounting-mcp.md). MCP should act as a selected-network data collection layer, while reports remain deterministic and template-first. AI can stay in the product as a fallback and learning layer, but it should receive only compact accounting context.
 
 ## How dapps integrate
 
