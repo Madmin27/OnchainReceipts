@@ -72,6 +72,7 @@ const DETERMINISTIC_INTENTS = new Set([
   "WALLET_SUMMARY",
   "WEEKLY_FEES",
   "RECENT_TRANSACTION_FEES",
+  "NATIVE_ASSET_FLOW",
   "MONTHLY_NATIVE_SENT",
   "INCOME_EXPENSE",
   "MONTHLY_SPENDING",
@@ -1194,9 +1195,33 @@ function isRecentTransactionFeeQuestion(question) {
   return mentionsTransactions && mentionsFees;
 }
 
+function parseQuestionMonthWindow(question) {
+  const text = String(question || "").toLowerCase();
+  if (/(bu ay|this month|monthly)/.test(text)) return 1;
+  const monthMatch = text.match(/(?:son|last)\s*(\d{1,2})\s*ay/)
+    || text.match(/(?:son|last)\s*(\d{1,2})\s*months?/)
+    || text.match(/(\d{1,2})\s*ay/)
+    || text.match(/(\d{1,2})\s*months?/);
+  if (monthMatch) return Math.max(1, Math.min(24, Number(monthMatch[1])));
+  return 1;
+}
+
+function parseNativeAssetFlow(question) {
+  const text = String(question || "").toLowerCase();
+  const mentionsAsset = /(eth|base|native)/.test(text);
+  const asksIncoming = /(aldim|aldım|aldim\b|al\b|receive|received|incoming|gelen)/.test(text);
+  const asksOutgoing = /(gonderdim|gönderdim|gonder|gönder|sent|send|outgoing|giden)/.test(text);
+  if (!mentionsAsset || (!asksIncoming && !asksOutgoing)) return null;
+  return {
+    direction: asksIncoming && !asksOutgoing ? "incoming" : "outgoing",
+    months: parseQuestionMonthWindow(text),
+  };
+}
+
 function detectIntent(question) {
   const text = String(question || "").toLowerCase();
   if (isRecentTransactionFeeQuestion(text)) return "RECENT_TRANSACTION_FEES";
+  if (parseNativeAssetFlow(text)) return "NATIVE_ASSET_FLOW";
   if (/(bu ay|this month|monthly|ay).*(eth|base|native).*(gonder|gönder|sent|send)|(eth|base|native).*(gonder|gönder|sent|send).*(bu ay|this month|monthly|ay)/.test(text)) {
     return "MONTHLY_NATIVE_SENT";
   }
@@ -1256,6 +1281,33 @@ function templateAnswer(intent) {
       ["Last 7 days network fees", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
       ["Estimated outgoing numeric total", report.estimatedOutgoingValue.toFixed(6)],
     ], "loaded rows, expense direction counts, estimated outgoing numeric values, current network scope");
+  }
+  if (intent === "NATIVE_ASSET_FLOW") {
+    const flow = parseNativeAssetFlow(questionText);
+    const months = flow?.months || 1;
+    const direction = flow?.direction || "outgoing";
+    const asset = currentNetwork().nativeCurrency?.symbol || "ETH";
+    const since = new Date();
+    if (months === 1) {
+      since.setDate(1);
+      since.setHours(0, 0, 0, 0);
+    } else {
+      since.setMonth(since.getMonth() - months);
+    }
+    const matchingRows = report.items
+      .filter(item => item.kind === "tx" && item.direction === direction)
+      .filter(item => itemTimestampMs(item) >= since.getTime())
+      .filter(item => String(item.value || "").includes(` ${asset}`));
+    const totalAmount = matchingRows.reduce((sum, item) => sum + parseAmount(item.value), 0);
+    const directionLabel = direction === "incoming" ? "received" : "sent";
+    const windowLabel = months === 1 ? "this month" : `last ${months} months`;
+    return deterministicBlock(`${windowLabel} ${asset} ${directionLabel}`, [
+      ["Scope", currentNetworkScopeText()],
+      ["Wallet", report.wallet],
+      ["Transactions reviewed", matchingRows.length],
+      ["Total native asset", `${totalAmount.toFixed(8)} ${asset}`],
+      ["Accounting note", matchingRows.length ? `Calculated from ${direction} native-value transactions loaded for ${windowLabel}.` : `No ${direction} ${asset} value transfers are loaded for ${windowLabel}.`],
+    ], "loaded native-value transaction rows, transaction direction, transaction timestamps, network native asset values");
   }
   if (intent === "MONTHLY_NATIVE_SENT") {
     const monthStart = new Date();
