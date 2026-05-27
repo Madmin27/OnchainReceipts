@@ -229,6 +229,51 @@
             Load more
           </button>
         </section>
+        <section class="qa-panel" aria-label="Wallet accounting assistant">
+          <div class="qa-head">
+            <div>
+              <p class="eyebrow">Wallet accounting</p>
+              <h3>Ask from the selected network only</h3>
+            </div>
+            <div class="qa-actions">
+              <button id="downloadMonthlyCsv" class="button secondary" type="button">
+                Download CSV
+              </button>
+              <button id="printMonthlyReport" class="button secondary" type="button">
+                Print PDF
+              </button>
+            </div>
+          </div>
+          <div class="quick-questions" aria-label="Ready questions">
+            <button type="button" data-question="What happened in this transaction?">
+              What happened?
+            </button>
+            <button type="button" data-question="How much gas did I pay?">Gas fee?</button>
+            <button type="button" data-question="Which tokens moved?">Token transfers?</button>
+            <button type="button" data-question="Is this receipt verified?">Verified?</button>
+            <button type="button" data-question="How much did I spend this month?">
+              Monthly spend?
+            </button>
+            <button type="button" data-question="Which dapp did I use the most?">
+              Top dapp?
+            </button>
+          </div>
+          <form id="qaForm" class="qa-form">
+            <label for="qaQuestion">Question</label>
+            <div class="tx-row">
+              <input
+                id="qaQuestion"
+                autocomplete="off"
+                placeholder="Ask about this receipt or current wallet report"
+              />
+              <button class="button primary" type="submit">Answer</button>
+            </div>
+          </form>
+          <div id="qaAnswer" class="qa-answer">
+            Ready questions use template answers first. AI fallback is logged but disabled in this
+            static prototype.
+          </div>
+        </section>
       </section>
     </main>
 

@@ -591,6 +591,94 @@ dd {
   padding: 18px;
 }
 
+.qa-panel {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.qa-head {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.qa-head h3 {
+  margin: 0;
+}
+
+.qa-actions,
+.quick-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.qa-actions .button {
+  min-width: 120px;
+}
+
+.quick-questions {
+  margin: 18px 0;
+}
+
+.quick-questions button {
+  background: #211e1c;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 720;
+  padding: 8px 12px;
+}
+
+.quick-questions button:hover {
+  border-color: var(--blue);
+  color: var(--ink);
+}
+
+.qa-form label {
+  display: block;
+  font-size: 13px;
+  font-weight: 760;
+  margin-bottom: 10px;
+}
+
+.qa-answer {
+  background: #151312;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  line-height: 1.65;
+  margin-top: 14px;
+  min-height: 72px;
+  padding: 16px;
+  white-space: pre-line;
+}
+
+.qa-answer[data-source="ai"]::before,
+.qa-answer[data-source="template"]::before {
+  color: var(--blue-soft);
+  display: block;
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.qa-answer[data-source="ai"]::before {
+  content: "AI assisted answer";
+}
+
+.qa-answer[data-source="template"]::before {
+  content: "Verified receipt answer";
+}
+
 .history-head {
   align-items: center;
   display: flex;
@@ -768,6 +856,43 @@ dd {
   font-weight: 720;
 }
 
+@media print {
+  .topbar,
+  .hero,
+  #product,
+  #assistant,
+  #security,
+  .demo-panel,
+  .wallet-panel,
+  .tx-form,
+  .credit-panel,
+  .history-panel,
+  .qa-form,
+  .quick-questions,
+  .qa-actions,
+  .footer {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff;
+    color: #111111;
+  }
+
+  .demo-section,
+  .qa-panel,
+  .qa-answer {
+    background: #ffffff;
+    border: 0;
+    color: #111111;
+  }
+
+  .qa-panel {
+    display: block !important;
+    padding: 0;
+  }
+}
+
 @media (max-width: 900px) {
   .topbar,
   .receipt-head,
@@ -775,7 +900,8 @@ dd {
   .split,
   .demo-panel,
   .footer,
-  .history-head {
+  .history-head,
+  .qa-head {
     align-items: flex-start;
     flex-direction: column;
   }

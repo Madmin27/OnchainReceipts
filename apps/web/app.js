@@ -20,6 +20,12 @@ const topUpAmountInput = document.querySelector("#topUpAmountInput");
 const billingWalletInput = document.querySelector("#billingWalletInput");
 const createTopUpButton = document.querySelector("#createTopUp");
 const topUpInstructions = document.querySelector("#topUpInstructions");
+const qaForm = document.querySelector("#qaForm");
+const qaQuestionInput = document.querySelector("#qaQuestion");
+const qaAnswer = document.querySelector("#qaAnswer");
+const quickQuestionButtons = document.querySelectorAll("[data-question]");
+const downloadMonthlyCsvButton = document.querySelector("#downloadMonthlyCsv");
+const printMonthlyReportButton = document.querySelector("#printMonthlyReport");
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -30,6 +36,7 @@ const MAX_QR_BYTES = 80_000;
 const RECEIPT_WIDTH = 1720;
 const RECEIPT_HEIGHT = 1900;
 const API_BASE_URL = "https://api.txreceipts.com.tr";
+const QUESTION_LOG_KEY = "txreceipts_question_logs_v1";
 const networks = window.TX_RECEIPTS_NETWORKS || [];
 
 const knownTokens = {
@@ -91,6 +98,16 @@ function setCreditStatus(message, tone = "neutral") {
   if (!creditStatus) return;
   creditStatus.textContent = message;
   creditStatus.dataset.tone = tone;
+}
+
+function setQaAnswer(message, source = "template") {
+  if (!qaAnswer) return;
+  qaAnswer.textContent = message;
+  qaAnswer.dataset.source = source;
+}
+
+function currentNetworkScopeText() {
+  return `This answer only uses ${currentNetwork().name} data currently loaded in TxReceipts.`;
 }
 
 function apiAuthInputs() {
@@ -811,6 +828,158 @@ function resetHistory() {
   renderHistory();
 }
 
+function compactReceipt() {
+  if (!receipt) return null;
+  return {
+    id: receipt.id,
+    network: receipt.network,
+    title: receipt.title,
+    purpose: receipt.purpose,
+    status: receipt.status,
+    sent: receipt.sent,
+    received: receipt.received,
+    gas: receipt.gas,
+    app: receipt.app,
+    method: receipt.method,
+    date: receipt.date,
+    tx: receipt.fullTxHash,
+    rows: Array.isArray(receipt.transferRows) ? receipt.transferRows.slice(0, 8) : [],
+  };
+}
+
+function parseAmount(value) {
+  const match = String(value || "").replace(",", ".").match(/-?\d+(\.\d+)?/);
+  return match ? Number(match[0]) : 0;
+}
+
+function walletReportItems() {
+  return allHistoryItems().filter(item => item.kind === "tx" || item.kind === "token");
+}
+
+function buildMonthlyReport() {
+  const items = walletReportItems();
+  const outgoing = items.filter(item => item.direction === "outgoing");
+  const incoming = items.filter(item => item.direction === "incoming");
+  const byTitle = new Map();
+  for (const item of items) {
+    const key = item.title || "Unknown activity";
+    byTitle.set(key, (byTitle.get(key) || 0) + 1);
+  }
+  const top = [...byTitle.entries()].sort((a, b) => b[1] - a[1])[0];
+  return {
+    network: currentNetwork().name,
+    wallet: connectedWallet || "Not connected",
+    totalRecords: items.length,
+    outgoingCount: outgoing.length,
+    incomingCount: incoming.length,
+    tokenRecords: items.filter(item => item.kind === "token").length,
+    estimatedOutgoingValue: outgoing.reduce((sum, item) => sum + parseAmount(item.value), 0),
+    topActivity: top ? `${top[0]} (${top[1]} records)` : "Not available",
+    items,
+  };
+}
+
+function detectIntent(question) {
+  const text = String(question || "").toLowerCase();
+  const rules = [
+    ["GAS_FEE", ["gas", "fee", "gaz", "ücret", "ucret", "komisyon", "masraf"]],
+    ["TOKEN_TRANSFERS", ["token", "transfer", "swap", "ne aldım", "ne aldim", "ne gönderdim", "ne gonderdim"]],
+    ["TRANSACTION_STATUS", ["başarılı", "basarili", "failed", "success", "status", "durum", "onaylandı", "onaylandi"]],
+    ["VERIFY_RECEIPT", ["verified", "doğrulandı", "dogrulandi", "güvenli", "guvenli", "intent"]],
+    ["MONTHLY_SPENDING", ["ay", "month", "monthly", "harcadım", "harcadim", "spend", "spent", "toplam"]],
+    ["DAPP_USAGE", ["dapp", "app", "uygulama", "most", "en çok", "en cok"]],
+    ["DOWNLOAD_RECEIPT", ["download", "indir", "pdf", "excel", "csv", "rapor"]],
+    ["EXPLAIN_TRANSACTION", ["what happened", "ne oldu", "açıkla", "acikla", "explain", "özet", "ozet"]],
+  ];
+  return rules.find(([, keywords]) => keywords.some(keyword => text.includes(keyword)))?.[0] || "UNKNOWN";
+}
+
+function templateAnswer(intent) {
+  const data = compactReceipt();
+  const report = buildMonthlyReport();
+  if (intent === "MONTHLY_SPENDING") {
+    return `${currentNetworkScopeText()}\nLoaded records: ${report.totalRecords}. Outgoing: ${report.outgoingCount}. Incoming: ${report.incomingCount}. Estimated outgoing numeric total from visible rows: ${report.estimatedOutgoingValue.toFixed(6)}.`;
+  }
+  if (intent === "DAPP_USAGE") {
+    return `${currentNetworkScopeText()}\nTop visible activity: ${report.topActivity}.`;
+  }
+  if (intent === "DOWNLOAD_RECEIPT") {
+    return "Use Download CSV for an Excel-readable wallet report, Print PDF for a report page, or Fetch receipt to download a PNG receipt for a transaction.";
+  }
+  if (!data) return "Generate or select a receipt first. This data is not available yet.";
+  if (intent === "GAS_FEE") return `${currentNetworkScopeText()}\nGas paid: ${data.gas || "This data is not available"}.`;
+  if (intent === "TOKEN_TRANSFERS") {
+    const rows = data.rows.map(row => `${row.label}: ${row.value}`).join("\n");
+    return `${currentNetworkScopeText()}\n${rows || "This data is not available."}`;
+  }
+  if (intent === "TRANSACTION_STATUS" || intent === "VERIFY_RECEIPT") {
+    return `${currentNetworkScopeText()}\nReceipt status: ${data.status}. Evidence: ${receipt.evidence || "This data is not available"}.`;
+  }
+  if (intent === "EXPLAIN_TRANSACTION") {
+    return `${currentNetworkScopeText()}\n${data.title}. Purpose: ${data.purpose}. Sent: ${data.sent}. Received: ${data.received}. Status: ${data.status}.`;
+  }
+  return null;
+}
+
+function logQuestion(question, intent, source) {
+  const logs = JSON.parse(localStorage.getItem(QUESTION_LOG_KEY) || "[]");
+  logs.push({
+    userQuestion: question,
+    matchedIntent: intent,
+    answerSource: source,
+    receiptType: receipt?.purpose || "wallet_report",
+    language: /[çğıöşü]/i.test(question) ? "tr" : "unknown",
+    helpful: null,
+    network: currentNetwork().name,
+    createdAt: new Date().toISOString(),
+  });
+  localStorage.setItem(QUESTION_LOG_KEY, JSON.stringify(logs.slice(-100)));
+}
+
+function answerQuestion(question) {
+  const intent = detectIntent(question);
+  const answer = templateAnswer(intent);
+  if (answer) {
+    logQuestion(question, intent, "template");
+    return { answer, source: "template" };
+  }
+  const fallback = `${currentNetworkScopeText()}\nAI fallback is disabled in this static prototype. Your question was logged as a ready-question candidate.`;
+  logQuestion(question, intent, "ai_candidate");
+  return { answer: fallback, source: "ai" };
+}
+
+function downloadMonthlyCsv() {
+  const report = buildMonthlyReport();
+  const rows = [
+    ["network", report.network],
+    ["wallet", report.wallet],
+    ["total_records", report.totalRecords],
+    ["outgoing_records", report.outgoingCount],
+    ["incoming_records", report.incomingCount],
+    [],
+    ["date", "type", "title", "direction", "value", "tx_hash"],
+    ...report.items.map(item => [item.timestamp || "", item.kind, item.title, item.direction, item.value, item.hash]),
+  ];
+  const csv = rows
+    .map(row => row.map(cell => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `txreceipts-${currentNetwork().id}-wallet-report.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function printMonthlyReport() {
+  const report = buildMonthlyReport();
+  setQaAnswer(`${currentNetworkScopeText()}\nWallet: ${report.wallet}\nLoaded records: ${report.totalRecords}\nOutgoing: ${report.outgoingCount}\nIncoming: ${report.incomingCount}\nTop activity: ${report.topActivity}`, "template");
+  window.print();
+}
+
 function populateNetworks() {
   const previousValue = networkSelect.value;
   networkSelect.textContent = "";
@@ -1062,6 +1231,29 @@ createTopUpButton?.addEventListener("click", async () => {
     setCreditStatus(error instanceof Error ? error.message : "Could not create top-up.", "error");
   }
 });
+
+quickQuestionButtons.forEach(button => {
+  button.addEventListener("click", () => {
+    const question = button.dataset.question || button.textContent;
+    if (qaQuestionInput) qaQuestionInput.value = question;
+    const result = answerQuestion(question);
+    setQaAnswer(result.answer, result.source);
+  });
+});
+
+qaForm?.addEventListener("submit", event => {
+  event.preventDefault();
+  const question = qaQuestionInput?.value.trim() || "";
+  if (!question) {
+    setQaAnswer("Ask a question or use one of the ready questions.", "template");
+    return;
+  }
+  const result = answerQuestion(question);
+  setQaAnswer(result.answer, result.source);
+});
+
+downloadMonthlyCsvButton?.addEventListener("click", downloadMonthlyCsv);
+printMonthlyReportButton?.addEventListener("click", printMonthlyReport);
 
 window.addEventListener("txreceipts:walletsChanged", () => {
   populateWalletProviders();

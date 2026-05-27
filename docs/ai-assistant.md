@@ -46,6 +46,19 @@ Production receipt verification should continue to use deterministic RPC and ind
 4. Add an assistant panel that can answer read-only questions from cached receipt data.
 5. Add Base MCP only for opt-in wallet actions and demos after the read-only assistant is useful.
 
+## Current prototype
+
+The web prototype starts with a zero-token assistant pattern:
+
+- ready-question buttons for common receipt and wallet accounting questions;
+- rule-based Turkish and English intent matching;
+- template answers before any AI fallback;
+- CSV export for Excel-readable wallet reports;
+- print flow for PDF saving;
+- local question logs for future ready-question candidates.
+
+AI fallback is intentionally disabled in the static prototype. Unknown questions are logged locally and can be reviewed later before enabling a low-cost text model.
+
 ## Safety rules
 
 - The assistant starts read-only.
