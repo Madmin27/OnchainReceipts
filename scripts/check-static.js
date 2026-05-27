@@ -6,6 +6,7 @@ const requiredFiles = [
   'SECURITY.md',
   'LICENSE',
   'apps/web/index.html',
+  'apps/web/pricing.html',
   'apps/web/styles.css',
   'apps/web/app.js',
   'apps/web/assets/txreceipts-demo.gif',

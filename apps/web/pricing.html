@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:"
+    />
+    <title>Pricing | TxReceipts</title>
+    <meta
+      name="description"
+      content="TxReceipts pricing for users, builders, and teams issuing verified Base receipts."
+    />
+    <meta name="theme-color" content="#111111" />
+    <link rel="icon" href="./assets/txreceipts-brand.jpg" type="image/jpeg" />
+    <link rel="apple-touch-icon" href="./assets/txreceipts-brand.jpg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./index.html#top" aria-label="TxReceipts home">
+        <img class="brand-mark" src="./assets/txreceipts-brand.jpg" alt="" aria-hidden="true" />
+        <span>TxReceipts</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="./index.html#product">Product</a>
+        <a href="./index.html#assistant">AI</a>
+        <a href="./index.html#security">Security</a>
+        <a aria-current="page" href="./pricing.html">Pricing</a>
+        <a href="./index.html#demo">Demo</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="pricing-hero">
+        <p class="eyebrow">Pricing</p>
+        <h1>Free for users. Usage-based for builders.</h1>
+        <p class="lede">
+          TxReceipts keeps the public receipt inbox accessible while charging dapps for verified
+          receipt infrastructure, branded artifacts, and API usage.
+        </p>
+      </section>
+
+      <section class="section pricing-detail">
+        <div class="pricing-grid">
+          <article>
+            <h3>Users</h3>
+            <strong>Free</strong>
+            <p>100 receipts per wallet per month, 90-day network history, PNG download.</p>
+          </article>
+          <article>
+            <h3>Starter</h3>
+            <strong>$9 / month</strong>
+            <p>5,000 verified dapp receipts, API key, dashboard, basic branding.</p>
+          </article>
+          <article>
+            <h3>Builder</h3>
+            <strong>$29 / month</strong>
+            <p>25,000 verified receipts, custom logo, webhook delivery, CSV export.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split">
+        <div>
+          <p class="eyebrow">Base USDC credits</p>
+          <h2>Prepaid credits keep billing simple for teams.</h2>
+          <p>
+            Dapps can top up receipt credits with native USDC on Base. The launch conversion is
+            designed for low-friction integration and clear reconciliation.
+          </p>
+        </div>
+        <ul class="checklist">
+          <li>1 USDC equals 1,000 verified receipt credits</li>
+          <li>Minimum top-up is 5 USDC</li>
+          <li>Duplicate project, chain, and tx hash requests are not double counted</li>
+          <li>User-generated receipts from the public app stay free at launch</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>TxReceipts pricing is built for Base-first adoption.</span>
+      <a href="./index.html#top">Back to product</a>
+    </footer>
+  </body>
+</html>
