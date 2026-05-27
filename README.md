@@ -48,6 +48,9 @@ V1 is intentionally narrow:
 - receipt generation from transaction hash
 - PNG receipt export
 - monthly summary
+- Excel-readable CSV wallet report export
+- print-to-PDF wallet accounting report
+- zero-token ready-question assistant for receipt and wallet questions
 - open receipt schema
 - dapp intent schema and SDK draft
 - AI assistant plan for read-only Base wallet questions
@@ -85,7 +88,7 @@ https://madmin27.github.io/OnchainReceipts/
 
 ![TxReceipts demo walkthrough](apps/web/assets/txreceipts-demo.gif)
 
-The first live demo can fetch a transaction hash through the selected network RPC, parse receipt logs for token transfers, estimate gas paid, and render a downloadable PNG receipt artifact.
+The first live demo can fetch a transaction hash through the selected network RPC, parse receipt logs for token transfers, estimate gas paid, and render a downloadable PNG receipt artifact. It also includes a lightweight wallet accounting panel with ready questions, CSV export, and print-to-PDF report output.
 
 ## Why not just a block explorer?
 
@@ -104,6 +107,15 @@ The core question is not only "what happened onchain?" It is "what did the app s
 ## AI assistant layer
 
 The receipt engine stays first. Base MCP is planned as an opt-in assistant layer for questions like "what did I spend USDC on this month?" or "which creator payments did I receive?" rather than as the canonical verification backend.
+
+The current prototype uses a zero-token assistant pattern:
+
+- ready-question buttons for common receipt and wallet accounting questions;
+- Turkish and English keyword routing before any AI call;
+- template answers for gas fees, token movements, status, verification, monthly spend, and top activity;
+- selected-network scope, so answers focus only on the connected network's loaded data;
+- local logging of unknown questions as future ready-question candidates;
+- AI fallback disabled in the static prototype to avoid unnecessary token usage.
 
 See [docs/ai-assistant.md](docs/ai-assistant.md).
 
