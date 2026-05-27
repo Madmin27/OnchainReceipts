@@ -15,7 +15,7 @@ AI_MODEL = "gpt-4.1-mini"
 [[d1_databases]]
 binding = "DB"
 database_name = "txreceipts"
-database_id = "replace-with-cloudflare-d1-id"
+database_id = "dd07e212-4c3f-4052-858a-43f34159d942"
 
 [triggers]
 crons = ["*/10 * * * *"]

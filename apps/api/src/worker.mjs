@@ -67,8 +67,8 @@ async function answerAccountingQuestion(request, env) {
   const question = String(body.question || "").trim().slice(0, 500);
   if (!question) throw httpError(400, "Missing question.");
   const context = compactAiContext(body.context || {});
-  const baseUrl = (env.AI_BASE_URL || "https://api.groq.com/openai/v1").replace(/\/+$/, "");
-  const model = env.AI_MODEL || "llama-3.1-8b-instant";
+  const baseUrl = (env.AI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "");
+  const model = env.AI_MODEL || "gpt-4.1-mini";
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -85,6 +85,10 @@ async function answerAccountingQuestion(request, env) {
           content: [
             "You are TxReceipts Accounting AI.",
             "Answer only from the provided compact accounting JSON.",
+            "Only answer questions about the provided network's wallet activity, transactions, fees, token movements, categories, exports, receipts, and reconciliation.",
+            "If the question is outside that scope, say it is out of scope.",
+            "Prefer context.analysis when ranking, sorting, or summarizing top transactions in time windows.",
+            "Do not fall back to a generic wallet summary unless it directly answers the question.",
             "Do not invent balances, tax treatment, dates, or missing fees.",
             "Keep the answer under 90 words.",
             "Use a concise accounting report style.",
@@ -115,6 +119,7 @@ function compactAiContext(context) {
     wallet: String(context.wallet || "").slice(0, 80),
     selectedTx: String(context.selectedTx || "").slice(0, 100),
     report: context.report || {},
+    analysis: context.analysis || {},
     selectedReceipt: context.selectedReceipt || null,
     rows: Array.isArray(context.rows) ? context.rows.slice(0, 40) : [],
   };

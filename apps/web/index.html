@@ -6,7 +6,7 @@
     <meta name="base:app_id" content="6a0ad7e4e317310c39c9c18a" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://api.txreceipts.com.tr https://mainnet.base.org https://base.blockscout.com https://ethereum-rpc.publicnode.com https://eth.blockscout.com https://mainnet.optimism.io https://optimism.blockscout.com https://arb1.arbitrum.io https://arbitrum.blockscout.com https://polygon-rpc.com https://polygon.blockscout.com https://solana-rpc.debridge.finance https://solana-rpc.publicnode.com https://api.qrserver.com"
+      content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://txreceipts-api.evpc77.workers.dev https://mainnet.base.org https://base.blockscout.com https://ethereum-rpc.publicnode.com https://eth.blockscout.com https://mainnet.optimism.io https://optimism.blockscout.com https://arb1.arbitrum.io https://arbitrum.blockscout.com https://polygon-rpc.com https://polygon.blockscout.com https://solana-rpc.debridge.finance https://solana-rpc.publicnode.com https://api.qrserver.com"
     />
     <title>TxReceipts</title>
     <meta
@@ -269,9 +269,6 @@
             <button type="button" data-question="Prepare accountant summary.">
               Accountant summary
             </button>
-            <button type="button" data-question="Mark as business expense.">
-              Business expense
-            </button>
           </div>
           <form id="qaForm" class="qa-form">
             <label for="qaQuestion">Question</label>
@@ -285,8 +282,8 @@
             </div>
           </form>
           <div id="qaAnswer" class="qa-answer">
-            Select a transaction row or paste a tx hash. Ready questions answer immediately from
-            the selected network data.
+            Select a transaction row or paste a tx hash. Ready questions use deterministic network
+            data only. Freeform questions use AI only for in-scope onchain pre-accounting analysis.
           </div>
         </section>
         <form id="txForm" class="tx-form">

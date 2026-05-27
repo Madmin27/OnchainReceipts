@@ -35,8 +35,8 @@ This keeps hosting close to free during launch.
 ```txt
 TREASURY_ADDRESS = your Base treasury wallet
 ALLOWED_ORIGIN = https://txreceipts.com.tr
-AI_BASE_URL = https://api.groq.com/openai/v1
-AI_MODEL = llama-3.1-8b-instant
+AI_BASE_URL = https://api.openai.com/v1
+AI_MODEL = gpt-4.1-mini
 ```
 
 5. Add the D1 database id in `wrangler.toml`.
@@ -51,6 +51,8 @@ Set an admin secret:
 wrangler secret put ADMIN_TOKEN
 wrangler secret put AI_API_KEY
 ```
+
+`AI_API_KEY` is the OpenAI API key and must be stored as a Cloudflare Worker secret. Do not put it in `wrangler.toml`.
 
 Create a project and first billing wallet:
 

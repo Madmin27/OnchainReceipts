@@ -180,3 +180,11 @@ See [docs/security-model.md](docs/security-model.md).
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Temporary deployment note
+
+The web app and SDK are temporarily pointed at `https://txreceipts-api.evpc77.workers.dev` because `https://api.txreceipts.com.tr` has not fully settled yet.
+
+When `api.txreceipts.com.tr` is stable again, switch the frontend and SDK defaults back to that custom API hostname.
+
+Keep this in mind before changing AI providers or fallback endpoints so the temporary Workers URL is not mistaken for the long-term production API domain.
