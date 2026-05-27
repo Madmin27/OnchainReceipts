@@ -6,19 +6,21 @@ TxReceipts
 
 ## Positioning
 
-Open-source receipt infrastructure for human-readable, verified Base-first transactions.
+Pre-accounting infrastructure for onchain wallets, payments, and dapps.
 
 ## User app
 
-The user app starts Base-first, with experimental multi-network lookup for receipt generation.
+The user app starts Base-first, with experimental multi-network lookup for ledger and receipt generation.
 
 Core jobs:
 
 - connect wallet
 - see recent network transactions by date
-- generate a receipt for any supported transaction
-- download PNG receipt
-- view monthly summary
+- classify wallet rows as income, expense, swap, transfer, fee, or unknown
+- generate a short printable receipt for any supported transaction
+- download PNG/PDF receipt output
+- view monthly ledger summary
+- export accounting-ready CSV rows
 - export JSON or CSV later
 - ask read-only questions about verified receipt history later
 
@@ -52,17 +54,19 @@ Payments start with prepaid native USDC on Base. Organizations can register bill
 
 ## Receipt artifacts
 
-Each receipt should have:
+Each accounting receipt should have:
 
 - JSON canonical form
 - PNG export
 - future PDF export
 - TxReceipts signature
+- accounting direction and category
+- memo, merchant reference, and invoice fields when available
 - optional daily anchoring proof
 
 ## AI assistant layer
 
-Base MCP belongs in a later assistant layer, not in the core verification path. The assistant should answer read-only questions over receipt history, labels, and monthly summaries, then link back to the underlying receipt artifacts and transaction hashes.
+Base MCP belongs in the assistant layer, not in the core verification path. The assistant should answer read-only questions over categorized ledger rows, labels, receipts, and monthly summaries, then link back to the underlying source records and transaction hashes.
 
 See [ai-assistant.md](ai-assistant.md).
 

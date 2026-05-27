@@ -518,7 +518,8 @@ dd {
   padding: 18px;
 }
 
-.accounting-panel {
+.accounting-panel,
+.monthly-ledger {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -529,25 +530,41 @@ dd {
   padding: 18px;
 }
 
+.monthly-ledger {
+  display: block;
+}
+
 .accounting-panel h3,
-.accounting-panel p {
+.accounting-panel p,
+.monthly-ledger h3 {
   margin-bottom: 0;
 }
 
-.accounting-metrics {
+.section-title.compact {
+  margin-bottom: 16px;
+}
+
+.accounting-metrics,
+.ledger-metrics {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.accounting-metrics div {
+.ledger-metrics {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.accounting-metrics div,
+.ledger-metrics div {
   background: #151312;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px;
 }
 
-.accounting-metrics strong {
+.accounting-metrics strong,
+.ledger-metrics strong {
   display: block;
   font-size: 22px;
   margin-top: 6px;
@@ -726,7 +743,7 @@ dd {
 }
 
 .qa-answer[data-source="template"]::before {
-  content: "Verified receipt answer";
+  content: "Template answer";
 }
 
 .history-head {
@@ -815,9 +832,16 @@ dd {
 }
 
 .history-meta,
+.history-ledger,
 .history-value {
   color: var(--muted);
   font-size: 13px;
+}
+
+.history-ledger {
+  color: var(--blue-soft);
+  font-weight: 720;
+  text-transform: capitalize;
 }
 
 .history-value {
@@ -967,6 +991,7 @@ dd {
   .tx-row,
   .credit-panel,
   .accounting-panel,
+  .ledger-metrics,
   .wallet-panel,
   .history-item {
     grid-template-columns: 1fr;

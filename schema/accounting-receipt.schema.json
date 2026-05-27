@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://txreceipts.com.tr/schema/accounting-receipt.schema.json",
+  "title": "AccountingReceipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "network", "txHash", "wallet", "date", "status", "direction", "category", "fees", "verification"],
+  "properties": {
+    "id": { "type": "string", "minLength": 3 },
+    "network": { "type": "string", "enum": ["base", "ethereum", "polygon", "arbitrum", "optimism", "solana"] },
+    "txHash": { "type": "string", "minLength": 32 },
+    "wallet": { "type": "string", "minLength": 32 },
+    "date": { "type": "string" },
+    "status": { "type": "string", "enum": ["success", "failed"] },
+    "direction": { "type": "string", "enum": ["income", "expense", "swap", "transfer", "fee", "unknown"] },
+    "category": {
+      "type": "string",
+      "enum": [
+        "sales",
+        "purchase",
+        "subscription",
+        "creator_payment",
+        "swap",
+        "gas_fee",
+        "protocol_fee",
+        "app_fee",
+        "refund",
+        "internal_transfer",
+        "uncategorized"
+      ]
+    },
+    "counterparty": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "address": { "type": "string" },
+        "label": { "type": "string" },
+        "type": { "type": "string", "enum": ["wallet", "dapp", "contract", "merchant"] }
+      }
+    },
+    "sent": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/tokenAmount" }
+    },
+    "received": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/tokenAmount" }
+    },
+    "fees": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gasNative": { "type": "string" },
+        "gasUsd": { "type": "string" },
+        "protocolFeeUsd": { "type": "string" },
+        "appFeeUsd": { "type": "string" }
+      }
+    },
+    "memo": { "type": "string" },
+    "merchantRef": { "type": "string" },
+    "invoiceNo": { "type": "string" },
+    "receiptUrl": { "type": "string" },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["txSuccess", "transfersParsed", "confidenceScore", "warnings"],
+      "properties": {
+        "txSuccess": { "type": "boolean" },
+        "transfersParsed": { "type": "boolean" },
+        "dappIntentMatched": { "type": "boolean" },
+        "confidenceScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "tokenAmount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["token", "amount"],
+      "properties": {
+        "token": { "type": "string" },
+        "amount": { "type": "string" },
+        "usdValue": { "type": "string" }
+      }
+    }
+  }
+}

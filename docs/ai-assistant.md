@@ -1,8 +1,8 @@
 # AI Assistant Plan
 
-TxReceipts should ship the receipt engine first and add an AI assistant as a product layer after the core data model is useful on its own.
+TxReceipts should ship the accounting engine first and keep AI as a product layer after the core ledger model is useful on its own.
 
-The assistant should answer questions about a user's Base activity using verified receipt data, wallet history, labels, and monthly summaries. Base MCP is useful here because it can connect an agent to wallet and Base Account workflows, but it should not become the primary production indexer or the source of accounting truth.
+The assistant should answer questions about a user's Base activity using categorized ledger rows, verified receipt data, wallet history, labels, and monthly summaries. Base MCP is useful here because it can connect an agent to wallet and Base Account workflows, but it should not become the primary production indexer or the source of accounting truth.
 
 ## Product role
 
@@ -40,7 +40,7 @@ Production receipt verification should continue to use deterministic RPC and ind
 
 ## MVP sequence
 
-1. Build the Base receipt inbox and transaction hash receipt generator.
+1. Build the Base wallet ledger and transaction hash receipt generator.
 2. Add dapp intent metadata and verified receipt status.
 3. Store user labels, categories, and monthly summaries.
 4. Add an assistant panel that can answer read-only questions from cached receipt data.
@@ -62,7 +62,7 @@ OpenAI can be used later by changing the base URL and model, but the first fallb
 
 The web prototype starts with a zero-token assistant pattern:
 
-- ready-question buttons for common receipt and wallet accounting questions;
+- ready-question buttons for common wallet accounting questions;
 - rule-based Turkish and English intent matching;
 - template answers before any AI fallback;
 - CSV export for Excel-readable wallet reports;

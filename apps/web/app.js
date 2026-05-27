@@ -35,6 +35,12 @@ const accountingReview = document.querySelector("#accountingReview");
 const accountingPeriod = document.querySelector("#accountingPeriod");
 const accountingExceptions = document.querySelector("#accountingExceptions");
 const accountingExports = document.querySelector("#accountingExports");
+const monthlyIncome = document.querySelector("#monthlyIncome");
+const monthlyExpenses = document.querySelector("#monthlyExpenses");
+const monthlyGasFees = document.querySelector("#monthlyGasFees");
+const monthlyAppFees = document.querySelector("#monthlyAppFees");
+const monthlyUncategorized = document.querySelector("#monthlyUncategorized");
+const monthlyVerified = document.querySelector("#monthlyVerified");
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -296,7 +302,7 @@ function normalizeTransfer(item) {
   };
 }
 
-function allHistoryItems() {
+function normalizedHistoryItems() {
   const normalized = currentNetwork().family === "solana"
     ? historyState.transactions.map(normalizeSolanaTx)
     : [
@@ -310,13 +316,17 @@ function allHistoryItems() {
   }
 
   return [...unique.values()]
+    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+}
+
+function allHistoryItems() {
+  return normalizedHistoryItems()
     .filter(item => {
       if (activeHistoryTab === "all") return item.kind === "tx";
       if (activeHistoryTab === "tokens") return item.kind === "token";
       if (activeHistoryTab === "nfts") return item.kind === "nft";
       return item.direction === activeHistoryTab;
-    })
-    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    });
 }
 
 function normalizeSolanaTx(item) {
@@ -329,6 +339,41 @@ function normalizeSolanaTx(item) {
     timestamp: item.blockTime ? new Date(item.blockTime * 1000).toISOString() : null,
     value: failed ? "failed" : "ok",
     direction: "other",
+  };
+}
+
+function accountingCategoryForItem(item) {
+  const text = `${item.title} ${item.subtitle} ${item.value}`.toLowerCase();
+  if (/failed|error/.test(text)) return "uncategorized";
+  if (/swap|exchange|router/.test(text)) return "swap";
+  if (/subscription|renew/.test(text)) return "subscription";
+  if (/creator|support|mint/.test(text)) return "creator_payment";
+  if (/refund/.test(text)) return "refund";
+  if (/fee|gas/.test(text)) return "gas_fee";
+  if (item.direction === "incoming") return "sales";
+  if (item.direction === "outgoing") return "purchase";
+  if (item.direction === "other") return "uncategorized";
+  return "internal_transfer";
+}
+
+function accountingDirectionForItem(item) {
+  const category = accountingCategoryForItem(item);
+  if (category === "swap") return "swap";
+  if (category === "gas_fee" || item.direction === "outgoing") return "expense";
+  if (item.direction === "incoming") return "income";
+  if (category === "internal_transfer") return "transfer";
+  return "unknown";
+}
+
+function accountingMetaForItem(item) {
+  const category = accountingCategoryForItem(item);
+  const direction = accountingDirectionForItem(item);
+  const status = /failed|error/i.test(`${item.title} ${item.value}`) ? "failed" : "verified";
+  return {
+    direction,
+    category,
+    status,
+    memo: `${category.replaceAll("_", " ")} candidate from loaded ${currentNetwork().name} row`,
   };
 }
 
@@ -365,18 +410,22 @@ function renderHistory() {
     const text = document.createElement("span");
     const title = document.createElement("strong");
     const meta = document.createElement("span");
+    const ledgerMeta = document.createElement("span");
     const value = document.createElement("span");
     const receiptAction = document.createElement("button");
+    const accounting = accountingMetaForItem(item);
     row.className = "history-item";
     title.textContent = safeDisplay(item.title);
     meta.className = "history-meta";
     meta.textContent = `${safeDisplay(item.subtitle, 100)} - ${formatDate(item.timestamp)}`;
+    ledgerMeta.className = "history-ledger";
+    ledgerMeta.textContent = `${accounting.direction} - ${accounting.category} - ${accounting.status}`;
     value.className = "history-value";
     value.textContent = safeDisplay(item.value, 48);
     receiptAction.className = "history-receipt-button";
     receiptAction.type = "button";
     receiptAction.textContent = "Receipt";
-    text.append(title, meta);
+    text.append(title, meta, ledgerMeta);
     row.append(text, value, receiptAction);
     row.addEventListener("click", async () => {
       await selectTransaction(item.hash);
@@ -883,17 +932,20 @@ function parseAmount(value) {
 }
 
 function walletReportItems() {
-  return allHistoryItems().filter(item => item.kind === "tx" || item.kind === "token");
+  return normalizedHistoryItems().filter(item => item.kind === "tx" || item.kind === "token");
 }
 
 function buildMonthlyReport() {
   const items = walletReportItems();
-  const outgoing = items.filter(item => item.direction === "outgoing");
-  const incoming = items.filter(item => item.direction === "incoming");
-  const needsReview = items.filter(item => item.direction === "other" || /failed|error|unknown/i.test(`${item.title} ${item.value}`));
+  const ledgerItems = items.map(item => ({ ...item, accounting: accountingMetaForItem(item) }));
+  const outgoing = ledgerItems.filter(item => item.accounting.direction === "expense");
+  const incoming = ledgerItems.filter(item => item.accounting.direction === "income");
+  const uncategorized = ledgerItems.filter(item => item.accounting.category === "uncategorized");
+  const verified = ledgerItems.filter(item => item.accounting.status === "verified");
+  const needsReview = ledgerItems.filter(item => item.accounting.direction === "unknown" || item.accounting.category === "uncategorized" || item.accounting.status === "failed");
   const weeklyFees = buildWeeklyFeeSummary();
   const byTitle = new Map();
-  for (const item of items) {
+  for (const item of ledgerItems) {
     const key = item.title || "Unknown activity";
     byTitle.set(key, (byTitle.get(key) || 0) + 1);
   }
@@ -909,9 +961,15 @@ function buildMonthlyReport() {
     weeklyFeeRecords: weeklyFees.records,
     weeklyFeeTotal: weeklyFees.total,
     weeklyFeeAsset: weeklyFees.asset,
+    uncategorizedCount: uncategorized.length,
+    verifiedReceiptCount: verified.length,
+    totalIncomeRows: incoming.length,
+    totalExpenseRows: outgoing.length,
+    appProtocolFeeStatus: "Review dapp metadata",
     estimatedOutgoingValue: outgoing.reduce((sum, item) => sum + parseAmount(item.value), 0),
+    estimatedIncomeValue: incoming.reduce((sum, item) => sum + parseAmount(item.value), 0),
     topActivity: top ? `${top[0]} (${top[1]} records)` : "Not available",
-    items,
+    items: ledgerItems,
   };
 }
 
@@ -967,6 +1025,12 @@ function updateAccountingPanel() {
       ? "Exports: CSV for Excel, print view for PDF"
       : "Exports: CSV and PDF ready after loading";
   }
+  if (monthlyIncome) monthlyIncome.textContent = String(report.totalIncomeRows);
+  if (monthlyExpenses) monthlyExpenses.textContent = String(report.totalExpenseRows);
+  if (monthlyGasFees) monthlyGasFees.textContent = `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`;
+  if (monthlyAppFees) monthlyAppFees.textContent = report.appProtocolFeeStatus;
+  if (monthlyUncategorized) monthlyUncategorized.textContent = String(report.uncategorizedCount);
+  if (monthlyVerified) monthlyVerified.textContent = String(report.verifiedReceiptCount);
 }
 
 function selectedTxText() {
@@ -993,12 +1057,16 @@ function detectIntent(question) {
   const rules = [
     ["WALLET_SUMMARY", ["wallet summary", "summarize this wallet", "wallet report", "cuzdan", "cuzdani ozetle"]],
     ["WEEKLY_FEES", ["son 1 hafta", "son bir hafta", "1 haftada", "bir haftada", "last 7", "last week", "weekly fee", "weekly gas", "feeleri", "fee'leri"]],
+    ["BUSINESS_EXPENSE", ["business expense", "isletme gideri", "mark as business"]],
+    ["INCOME_EXPENSE", ["income or expense", "gelir mi", "gider mi", "income", "expense"]],
     ["GAS_FEE", ["gas", "fee", "gaz", "ücret", "ucret", "komisyon", "masraf"]],
     ["TOKEN_TRANSFERS", ["token", "transfer", "swap", "ne aldım", "ne aldim", "ne gönderdim", "ne gonderdim"]],
     ["TRANSACTION_STATUS", ["başarılı", "basarili", "failed", "success", "status", "durum", "onaylandı", "onaylandi"]],
     ["VERIFY_RECEIPT", ["verified", "doğrulandı", "dogrulandi", "güvenli", "guvenli", "intent"]],
     ["MONTHLY_SPENDING", ["ay", "month", "monthly", "harcadım", "harcadim", "spend", "spent", "toplam"]],
     ["DAPP_USAGE", ["dapp", "app", "uygulama", "most", "en çok", "en cok"]],
+    ["UNCATEGORIZED", ["uncategorized", "kategori", "kategorisiz", "review", "inceleme"]],
+    ["ACCOUNTANT_SUMMARY", ["accountant", "muhasebeci", "summary", "ozet", "rapor hazirla"]],
     ["DOWNLOAD_RECEIPT", ["download", "indir", "pdf", "excel", "csv", "rapor"]],
     ["EXPLAIN_TRANSACTION", ["what happened", "ne oldu", "açıkla", "acikla", "explain", "özet", "ozet"]],
   ];
@@ -1011,6 +1079,7 @@ function detectIntent(question) {
 function templateAnswer(intent) {
   const data = compactReceipt();
   const report = buildMonthlyReport();
+  const selectedLedgerItem = report.items.find(item => item.hash === txInput?.value.trim());
   if (intent === "WALLET_SUMMARY") {
     return accountingBlock("wallet summary", [
       ["Scope", currentNetworkScopeText()],
@@ -1020,6 +1089,10 @@ function templateAnswer(intent) {
       ["Incoming records", report.incomingCount],
       ["Token records", report.tokenRecords],
       ["Rows needing review", report.needsReviewCount],
+      ["Income rows", report.totalIncomeRows],
+      ["Expense rows", report.totalExpenseRows],
+      ["Uncategorized rows", report.uncategorizedCount],
+      ["Verified records", report.verifiedReceiptCount],
       ["Top visible activity", report.topActivity],
     ]);
   }
@@ -1045,11 +1118,67 @@ function templateAnswer(intent) {
       ["Accounting note", report.weeklyFeeRecords ? "Calculated from loaded transaction fee fields." : "No fee fields are available in the loaded rows yet."],
     ]);
   }
+  if (intent === "INCOME_EXPENSE") {
+    if (!selectedLedgerItem) {
+      return accountingBlock("income or expense", [
+        ["Status", "Select a transaction row or paste a tx hash first"],
+        ["Data availability", "Ledger row is not available yet"],
+      ]);
+    }
+    return accountingBlock("income or expense", [
+      ["Transaction", shortHash(selectedLedgerItem.hash)],
+      ["Direction", selectedLedgerItem.accounting.direction],
+      ["Category", selectedLedgerItem.accounting.category],
+      ["Memo", selectedLedgerItem.accounting.memo],
+      ["Verification status", selectedLedgerItem.accounting.status],
+    ]);
+  }
+  if (intent === "BUSINESS_EXPENSE") {
+    if (!selectedLedgerItem) {
+      return accountingBlock("business expense candidate", [
+        ["Status", "Select a transaction row first"],
+        ["Next step", "Choose an outgoing transaction, then add a memo before export"],
+      ]);
+    }
+    return accountingBlock("business expense candidate", [
+      ["Transaction", shortHash(selectedLedgerItem.hash)],
+      ["Suggested direction", "expense"],
+      ["Suggested category", selectedLedgerItem.accounting.category === "purchase" ? "purchase" : "uncategorized"],
+      ["Memo", "Review with accountant before final bookkeeping"],
+      ["Export note", "This can be carried into the CSV memo/category columns"],
+    ]);
+  }
   if (intent === "DAPP_USAGE") {
     return accountingBlock("top wallet activity", [
       ["Scope", currentNetworkScopeText()],
       ["Top visible activity", report.topActivity],
       ["Loaded records", report.totalRecords],
+    ]);
+  }
+  if (intent === "UNCATEGORIZED") {
+    const rows = report.items
+      .filter(item => item.accounting.category === "uncategorized")
+      .slice(0, 8)
+      .map(item => `${formatDate(item.timestamp)} - ${shortHash(item.hash)} - ${item.title}`)
+      .join("\n");
+    return accountingBlock("uncategorized transactions", [
+      ["Scope", currentNetworkScopeText()],
+      ["Uncategorized rows", report.uncategorizedCount],
+      ["Review list", rows || "No uncategorized rows in the loaded activity"],
+    ]);
+  }
+  if (intent === "ACCOUNTANT_SUMMARY") {
+    return accountingBlock("accountant summary", [
+      ["Scope", currentNetworkScopeText()],
+      ["Wallet", report.wallet],
+      ["Loaded records", report.totalRecords],
+      ["Income rows", report.totalIncomeRows],
+      ["Expense rows", report.totalExpenseRows],
+      ["Gas fees", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
+      ["App/protocol fees", report.appProtocolFeeStatus],
+      ["Uncategorized rows", report.uncategorizedCount],
+      ["Verified records", report.verifiedReceiptCount],
+      ["Next step", "Review uncategorized rows, then export CSV or print PDF"],
     ]);
   }
   if (intent === "DOWNLOAD_RECEIPT") {
@@ -1130,6 +1259,11 @@ function compactAccountingContext() {
       weeklyFeeRecords: report.weeklyFeeRecords,
       weeklyFeeTotal: report.weeklyFeeTotal,
       weeklyFeeAsset: report.weeklyFeeAsset,
+      totalIncomeRows: report.totalIncomeRows,
+      totalExpenseRows: report.totalExpenseRows,
+      uncategorizedCount: report.uncategorizedCount,
+      verifiedReceiptCount: report.verifiedReceiptCount,
+      appProtocolFeeStatus: report.appProtocolFeeStatus,
       topActivity: report.topActivity,
     },
     selectedReceipt: compactReceipt(),
@@ -1137,7 +1271,10 @@ function compactAccountingContext() {
       date: item.timestamp || "",
       type: item.kind,
       title: item.title,
-      direction: item.direction,
+      direction: item.accounting.direction,
+      category: item.accounting.category,
+      status: item.accounting.status,
+      memo: item.accounting.memo,
       value: item.value,
       tx: item.hash,
     })),
@@ -1180,9 +1317,27 @@ function downloadMonthlyCsv() {
     ["outgoing_records", report.outgoingCount],
     ["incoming_records", report.incomingCount],
     ["rows_needing_review", report.needsReviewCount],
+    ["income_rows", report.totalIncomeRows],
+    ["expense_rows", report.totalExpenseRows],
+    ["uncategorized_rows", report.uncategorizedCount],
+    ["verified_records", report.verifiedReceiptCount],
+    ["gas_fees_native", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
     [],
-    ["date", "type", "title", "direction", "value", "tx_hash"],
-    ...report.items.map(item => [item.timestamp || "", item.kind, item.title, item.direction, item.value, item.hash]),
+    ["Date", "Network", "Tx Hash", "Direction", "Category", "Counterparty", "Value", "Gas Native", "App Fee USD", "Protocol Fee USD", "Memo", "Verification Status"],
+    ...report.items.map(item => [
+      item.timestamp || "",
+      report.network,
+      item.hash,
+      item.accounting.direction,
+      item.accounting.category,
+      item.subtitle,
+      item.value,
+      "",
+      "",
+      "",
+      item.accounting.memo,
+      item.accounting.status,
+    ]),
   ];
   const csv = rows
     .map(row => row.map(cell => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
@@ -1200,7 +1355,7 @@ function downloadMonthlyCsv() {
 
 function printMonthlyReport() {
   const report = buildMonthlyReport();
-  setQaAnswer(`${currentNetworkScopeText()}\nWallet: ${report.wallet}\nLoaded records: ${report.totalRecords}\nOutgoing: ${report.outgoingCount}\nIncoming: ${report.incomingCount}\nRows needing review: ${report.needsReviewCount}\nTop activity: ${report.topActivity}`, "template");
+  setQaAnswer(`${currentNetworkScopeText()}\nWallet: ${report.wallet}\nLoaded records: ${report.totalRecords}\nIncome rows: ${report.totalIncomeRows}\nExpense rows: ${report.totalExpenseRows}\nGas fees: ${report.weeklyFeeTotal} ${report.weeklyFeeAsset}\nUncategorized: ${report.uncategorizedCount}\nVerified records: ${report.verifiedReceiptCount}\nTop activity: ${report.topActivity}`, "template");
   window.print();
 }
 

@@ -12,6 +12,7 @@ const requiredFiles = [
   'apps/web/assets/txreceipts-demo.gif',
   'schema/receipt.schema.json',
   'schema/intent.schema.json',
+  'schema/accounting-receipt.schema.json',
   'examples/sample-receipt.json',
   'docs/usdc-payments.md',
   'docs/ai-assistant.md',
@@ -35,6 +36,7 @@ for (const file of requiredFiles) {
 
 JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'schema/receipt.schema.json'), 'utf8'));
 JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'schema/intent.schema.json'), 'utf8'));
+JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'schema/accounting-receipt.schema.json'), 'utf8'));
 JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'examples/sample-receipt.json'), 'utf8'));
 
 console.log('Static project checks passed.');

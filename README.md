@@ -1,8 +1,8 @@
 # TxReceipts
 
-Open-source pre-accounting workspace for Base wallet activity.
+Pre-accounting infrastructure for onchain wallets, payments, and dapps.
 
-TxReceipts turns complex onchain activity into accounting-ready wallet records people can review, export, reconcile, and trust. The long-term goal is not just to decode a transaction hash. It is to help users and accountants understand income, expenses, fees, token movements, and exception rows, then produce clean reports and short printable transaction notes when needed.
+TxReceipts turns wallet activity into verified receipts, categorized ledgers, monthly summaries, and reconciliation-ready records. The long-term goal is not just to decode a transaction hash. It is to help users and accountants understand income, expenses, fees, token movements, and exception rows, then produce clean reports and short printable transaction notes when needed.
 
 ## Why this exists
 
@@ -50,6 +50,7 @@ V1 is intentionally narrow:
 - monthly summary
 - Excel-readable CSV wallet report export
 - print-to-PDF wallet accounting report
+- monthly wallet ledger with income, expense, gas, uncategorized, and verified record counts
 - zero-token ready-question assistant for wallet accounting questions
 - server-side low-cost AI fallback for unknown accounting questions
 - pre-accounting panel with selected-network review counts and export readiness

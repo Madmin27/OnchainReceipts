@@ -36,19 +36,19 @@
     <main id="top">
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Base-first pre-accounting</p>
-          <h1>Wallet activity prepared for accounting.</h1>
+          <p class="eyebrow">Onchain pre-accounting</p>
+          <h1>Pre-accounting infrastructure for Base wallets and dapps.</h1>
           <p class="lede">
-            TxReceipts turns Base wallet activity into reviewable income, expense, fee, and token
-            movement records for monthly reconciliation.
+            TxReceipts turns wallet activity into verified receipts, categorized ledgers, and
+            monthly reconciliation reports for users, teams, builders, and accountants.
           </p>
           <div class="hero-actions">
             <a class="button primary" href="#demo">Open demo</a>
           </div>
           <div class="hero-proof" aria-label="Core product points">
             <span>Base mainnet first</span>
-            <span>Read-only accounting view</span>
-            <span>CSV and print-ready outputs</span>
+            <span>Ledger and receipt archive</span>
+            <span>CSV, PDF, and printable notes</span>
           </div>
         </div>
       </section>
@@ -60,24 +60,24 @@
         </div>
         <div class="feature-grid">
           <article>
-            <h3>Pre-accounting inbox</h3>
+            <h3>Wallet ledger</h3>
             <p>
-              Users connect a wallet, review transactions by date, separate incoming and outgoing
-              rows, and prepare monthly reports.
+              Turn wallet history into clean income, expense, swap, transfer, fee, subscription,
+              and dapp payment records.
             </p>
           </article>
           <article>
-            <h3>Accounting context</h3>
+            <h3>Monthly reconciliation</h3>
             <p>
-              Dapps can submit business context behind a transaction: category, merchant reference,
-              expected assets, app fees, and report notes.
+              Group activity by month, wallet, network, dapp, token, category, and review status
+              before export.
             </p>
           </article>
           <article>
-            <h3>Printable transaction notes</h3>
+            <h3>Accounting-ready exports</h3>
             <p>
-              For a selected transaction, the app can produce a short printable note with status,
-              token movement, gas paid, and verification evidence.
+              Download CSV reports, print PDF summaries, and create short printable receipts for
+              selected transactions.
             </p>
           </article>
         </div>
@@ -137,10 +137,10 @@
         <div class="demo-panel">
           <div>
             <p class="eyebrow">Prototype</p>
-            <h2>Prepare a wallet accounting report.</h2>
+            <h2>Generate a bookkeeping-ready onchain receipt.</h2>
             <p>
-              Connect a wallet or paste a transaction hash to classify activity, review fees, and
-              create CSV, PDF, or short printable transaction notes.
+              Paste a transaction hash or connect a wallet to classify activity, review fees, add
+              accounting context, and create CSV, PDF, or short printable receipts.
             </p>
           </div>
         </div>
@@ -193,6 +193,38 @@
             <span id="accountingExports">Exports: CSV and print PDF ready after loading</span>
           </div>
         </section>
+        <section class="monthly-ledger" aria-label="Monthly wallet ledger">
+          <div class="section-title compact">
+            <p class="eyebrow">Monthly wallet ledger</p>
+            <h3>Current loaded period</h3>
+          </div>
+          <div class="ledger-metrics">
+            <div>
+              <span class="mini-label">Income rows</span>
+              <strong id="monthlyIncome">0</strong>
+            </div>
+            <div>
+              <span class="mini-label">Expense rows</span>
+              <strong id="monthlyExpenses">0</strong>
+            </div>
+            <div>
+              <span class="mini-label">Gas fees</span>
+              <strong id="monthlyGasFees">0 ETH</strong>
+            </div>
+            <div>
+              <span class="mini-label">App/protocol fees</span>
+              <strong id="monthlyAppFees">Review</strong>
+            </div>
+            <div>
+              <span class="mini-label">Uncategorized</span>
+              <strong id="monthlyUncategorized">0</strong>
+            </div>
+            <div>
+              <span class="mini-label">Verified records</span>
+              <strong id="monthlyVerified">0</strong>
+            </div>
+          </div>
+        </section>
         <section class="qa-panel" aria-label="Wallet accounting assistant">
           <div class="qa-head">
             <div>
@@ -216,6 +248,9 @@
             <button type="button" data-question="Summarize this transaction.">
               Transaction report
             </button>
+            <button type="button" data-question="Is this income or expense?">
+              Income/expense?
+            </button>
             <button type="button" data-question="How much gas did I pay?">Gas fee?</button>
             <button type="button" data-question="Calculate the fees I paid in the last 7 days.">
               7-day fees?
@@ -227,6 +262,15 @@
             </button>
             <button type="button" data-question="Which dapp did I use the most?">
               Top dapp?
+            </button>
+            <button type="button" data-question="Show uncategorized transactions.">
+              Uncategorized?
+            </button>
+            <button type="button" data-question="Prepare accountant summary.">
+              Accountant summary
+            </button>
+            <button type="button" data-question="Mark as business expense.">
+              Business expense
             </button>
           </div>
           <form id="qaForm" class="qa-form">
