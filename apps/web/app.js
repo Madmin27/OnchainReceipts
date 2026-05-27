@@ -891,6 +891,7 @@ function buildMonthlyReport() {
   const outgoing = items.filter(item => item.direction === "outgoing");
   const incoming = items.filter(item => item.direction === "incoming");
   const needsReview = items.filter(item => item.direction === "other" || /failed|error|unknown/i.test(`${item.title} ${item.value}`));
+  const weeklyFees = buildWeeklyFeeSummary();
   const byTitle = new Map();
   for (const item of items) {
     const key = item.title || "Unknown activity";
@@ -905,10 +906,43 @@ function buildMonthlyReport() {
     incomingCount: incoming.length,
     tokenRecords: items.filter(item => item.kind === "token").length,
     needsReviewCount: needsReview.length,
+    weeklyFeeRecords: weeklyFees.records,
+    weeklyFeeTotal: weeklyFees.total,
+    weeklyFeeAsset: weeklyFees.asset,
     estimatedOutgoingValue: outgoing.reduce((sum, item) => sum + parseAmount(item.value), 0),
     topActivity: top ? `${top[0]} (${top[1]} records)` : "Not available",
     items,
   };
+}
+
+function blockscoutFeeWei(item) {
+  const direct = item.fee?.value || item.transaction_fee || item.tx_fee;
+  if (direct && /^\d+$/.test(String(direct))) return BigInt(direct);
+  const gasUsed = item.gas_used || item.gasUsed || item.gas;
+  const gasPrice = item.gas_price || item.gasPrice;
+  if (/^\d+$/.test(String(gasUsed || "")) && /^\d+$/.test(String(gasPrice || ""))) {
+    return BigInt(gasUsed) * BigInt(gasPrice);
+  }
+  return 0n;
+}
+
+function buildWeeklyFeeSummary() {
+  const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  if (currentNetwork().family === "solana") {
+    const rows = historyState.transactions.filter(item => {
+      const timestamp = item.blockTime ? item.blockTime * 1000 : 0;
+      return timestamp >= since && Number.isFinite(Number(item.fee));
+    });
+    const totalLamports = rows.reduce((sum, item) => sum + BigInt(item.fee || 0), 0n);
+    return { records: rows.length, total: lamportsToSol(totalLamports), asset: "SOL" };
+  }
+
+  const rows = historyState.transactions.filter(item => {
+    const timestamp = item.timestamp ? new Date(item.timestamp).getTime() : 0;
+    return timestamp >= since && blockscoutFeeWei(item) > 0n;
+  });
+  const totalWei = rows.reduce((sum, item) => sum + blockscoutFeeWei(item), 0n);
+  return { records: rows.length, total: formatUnits(totalWei, ETH_DECIMALS, 8), asset: currentNetwork().nativeCurrency?.symbol || "ETH" };
 }
 
 function updateAccountingPanel() {
@@ -958,6 +992,7 @@ function detectIntent(question) {
   const text = String(question || "").toLowerCase();
   const rules = [
     ["WALLET_SUMMARY", ["wallet summary", "summarize this wallet", "wallet report", "cuzdan", "cuzdani ozetle"]],
+    ["WEEKLY_FEES", ["son 1 hafta", "son bir hafta", "1 haftada", "bir haftada", "last 7", "last week", "weekly fee", "weekly gas", "feeleri", "fee'leri"]],
     ["GAS_FEE", ["gas", "fee", "gaz", "ücret", "ucret", "komisyon", "masraf"]],
     ["TOKEN_TRANSFERS", ["token", "transfer", "swap", "ne aldım", "ne aldim", "ne gönderdim", "ne gonderdim"]],
     ["TRANSACTION_STATUS", ["başarılı", "basarili", "failed", "success", "status", "durum", "onaylandı", "onaylandi"]],
@@ -996,7 +1031,18 @@ function templateAnswer(intent) {
       ["Outgoing records", report.outgoingCount],
       ["Incoming records", report.incomingCount],
       ["Rows needing review", report.needsReviewCount],
+      ["Last 7 days fee rows", report.weeklyFeeRecords],
+      ["Last 7 days network fees", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
       ["Estimated outgoing numeric total", report.estimatedOutgoingValue.toFixed(6)],
+    ]);
+  }
+  if (intent === "WEEKLY_FEES") {
+    return accountingBlock("last 7 days network fees", [
+      ["Scope", currentNetworkScopeText()],
+      ["Wallet", report.wallet],
+      ["Loaded fee rows", report.weeklyFeeRecords],
+      ["Estimated network fees paid", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
+      ["Accounting note", report.weeklyFeeRecords ? "Calculated from loaded transaction fee fields." : "No fee fields are available in the loaded rows yet."],
     ]);
   }
   if (intent === "DAPP_USAGE") {
@@ -1068,16 +1114,61 @@ function logQuestion(question, intent, source) {
   localStorage.setItem(QUESTION_LOG_KEY, JSON.stringify(logs.slice(-100)));
 }
 
-function answerQuestion(question) {
+function compactAccountingContext() {
+  const report = buildMonthlyReport();
+  return {
+    network: currentNetwork().name,
+    scope: currentNetworkScopeText(),
+    wallet: connectedWallet || null,
+    selectedTx: txInput?.value.trim() || null,
+    report: {
+      totalRecords: report.totalRecords,
+      outgoingCount: report.outgoingCount,
+      incomingCount: report.incomingCount,
+      tokenRecords: report.tokenRecords,
+      needsReviewCount: report.needsReviewCount,
+      weeklyFeeRecords: report.weeklyFeeRecords,
+      weeklyFeeTotal: report.weeklyFeeTotal,
+      weeklyFeeAsset: report.weeklyFeeAsset,
+      topActivity: report.topActivity,
+    },
+    selectedReceipt: compactReceipt(),
+    rows: report.items.slice(0, 40).map(item => ({
+      date: item.timestamp || "",
+      type: item.kind,
+      title: item.title,
+      direction: item.direction,
+      value: item.value,
+      tx: item.hash,
+    })),
+  };
+}
+
+async function answerQuestion(question) {
   const intent = detectIntent(question);
   const answer = templateAnswer(intent);
   if (answer) {
     logQuestion(question, intent, "template");
     return { answer, source: "template" };
   }
-  const fallback = `${currentNetworkScopeText()}\nAI fallback handoff is preserved for the server app. This static prototype logged your question as a ready-question candidate.`;
-  logQuestion(question, intent, "ai_candidate");
-  return { answer: fallback, source: "ai" };
+  try {
+    const response = await fetch(`${API_BASE_URL}/v1/ai/accounting-answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, context: compactAccountingContext() }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `AI API returned HTTP ${response.status}`);
+    logQuestion(question, intent, "ai");
+    return { answer: payload.answer || "AI could not prepare an answer.", source: "ai" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "AI fallback is unavailable.";
+    logQuestion(question, intent, "ai_candidate");
+    return {
+      answer: `${currentNetworkScopeText()}\nAI fallback could not be reached. ${message}\nYour question was logged as a ready-question candidate.`,
+      source: "ai",
+    };
+  }
 }
 
 function downloadMonthlyCsv() {
@@ -1375,7 +1466,7 @@ quickQuestionButtons.forEach(button => {
       setQaContext(`Preparing ${currentNetwork().name} tx: ${shortHash(txHash)}`);
       await generateReceipt(txHash, { download: false, quiet: true });
     }
-    const result = answerQuestion(question);
+    const result = await answerQuestion(question);
     setQaAnswer(result.answer, result.source);
   });
 });
@@ -1393,7 +1484,7 @@ qaForm?.addEventListener("submit", event => {
     setQaContext(`Preparing ${currentNetwork().name} tx: ${shortHash(txHash)}`);
     await generateReceipt(txHash, { download: false, quiet: true });
   }
-  const result = answerQuestion(question);
+  const result = await answerQuestion(question);
   setQaAnswer(result.answer, result.source);
   })();
 });

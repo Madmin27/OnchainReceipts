@@ -52,10 +52,72 @@ export async function handleRequest(request, env) {
       const project = await requireProject(request, env);
       return json(await createReceipt(request, env, project), env, 201);
     }
+    if (request.method === "POST" && url.pathname === "/v1/ai/accounting-answer") {
+      return json(await answerAccountingQuestion(request, env), env);
+    }
     return json({ error: "Not found" }, env, 404);
   } catch (error) {
     return json({ error: error.message || "Unexpected error" }, env, error.status || 500);
   }
+}
+
+async function answerAccountingQuestion(request, env) {
+  if (!env.AI_API_KEY) throw httpError(503, "AI_API_KEY is not configured.");
+  const body = await readJson(request);
+  const question = String(body.question || "").trim().slice(0, 500);
+  if (!question) throw httpError(400, "Missing question.");
+  const context = compactAiContext(body.context || {});
+  const baseUrl = (env.AI_BASE_URL || "https://api.groq.com/openai/v1").replace(/\/+$/, "");
+  const model = env.AI_MODEL || "llama-3.1-8b-instant";
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.AI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.1,
+      max_tokens: 180,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "You are TxReceipts Accounting AI.",
+            "Answer only from the provided compact accounting JSON.",
+            "Do not invent balances, tax treatment, dates, or missing fees.",
+            "Keep the answer under 90 words.",
+            "Use a concise accounting report style.",
+            "If data is missing, say exactly what is missing and what the user should load.",
+          ].join(" "),
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ question, context }),
+        },
+      ],
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw httpError(response.status, payload.error?.message || "AI provider request failed.");
+  const answer = payload.choices?.[0]?.message?.content || "";
+  return {
+    answer: String(answer).trim().slice(0, 1200) || "AI could not prepare an answer from the provided accounting context.",
+    source: "ai",
+    model,
+  };
+}
+
+function compactAiContext(context) {
+  return {
+    network: String(context.network || "").slice(0, 80),
+    scope: String(context.scope || "").slice(0, 160),
+    wallet: String(context.wallet || "").slice(0, 80),
+    selectedTx: String(context.selectedTx || "").slice(0, 100),
+    report: context.report || {},
+    selectedReceipt: context.selectedReceipt || null,
+    rows: Array.isArray(context.rows) ? context.rows.slice(0, 40) : [],
+  };
 }
 
 async function createProject(request, env) {

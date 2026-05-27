@@ -19,6 +19,7 @@ This keeps hosting close to free during launch.
 - Base USDC top-up intent creation.
 - Scheduled scan for USDC transfers into the treasury wallet.
 - Confirmation of registered billing wallet payments.
+- Low-cost AI fallback for accounting questions templates cannot answer.
 - Credit ledger top-up.
 - Receipt credit usage.
 - Duplicate tx hash and duplicate receipt protection.
@@ -34,6 +35,8 @@ This keeps hosting close to free during launch.
 ```txt
 TREASURY_ADDRESS = your Base treasury wallet
 ALLOWED_ORIGIN = https://txreceipts.com.tr
+AI_BASE_URL = https://api.groq.com/openai/v1
+AI_MODEL = llama-3.1-8b-instant
 ```
 
 5. Add the D1 database id in `wrangler.toml`.
@@ -46,6 +49,7 @@ Set an admin secret:
 
 ```sh
 wrangler secret put ADMIN_TOKEN
+wrangler secret put AI_API_KEY
 ```
 
 Create a project and first billing wallet:

@@ -51,6 +51,7 @@ V1 is intentionally narrow:
 - Excel-readable CSV wallet report export
 - print-to-PDF wallet accounting report
 - zero-token ready-question assistant for wallet accounting questions
+- server-side low-cost AI fallback for unknown accounting questions
 - pre-accounting panel with selected-network review counts and export readiness
 - open accounting record and receipt schema
 - dapp intent schema and SDK draft

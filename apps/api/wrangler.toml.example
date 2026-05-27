@@ -5,8 +5,12 @@ compatibility_date = "2026-05-18"
 [vars]
 TREASURY_ADDRESS = "0x0000000000000000000000000000000000000000"
 ALLOWED_ORIGIN = "https://txreceipts.com.tr"
+AI_BASE_URL = "https://api.groq.com/openai/v1"
+AI_MODEL = "llama-3.1-8b-instant"
 # Set ADMIN_TOKEN as a Cloudflare secret, not in this file:
 # wrangler secret put ADMIN_TOKEN
+# Set AI_API_KEY as a Cloudflare secret, not in this file:
+# wrangler secret put AI_API_KEY
 
 [[d1_databases]]
 binding = "DB"

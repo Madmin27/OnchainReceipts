@@ -46,6 +46,18 @@ Production receipt verification should continue to use deterministic RPC and ind
 4. Add an assistant panel that can answer read-only questions from cached receipt data.
 5. Add Base MCP only for opt-in wallet actions and demos after the read-only assistant is useful.
 
+## Low-cost API choice
+
+Use Groq first for the live fallback layer:
+
+- provider: Groq;
+- model: `llama-3.1-8b-instant`;
+- API shape: OpenAI-compatible chat completions;
+- secret name: `AI_API_KEY`;
+- Worker vars: `AI_BASE_URL=https://api.groq.com/openai/v1`, `AI_MODEL=llama-3.1-8b-instant`.
+
+OpenAI can be used later by changing the base URL and model, but the first fallback only needs short text answers from compact accounting JSON.
+
 ## Current prototype
 
 The web prototype starts with a zero-token assistant pattern:
@@ -55,9 +67,10 @@ The web prototype starts with a zero-token assistant pattern:
 - template answers before any AI fallback;
 - CSV export for Excel-readable wallet reports;
 - print flow for PDF saving;
-- local question logs for future ready-question candidates.
+- local question logs for future ready-question candidates;
+- server-side AI fallback through `/v1/ai/accounting-answer` when no template can answer.
 
-AI fallback is intentionally disabled in the static prototype. Unknown questions are logged locally and can be reviewed later before enabling a low-cost text model.
+The AI key must stay on the Worker. The browser sends only the user question and compact accounting context, never raw MCP output or the API key.
 
 ## Safety rules
 
