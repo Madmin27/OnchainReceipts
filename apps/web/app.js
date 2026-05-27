@@ -85,6 +85,10 @@ function walletOptions() {
   return window.TxReceiptsWallets?.list() || [];
 }
 
+function normalizeWalletLabel(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
 function setStatus(message, tone = "neutral") {
   txStatus.textContent = message;
   txStatus.dataset.tone = tone;
@@ -342,6 +346,10 @@ function renderHistory() {
   }
 
   setHistoryStatus(`Showing ${items.length} of ${allItems.length} ${activeHistoryTab === "all" ? "transaction" : activeHistoryTab} record${items.length === 1 ? "" : "s"}.`);
+  if (!txInput.value.trim() && items[0]?.hash) {
+    txInput.value = items[0].hash;
+    setQaContext(`Latest ${currentNetwork().name} tx selected: ${shortHash(items[0].hash)}`);
+  }
 
   for (const item of items) {
     const row = document.createElement("div");
@@ -914,6 +922,7 @@ function accountingBlock(title, rows) {
 function detectIntent(question) {
   const text = String(question || "").toLowerCase();
   const rules = [
+    ["WALLET_SUMMARY", ["wallet summary", "summarize this wallet", "wallet report", "cuzdan", "cuzdani ozetle"]],
     ["GAS_FEE", ["gas", "fee", "gaz", "ücret", "ucret", "komisyon", "masraf"]],
     ["TOKEN_TRANSFERS", ["token", "transfer", "swap", "ne aldım", "ne aldim", "ne gönderdim", "ne gonderdim"]],
     ["TRANSACTION_STATUS", ["başarılı", "basarili", "failed", "success", "status", "durum", "onaylandı", "onaylandi"]],
@@ -923,12 +932,26 @@ function detectIntent(question) {
     ["DOWNLOAD_RECEIPT", ["download", "indir", "pdf", "excel", "csv", "rapor"]],
     ["EXPLAIN_TRANSACTION", ["what happened", "ne oldu", "açıkla", "acikla", "explain", "özet", "ozet"]],
   ];
+  if (text.includes("tx summary") || text.includes("transaction summary") || text.includes("summarize this transaction")) {
+    return "EXPLAIN_TRANSACTION";
+  }
   return rules.find(([, keywords]) => keywords.some(keyword => text.includes(keyword)))?.[0] || "UNKNOWN";
 }
 
 function templateAnswer(intent) {
   const data = compactReceipt();
   const report = buildMonthlyReport();
+  if (intent === "WALLET_SUMMARY") {
+    return accountingBlock("wallet summary", [
+      ["Scope", currentNetworkScopeText()],
+      ["Wallet", report.wallet],
+      ["Loaded records", report.totalRecords],
+      ["Outgoing records", report.outgoingCount],
+      ["Incoming records", report.incomingCount],
+      ["Token records", report.tokenRecords],
+      ["Top visible activity", report.topActivity],
+    ]);
+  }
   if (intent === "MONTHLY_SPENDING") {
     return accountingBlock("monthly wallet summary", [
       ["Scope", currentNetworkScopeText()],
@@ -1091,7 +1114,8 @@ function populateWalletProviders({ preserveSelection = true } = {}) {
     walletProviderSelect.appendChild(option);
   });
   const previousStillValid = preserveSelection && compatible.some(wallet => wallet.id === previousValue);
-  walletProviderSelect.value = previousStillValid ? previousValue : compatible[0].id;
+  const preferred = compatible.find(wallet => normalizeWalletLabel(wallet.name).includes("metamask"));
+  walletProviderSelect.value = previousStillValid ? previousValue : (preferred || compatible[0]).id;
 }
 
 function syncNetworkToSelectedWallet({ preserveNetwork = false } = {}) {
