@@ -15,6 +15,7 @@ const requiredFiles = [
   'examples/sample-receipt.json',
   'docs/usdc-payments.md',
   'docs/ai-assistant.md',
+  'docs/accounting-mcp.md',
   'packages/billing/usdc-credits.js',
   'apps/api/src/billing.mjs',
   'apps/api/src/worker.mjs',

@@ -518,6 +518,56 @@ dd {
   padding: 18px;
 }
 
+.accounting-panel {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+  margin-bottom: 16px;
+  padding: 18px;
+}
+
+.accounting-panel h3,
+.accounting-panel p {
+  margin-bottom: 0;
+}
+
+.accounting-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.accounting-metrics div {
+  background: #151312;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.accounting-metrics strong {
+  display: block;
+  font-size: 22px;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+
+.accounting-worklist {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  padding-top: 14px;
+}
+
+.accounting-worklist span {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .credit-panel {
   align-items: end;
   background: var(--paper);
@@ -916,6 +966,7 @@ dd {
   .pricing-grid,
   .tx-row,
   .credit-panel,
+  .accounting-panel,
   .wallet-panel,
   .history-item {
     grid-template-columns: 1fr;

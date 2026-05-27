@@ -27,6 +27,14 @@ const qaContext = document.querySelector("#qaContext");
 const quickQuestionButtons = document.querySelectorAll("[data-question]");
 const downloadMonthlyCsvButton = document.querySelector("#downloadMonthlyCsv");
 const printMonthlyReportButton = document.querySelector("#printMonthlyReport");
+const accountingScope = document.querySelector("#accountingScope");
+const accountingOutgoing = document.querySelector("#accountingOutgoing");
+const accountingIncoming = document.querySelector("#accountingIncoming");
+const accountingTokens = document.querySelector("#accountingTokens");
+const accountingReview = document.querySelector("#accountingReview");
+const accountingPeriod = document.querySelector("#accountingPeriod");
+const accountingExceptions = document.querySelector("#accountingExceptions");
+const accountingExports = document.querySelector("#accountingExports");
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -332,6 +340,7 @@ function renderHistory() {
   const items = combinedHistoryItems();
   const allItems = allHistoryItems();
   historyList.textContent = "";
+  updateAccountingPanel();
 
   if (!connectedWallet) {
     setHistoryStatus(`Connect a wallet to load the latest ${currentNetwork().name} activity automatically.`);
@@ -881,6 +890,7 @@ function buildMonthlyReport() {
   const items = walletReportItems();
   const outgoing = items.filter(item => item.direction === "outgoing");
   const incoming = items.filter(item => item.direction === "incoming");
+  const needsReview = items.filter(item => item.direction === "other" || /failed|error|unknown/i.test(`${item.title} ${item.value}`));
   const byTitle = new Map();
   for (const item of items) {
     const key = item.title || "Unknown activity";
@@ -894,10 +904,35 @@ function buildMonthlyReport() {
     outgoingCount: outgoing.length,
     incomingCount: incoming.length,
     tokenRecords: items.filter(item => item.kind === "token").length,
+    needsReviewCount: needsReview.length,
     estimatedOutgoingValue: outgoing.reduce((sum, item) => sum + parseAmount(item.value), 0),
     topActivity: top ? `${top[0]} (${top[1]} records)` : "Not available",
     items,
   };
+}
+
+function updateAccountingPanel() {
+  const report = buildMonthlyReport();
+  if (accountingScope) {
+    accountingScope.textContent = connectedWallet
+      ? `${currentNetwork().name} only. Wallet ${shortHash(connectedWallet)}. ${report.totalRecords} loaded records ready for review.`
+      : `Connect a wallet to prepare a ${currentNetwork().name} report.`;
+  }
+  if (accountingOutgoing) accountingOutgoing.textContent = String(report.outgoingCount);
+  if (accountingIncoming) accountingIncoming.textContent = String(report.incomingCount);
+  if (accountingTokens) accountingTokens.textContent = String(report.tokenRecords);
+  if (accountingReview) accountingReview.textContent = report.totalRecords ? `${report.needsReviewCount} rows` : "Pending";
+  if (accountingPeriod) accountingPeriod.textContent = `Period: ${report.totalRecords ? "current loaded activity" : "waiting for wallet data"}`;
+  if (accountingExceptions) {
+    accountingExceptions.textContent = report.totalRecords
+      ? `Exceptions: ${report.needsReviewCount} uncategorized or failed rows`
+      : "Exceptions: connect wallet";
+  }
+  if (accountingExports) {
+    accountingExports.textContent = report.totalRecords
+      ? "Exports: CSV for Excel, print view for PDF"
+      : "Exports: CSV and PDF ready after loading";
+  }
 }
 
 function selectedTxText() {
@@ -949,6 +984,7 @@ function templateAnswer(intent) {
       ["Outgoing records", report.outgoingCount],
       ["Incoming records", report.incomingCount],
       ["Token records", report.tokenRecords],
+      ["Rows needing review", report.needsReviewCount],
       ["Top visible activity", report.topActivity],
     ]);
   }
@@ -959,6 +995,7 @@ function templateAnswer(intent) {
       ["Loaded records", report.totalRecords],
       ["Outgoing records", report.outgoingCount],
       ["Incoming records", report.incomingCount],
+      ["Rows needing review", report.needsReviewCount],
       ["Estimated outgoing numeric total", report.estimatedOutgoingValue.toFixed(6)],
     ]);
   }
@@ -1051,6 +1088,7 @@ function downloadMonthlyCsv() {
     ["total_records", report.totalRecords],
     ["outgoing_records", report.outgoingCount],
     ["incoming_records", report.incomingCount],
+    ["rows_needing_review", report.needsReviewCount],
     [],
     ["date", "type", "title", "direction", "value", "tx_hash"],
     ...report.items.map(item => [item.timestamp || "", item.kind, item.title, item.direction, item.value, item.hash]),
@@ -1071,7 +1109,7 @@ function downloadMonthlyCsv() {
 
 function printMonthlyReport() {
   const report = buildMonthlyReport();
-  setQaAnswer(`${currentNetworkScopeText()}\nWallet: ${report.wallet}\nLoaded records: ${report.totalRecords}\nOutgoing: ${report.outgoingCount}\nIncoming: ${report.incomingCount}\nTop activity: ${report.topActivity}`, "template");
+  setQaAnswer(`${currentNetworkScopeText()}\nWallet: ${report.wallet}\nLoaded records: ${report.totalRecords}\nOutgoing: ${report.outgoingCount}\nIncoming: ${report.incomingCount}\nRows needing review: ${report.needsReviewCount}\nTop activity: ${report.topActivity}`, "template");
   window.print();
 }
 

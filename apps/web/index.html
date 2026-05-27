@@ -28,7 +28,7 @@
         <a href="#product">Product</a>
         <a href="#assistant">AI</a>
         <a href="#security">Security</a>
-        <a href="./pricing.html">Pricing</a>
+        <a href="./pricing.html">Teams</a>
         <a href="#demo">Demo</a>
       </nav>
     </header>
@@ -160,6 +160,38 @@
             Connect wallet
           </button>
         </div>
+        <section class="accounting-panel" aria-label="Pre-accounting dashboard">
+          <div>
+            <p class="eyebrow">Pre-accounting</p>
+            <h3>Accountant-ready wallet workspace</h3>
+            <p id="accountingScope" class="form-status">
+              Connect a wallet to prepare a selected-network report.
+            </p>
+          </div>
+          <div class="accounting-metrics" aria-label="Wallet accounting summary">
+            <div>
+              <span class="mini-label">Outgoing</span>
+              <strong id="accountingOutgoing">0</strong>
+            </div>
+            <div>
+              <span class="mini-label">Incoming</span>
+              <strong id="accountingIncoming">0</strong>
+            </div>
+            <div>
+              <span class="mini-label">Token rows</span>
+              <strong id="accountingTokens">0</strong>
+            </div>
+            <div>
+              <span class="mini-label">Review</span>
+              <strong id="accountingReview">Pending</strong>
+            </div>
+          </div>
+          <div class="accounting-worklist" aria-label="Accounting worklist">
+            <span id="accountingPeriod">Period: current loaded wallet activity</span>
+            <span id="accountingExceptions">Exceptions: connect wallet</span>
+            <span id="accountingExports">Exports: CSV and print PDF ready after loading</span>
+          </div>
+        </section>
         <section class="qa-panel" aria-label="Wallet accounting assistant">
           <div class="qa-head">
             <div>
@@ -178,10 +210,10 @@
           </div>
           <div class="quick-questions" aria-label="Ready questions">
             <button type="button" data-question="Summarize this wallet.">
-              Wallet summary
+              Wallet report
             </button>
             <button type="button" data-question="Summarize this transaction.">
-              Tx summary
+              Transaction report
             </button>
             <button type="button" data-question="How much gas did I pay?">Gas fee?</button>
             <button type="button" data-question="Which tokens moved?">Token transfers?</button>
@@ -247,36 +279,6 @@
           <button id="loadMoreHistory" class="button secondary load-more" type="button" hidden>
             Load more
           </button>
-        </section>
-        <section class="credit-panel" aria-label="Developer credit balance">
-          <div>
-            <p class="eyebrow">Developer credits</p>
-            <h3>API balance</h3>
-            <p>
-              Check project credits before issuing API receipts. Usage can continue down to -10
-              credits to avoid breaking live dapp flows.
-            </p>
-          </div>
-          <div class="credit-fields">
-            <label for="projectIdInput">Project ID</label>
-            <input id="projectIdInput" autocomplete="off" placeholder="project_..." />
-            <label for="apiKeyInput">API key</label>
-            <input id="apiKeyInput" autocomplete="off" placeholder="txr_..." type="password" />
-            <button id="checkCredits" class="button secondary" type="button">Check credits</button>
-          </div>
-          <div class="credit-fields">
-            <label for="topUpAmountInput">Base USDC amount</label>
-            <input id="topUpAmountInput" autocomplete="off" inputmode="decimal" placeholder="5.00" />
-            <label for="billingWalletInput">Sender wallet</label>
-            <input id="billingWalletInput" autocomplete="off" placeholder="0x..." />
-            <button id="createTopUp" class="button secondary" type="button">Create top-up</button>
-          </div>
-          <div class="credit-balance">
-            <span class="mini-label">Balance</span>
-            <strong id="creditBalance">Not connected</strong>
-            <p id="creditStatus" class="form-status" role="status">API backend is ready for Cloudflare deployment.</p>
-            <div id="topUpInstructions" class="topup-instructions" hidden></div>
-          </div>
         </section>
       </section>
     </main>

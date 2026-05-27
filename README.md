@@ -51,6 +51,7 @@ V1 is intentionally narrow:
 - Excel-readable CSV wallet report export
 - print-to-PDF wallet accounting report
 - zero-token ready-question assistant for receipt and wallet questions
+- pre-accounting panel with selected-network review counts and export readiness
 - open receipt schema
 - dapp intent schema and SDK draft
 - AI assistant plan for read-only Base wallet questions
@@ -118,6 +119,8 @@ The current prototype uses a zero-token assistant pattern:
 - AI fallback disabled in the static prototype to avoid unnecessary token usage.
 
 See [docs/ai-assistant.md](docs/ai-assistant.md).
+
+The accounting MCP plan is documented in [docs/accounting-mcp.md](docs/accounting-mcp.md). MCP should act as a selected-network data collection layer, while reports remain deterministic and template-first.
 
 ## How dapps integrate
 
