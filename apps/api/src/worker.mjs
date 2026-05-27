@@ -23,41 +23,41 @@ export default {
 
 export async function handleRequest(request, env) {
   const url = new URL(request.url);
-  if (request.method === "OPTIONS") return corsResponse(null, env, 204);
+  if (request.method === "OPTIONS") return corsResponse(null, env, request, 204);
   if (request.method === "GET" && url.pathname === "/health") {
-    return json({ ok: true, service: "txreceipts-api" }, env);
+    return json({ ok: true, service: "txreceipts-api" }, env, request);
   }
 
   try {
     if (request.method === "POST" && url.pathname === "/v1/admin/projects") {
       await requireAdmin(request, env);
-      return json(await createProject(request, env), env, 201);
+      return json(await createProject(request, env), env, request, 201);
     }
     if (request.method === "POST" && url.pathname === "/v1/credits/topups") {
       const project = await requireProject(request, env);
-      return json(await createTopUp(request, env, project), env, 201);
+      return json(await createTopUp(request, env, project), env, request, 201);
     }
     const topUpMatch = url.pathname.match(/^\/v1\/credits\/topups\/([^/]+)$/);
     if (request.method === "GET" && topUpMatch) {
       const project = await requireProject(request, env);
-      return json(await getTopUp(env, project.id, topUpMatch[1]), env);
+      return json(await getTopUp(env, project.id, topUpMatch[1]), env, request);
     }
     const projectCreditsMatch = url.pathname.match(/^\/v1\/projects\/([^/]+)\/credits$/);
     if (request.method === "GET" && projectCreditsMatch) {
       const project = await requireProject(request, env);
       if (project.id !== projectCreditsMatch[1]) throw httpError(403, "Project mismatch.");
-      return json(await projectCredits(env, project.id), env);
+      return json(await projectCredits(env, project.id), env, request);
     }
     if (request.method === "POST" && url.pathname === "/v1/receipts") {
       const project = await requireProject(request, env);
-      return json(await createReceipt(request, env, project), env, 201);
+      return json(await createReceipt(request, env, project), env, request, 201);
     }
     if (request.method === "POST" && url.pathname === "/v1/ai/accounting-answer") {
-      return json(await answerAccountingQuestion(request, env), env);
+      return json(await answerAccountingQuestion(request, env), env, request);
     }
-    return json({ error: "Not found" }, env, 404);
+    return json({ error: "Not found" }, env, request, 404);
   } catch (error) {
-    return json({ error: error.message || "Unexpected error" }, env, error.status || 500);
+    return json({ error: error.message || "Unexpected error" }, env, request, error.status || 500);
   }
 }
 
@@ -394,21 +394,38 @@ function mapTopUp(row) {
   };
 }
 
-function json(body, env, status = 200) {
-  return corsResponse(JSON.stringify(body), env, status, JSON_HEADERS);
+function json(body, env, request, status = 200) {
+  return corsResponse(JSON.stringify(body), env, request, status, JSON_HEADERS);
 }
 
-function corsResponse(body, env, status = 200, headers = {}) {
+function corsResponse(body, env, request, status = 200, headers = {}) {
+  const origin = allowedOrigin(request, env);
   return new Response(body, {
     status,
     headers: {
       ...headers,
-      "Access-Control-Allow-Origin": env.ALLOWED_ORIGIN || "https://txreceipts.com.tr",
+      "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Headers": "Authorization, Content-Type, Idempotency-Key",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Vary": "Origin",
     },
   });
+}
+
+function allowedOrigin(request, env) {
+  const requestOrigin = request.headers.get("Origin") || "";
+  const configured = String(env.ALLOWED_ORIGIN || "")
+    .split(",")
+    .map(value => value.trim())
+    .filter(Boolean);
+  const defaults = [
+    "https://txreceipts.com.tr",
+    "https://www.txreceipts.com.tr",
+    "https://madmin27.github.io",
+    "https://madmin27.github.io/OnchainReceipts",
+  ];
+  const allowed = new Set([...defaults, ...configured]);
+  return allowed.has(requestOrigin) ? requestOrigin : (configured[0] || defaults[0]);
 }
 
 function httpError(status, message) {
