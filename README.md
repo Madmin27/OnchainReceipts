@@ -1,22 +1,23 @@
 # TxReceipts
 
-Open-source receipt infrastructure for human-readable, verified Base transactions.
+Open-source pre-accounting workspace for Base wallet activity.
 
-TxReceipts turns complex onchain activity into receipts people can read, download, reconcile, and trust. The long-term goal is not just to decode a transaction hash. It is to compare what a dapp said it was doing with what actually happened onchain, then produce a signed receipt that works for users, builders, and accountants.
+TxReceipts turns complex onchain activity into accounting-ready wallet records people can review, export, reconcile, and trust. The long-term goal is not just to decode a transaction hash. It is to help users and accountants understand income, expenses, fees, token movements, and exception rows, then produce clean reports and short printable transaction notes when needed.
 
 ## Why this exists
 
-Block explorers are precise, but most people cannot read raw logs, internal calls, router paths, gas accounting, and token transfers with confidence. Wallet previews help before signing, but after the transaction users still need a clear record of what happened.
+Block explorers are precise, but most people cannot turn raw logs, internal calls, router paths, gas fields, and token transfers into monthly bookkeeping. Wallet previews help before signing, but after the transaction users still need records that an accountant can review.
 
 TxReceipts is designed for:
 
-- Users who want a monthly receipt box for Base activity.
-- Dapps that want to give users verified receipts after swaps, mints, payments, subscriptions, games, and creator support.
-- Builders who need a shared schema for transaction intent, actual onchain outcome, fee breakdowns, and downloadable receipt artifacts.
+- Users who want a monthly wallet activity report for Base.
+- Accountants who need incoming, outgoing, fee, token, and review rows without reading explorer logs.
+- Dapps that want to attach business context after swaps, mints, payments, subscriptions, games, and creator support.
+- Builders who need a shared schema for transaction intent, actual onchain outcome, fee breakdowns, and printable transaction notes.
 
 ## What makes it different
 
-There are already products that make transaction hashes more readable. TxReceipts focuses on a different primitive:
+There are already products that make transaction hashes more readable. TxReceipts focuses on a more practical accounting primitive:
 
 **Intent plus verification.**
 
@@ -24,10 +25,10 @@ A dapp can send intent metadata after a transaction:
 
 - what the user intended to do
 - expected input and output assets
-- app fee, protocol fee, merchant, category, and receipt copy
+- app fee, protocol fee, merchant, category, and accounting note
 - app identity and branding
 
-The receipt engine then checks Base onchain data:
+The accounting verification engine then checks Base onchain data:
 
 - transaction success
 - sender and recipient relationships
@@ -36,23 +37,22 @@ The receipt engine then checks Base onchain data:
 - observed fees
 - whether the actual result matches the submitted intent
 
-The output is a signed receipt JSON plus a PNG receipt render target.
+The output is an accounting-ready record. A short printable receipt can also be generated for a selected transaction.
 
 ## Launch scope
 
 V1 is intentionally narrow:
 
 - Base mainnet first, with experimental multi-network lookup in the demo
-- wallet-connected user receipt inbox
+- wallet-connected pre-accounting inbox
 - transaction timeline
-- receipt generation from transaction hash
-- PNG receipt export
+- short printable transaction note from transaction hash
 - monthly summary
 - Excel-readable CSV wallet report export
 - print-to-PDF wallet accounting report
-- zero-token ready-question assistant for receipt and wallet questions
+- zero-token ready-question assistant for wallet accounting questions
 - pre-accounting panel with selected-network review counts and export readiness
-- open receipt schema
+- open accounting record and receipt schema
 - dapp intent schema and SDK draft
 - AI assistant plan for read-only Base wallet questions
 
@@ -89,7 +89,7 @@ https://madmin27.github.io/OnchainReceipts/
 
 ![TxReceipts demo walkthrough](apps/web/assets/txreceipts-demo.gif)
 
-The first live demo can fetch a transaction hash through the selected network RPC, parse receipt logs for token transfers, estimate gas paid, and render a downloadable PNG receipt artifact. It also includes a lightweight wallet accounting panel with ready questions, CSV export, and print-to-PDF report output.
+The first live demo connects to wallet activity, separates incoming and outgoing rows, highlights records needing review, and prepares CSV or print-to-PDF accounting output. A selected transaction can also produce a short printable receipt note with token movement, status, and gas paid.
 
 ## Why not just a block explorer?
 
@@ -97,21 +97,21 @@ Block explorers are essential, but they are optimized for technical inspection. 
 
 TxReceipts is designed for a different job:
 
-- turn transaction outcomes into accounting-friendly receipt artifacts
+- turn wallet activity into accounting-friendly records
 - separate sent assets, received assets, gas, app fees, and protocol fees
 - let dapps submit intent metadata that can be checked against observed onchain results
-- produce signed, downloadable receipt JSON/PNG artifacts
-- give users a monthly receipt box rather than a list of hashes
+- produce CSV, PDF, and short printable transaction outputs
+- give users a monthly bookkeeping workspace rather than a list of hashes
 
-The core question is not only "what happened onchain?" It is "what did the app say would happen, what actually happened, and can the user keep a trustworthy receipt?"
+The core question is not only "what happened onchain?" It is "what is income, what is expense, what needs review, and can the user hand this to accounting?"
 
 ## AI assistant layer
 
-The receipt engine stays first. Base MCP is planned as an opt-in assistant layer for questions like "what did I spend USDC on this month?" or "which creator payments did I receive?" rather than as the canonical verification backend.
+The accounting engine stays first. Base MCP is planned as an opt-in assistant layer for questions like "what did I spend USDC on this month?" or "which creator payments did I receive?" rather than as the canonical verification backend.
 
 The current prototype uses a zero-token assistant pattern:
 
-- ready-question buttons for common receipt and wallet accounting questions;
+- ready-question buttons for common wallet accounting questions;
 - Turkish and English keyword routing before any AI call;
 - template answers for gas fees, token movements, status, verification, monthly spend, and top activity;
 - selected-network scope, so answers focus only on the connected network's loaded data;
@@ -152,7 +152,7 @@ const receipt = await receipts.createReceipt({
 });
 ```
 
-The receipt engine returns a `verified`, `partial`, `mismatch`, or `failed` status with downloadable artifacts, machine-readable verification checks, and credit accounting details. One dapp tx credit is counted only once for each `project_id + chain_id + tx_hash`.
+The verification engine returns a `verified`, `partial`, `mismatch`, or `failed` status with downloadable artifacts, machine-readable checks, and credit accounting details. One dapp tx credit is counted only once for each `project_id + chain_id + tx_hash`.
 
 ## Payments and tx credits
 

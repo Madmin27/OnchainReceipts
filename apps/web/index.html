@@ -11,7 +11,7 @@
     <title>TxReceipts</title>
     <meta
       name="description"
-      content="Open-source receipt infrastructure for human-readable, verified Base transactions."
+      content="Pre-accounting workspace for Base wallet activity, reports, and printable transaction notes."
     />
     <meta name="theme-color" content="#111111" />
     <link rel="icon" href="./assets/txreceipts-brand.jpg" type="image/jpeg" />
@@ -36,19 +36,19 @@
     <main id="top">
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Base-first receipts</p>
-          <h1>Readable receipts for Base transactions.</h1>
+          <p class="eyebrow">Base-first pre-accounting</p>
+          <h1>Wallet activity prepared for accounting.</h1>
           <p class="lede">
-            TxReceipts turns wallet activity into clean receipt records users can understand,
-            download, and reconcile.
+            TxReceipts turns Base wallet activity into reviewable income, expense, fee, and token
+            movement records for monthly reconciliation.
           </p>
           <div class="hero-actions">
             <a class="button primary" href="#demo">Open demo</a>
           </div>
           <div class="hero-proof" aria-label="Core product points">
             <span>Base mainnet first</span>
-            <span>Read-only wallet view</span>
-            <span>PNG receipt export</span>
+            <span>Read-only accounting view</span>
+            <span>CSV and print-ready outputs</span>
           </div>
         </div>
       </section>
@@ -56,28 +56,28 @@
       <section id="product" class="section">
         <div class="section-title">
           <p class="eyebrow">Product</p>
-          <h2>Not another explorer view.</h2>
+          <h2>A working panel for wallet bookkeeping.</h2>
         </div>
         <div class="feature-grid">
           <article>
-            <h3>User receipt inbox</h3>
+            <h3>Pre-accounting inbox</h3>
             <p>
-              Users connect a wallet, browse network transactions by date, generate receipts, and
-              download PNG files for monthly reconciliation.
+              Users connect a wallet, review transactions by date, separate incoming and outgoing
+              rows, and prepare monthly reports.
             </p>
           </article>
           <article>
-            <h3>Dapp intent metadata</h3>
+            <h3>Accounting context</h3>
             <p>
-              Dapps can submit the business context behind a transaction: expected assets, fees,
-              merchant references, categories, and receipt copy.
+              Dapps can submit business context behind a transaction: category, merchant reference,
+              expected assets, app fees, and report notes.
             </p>
           </article>
           <article>
-            <h3>Onchain verification</h3>
+            <h3>Printable transaction notes</h3>
             <p>
-              The engine checks transaction success, token transfers, gas paid, observed fees, and
-              whether the app's claim matched the Base transaction.
+              For a selected transaction, the app can produce a short printable note with status,
+              token movement, gas paid, and verification evidence.
             </p>
           </article>
         </div>
@@ -86,11 +86,11 @@
       <section id="assistant" class="section assistant-section">
         <div class="assistant-copy">
           <p class="eyebrow">AI layer</p>
-          <h2>Ask your Base wallet, after the receipt engine has done the hard work.</h2>
+          <h2>Ask accounting questions after the wallet data is organized.</h2>
           <p>
-            The first product remains a verified receipt inbox. Base MCP fits as the next layer:
-            a read-focused assistant that explains wallet activity, monthly spend, creator income,
-            and accounting notes using receipt data the user can inspect.
+            The first product is a pre-accounting workspace. Base MCP fits as the next layer:
+            a read-focused assistant that explains monthly spend, income, fees, categories, and
+            exception rows using compact data the user can inspect.
           </p>
         </div>
         <div class="assistant-console" aria-label="Ask your Base wallet preview">
@@ -102,8 +102,8 @@
             <span>TxReceipts</span>
             <p>
               You spent 84.25 USDC across 11 Base transactions: 42.00 creator support,
-              25.00 swaps, 9.99 subscriptions, and 7.26 app fees. Three receipts are verified,
-              two need dapp intent metadata, and one subscription renews next week.
+              25.00 swaps, 9.99 subscriptions, and 7.26 app fees. Eight rows are ready for export,
+              two need category review, and one recurring payment should be checked next week.
             </p>
           </div>
           <ul class="assistant-rules">
@@ -137,10 +137,10 @@
         <div class="demo-panel">
           <div>
             <p class="eyebrow">Prototype</p>
-            <h2>Generate a network receipt artifact.</h2>
+            <h2>Prepare a wallet accounting report.</h2>
             <p>
-              Paste a transaction hash to fetch the transaction receipt from the selected network RPC,
-              parse token transfers, estimate gas paid, and render a downloadable receipt.
+              Connect a wallet or paste a transaction hash to classify activity, review fees, and
+              create CSV, PDF, or short printable transaction notes.
             </p>
           </div>
         </div>
@@ -253,7 +253,7 @@
               spellcheck="false"
               placeholder="0x..."
             />
-            <button class="button primary" type="submit">Fetch receipt</button>
+            <button class="button primary" type="submit">Review tx</button>
           </div>
           <p id="txStatus" class="form-status" role="status">
             Choose a wallet activity or paste a transaction hash.
@@ -285,7 +285,7 @@
     </main>
 
     <footer class="footer">
-      <span>TxReceipts is open-source receipt infrastructure for Base.</span>
+      <span>TxReceipts is an open-source pre-accounting workspace for Base.</span>
       <a href="./docs/security-model.md">Security model</a>
     </footer>
 
