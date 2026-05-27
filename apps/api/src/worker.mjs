@@ -78,7 +78,7 @@ async function answerAccountingQuestion(request, env) {
     body: JSON.stringify({
       model,
       temperature: 0.1,
-      max_tokens: 180,
+      max_tokens: 220,
       messages: [
         {
           role: "system",
@@ -87,11 +87,16 @@ async function answerAccountingQuestion(request, env) {
             "Answer only from the provided compact accounting JSON.",
             "Only answer questions about the provided network's wallet activity, transactions, fees, token movements, categories, exports, receipts, and reconciliation.",
             "If the question is outside that scope, say it is out of scope.",
+            "When context.selectedTx, context.selectedReceipt, or context.selectedLedgerRow is present, treat the question as transaction-scoped unless the user explicitly asks wallet-wide or time-window totals.",
+            "Use selectedReceipt and selectedLedgerRow first for transaction-specific answers, then use rows and analysis for broader wallet questions.",
             "Prefer context.analysis when ranking, sorting, or summarizing top transactions in time windows.",
             "Do not fall back to a generic wallet summary unless it directly answers the question.",
             "Do not invent balances, tax treatment, dates, or missing fees.",
-            "Keep the answer under 90 words.",
+            "Keep the answer under 120 words.",
             "Use a concise accounting report style.",
+            "Format the answer as 3 short parts when possible: Answer, Evidence, Missing.",
+            "Evidence must cite concrete context fields such as tx hash, status, method, sent, received, gas, direction, category, feeValue, gasUsed, gasPrice, or timestamps.",
+            "If the data is incomplete, say Confidence: low in the Missing part.",
             "If data is missing, say exactly what is missing and what the user should load.",
           ].join(" "),
         },
@@ -121,6 +126,7 @@ function compactAiContext(context) {
     report: context.report || {},
     analysis: context.analysis || {},
     selectedReceipt: context.selectedReceipt || null,
+    selectedLedgerRow: context.selectedLedgerRow || null,
     rows: Array.isArray(context.rows) ? context.rows.slice(0, 40) : [],
   };
 }

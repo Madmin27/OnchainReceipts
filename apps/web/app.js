@@ -1565,7 +1565,35 @@ function isInScopeAccountingQuestion(question) {
 
   if (accountingTerms.some(term => text.includes(term))) return true;
 
-  const selectedTxSignals = ["what happened", "why", "how", "explain", "analyse", "analyze", "neden", "nasıl", "açıkla", "acikla", "incele", "detay"];
+  const selectedTxSignals = [
+    "what happened",
+    "why",
+    "how",
+    "which",
+    "who",
+    "when",
+    "where",
+    "how much",
+    "how many",
+    "explain",
+    "analyse",
+    "analyze",
+    "neden",
+    "nasıl",
+    "hangi",
+    "kim",
+    "kime",
+    "kimden",
+    "nereye",
+    "nereden",
+    "ne",
+    "ne kadar",
+    "kaç",
+    "açıkla",
+    "acikla",
+    "incele",
+    "detay",
+  ];
   return Boolean((txInput?.value.trim() || receipt?.fullTxHash) && selectedTxSignals.some(signal => text.includes(signal)));
 }
 
@@ -1586,11 +1614,13 @@ function logQuestion(question, intent, source) {
 
 function compactAccountingContext() {
   const report = buildMonthlyReport();
+  const selectedTx = txInput?.value.trim() || null;
+  const selectedLedgerRow = report.items.find(item => item.hash === selectedTx) || null;
   return {
     network: currentNetwork().name,
     scope: currentNetworkScopeText(),
     wallet: connectedWallet || null,
-    selectedTx: txInput?.value.trim() || null,
+    selectedTx,
     report: {
       totalRecords: report.totalRecords,
       outgoingCount: report.outgoingCount,
@@ -1609,6 +1639,21 @@ function compactAccountingContext() {
     },
     analysis: buildQuestionAnalysis(report),
     selectedReceipt: compactReceipt(),
+    selectedLedgerRow: selectedLedgerRow ? {
+      date: selectedLedgerRow.timestamp || "",
+      type: selectedLedgerRow.kind,
+      title: selectedLedgerRow.title,
+      subtitle: selectedLedgerRow.subtitle,
+      direction: selectedLedgerRow.accounting.direction,
+      category: selectedLedgerRow.accounting.category,
+      status: selectedLedgerRow.accounting.status,
+      memo: selectedLedgerRow.accounting.memo,
+      value: selectedLedgerRow.value,
+      tx: selectedLedgerRow.hash,
+      feeValue: selectedLedgerRow.fee?.value || selectedLedgerRow.transaction_fee || selectedLedgerRow.tx_fee || "",
+      gasUsed: selectedLedgerRow.gas_used || selectedLedgerRow.gasUsed || selectedLedgerRow.gas || "",
+      gasPrice: selectedLedgerRow.gas_price || selectedLedgerRow.gasPrice || "",
+    } : null,
     rows: report.items.slice(0, 40).map(item => ({
       date: item.timestamp || "",
       type: item.kind,
