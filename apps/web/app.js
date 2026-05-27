@@ -24,6 +24,7 @@ const qaForm = document.querySelector("#qaForm");
 const qaQuestionInput = document.querySelector("#qaQuestion");
 const qaAnswer = document.querySelector("#qaAnswer");
 const qaContext = document.querySelector("#qaContext");
+const qaSubmitButton = qaForm?.querySelector('button[type="submit"]');
 const quickQuestionButtons = document.querySelectorAll("[data-question]");
 const READY_QUESTION_METADATA = {
   "Summarize this wallet.": "Fields used: loaded rows, accounting direction, accounting category, verification status, network scope.",
@@ -150,6 +151,14 @@ function setQaAnswer(message, source = "template") {
   if (!qaAnswer) return;
   qaAnswer.textContent = message;
   qaAnswer.dataset.source = source;
+}
+
+function setQaLoading(isLoading) {
+  if (qaAnswer) qaAnswer.dataset.loading = isLoading ? "true" : "false";
+  if (qaSubmitButton) {
+    qaSubmitButton.disabled = isLoading;
+    qaSubmitButton.textContent = isLoading ? "Searching..." : "AI Answer";
+  }
 }
 
 function setQaContext(message, tone = "neutral") {
@@ -302,6 +311,12 @@ function normalizeTx(item) {
     timestamp: item.timestamp,
     value: item.value && item.value !== "0" ? formatEthValue(item.value) : safeDisplay(item.status || item.result || "ok", 48),
     direction: isIncoming ? "incoming" : isOutgoing ? "outgoing" : "other",
+    fee: item.fee,
+    transaction_fee: item.transaction_fee,
+    tx_fee: item.tx_fee,
+    gas_used: item.gas_used,
+    gasPrice: item.gasPrice,
+    gas_price: item.gas_price,
   };
 }
 
@@ -1881,13 +1896,19 @@ qaForm?.addEventListener("submit", event => {
     setQaAnswer("Ask a question or use one of the ready questions.", "template");
     return;
   }
-  const txHash = txInput?.value.trim();
-  if (txHash && !receiptMatchesInput()) {
-    setQaContext(`Preparing ${currentNetwork().name} tx: ${shortHash(txHash)}`);
-    await generateReceipt(txHash, { download: false, quiet: true });
+  setQaLoading(true);
+  setQaAnswer(`Searching ${currentNetwork().name} activity...`, "loading");
+  try {
+    const txHash = txInput?.value.trim();
+    if (txHash && !receiptMatchesInput()) {
+      setQaContext(`Preparing ${currentNetwork().name} tx: ${shortHash(txHash)}`);
+      await generateReceipt(txHash, { download: false, quiet: true });
+    }
+    const result = await answerQuestion(question, { preferTemplate: false });
+    setQaAnswer(result.answer, result.source);
+  } finally {
+    setQaLoading(false);
   }
-  const result = await answerQuestion(question, { preferTemplate: false });
-  setQaAnswer(result.answer, result.source);
   })();
 });
 

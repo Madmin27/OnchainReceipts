@@ -746,6 +746,40 @@ dd {
   content: "Template answer";
 }
 
+.qa-answer[data-loading="true"] {
+  border-color: var(--blue);
+  color: var(--ink);
+}
+
+.qa-answer[data-source="loading"]::before {
+  color: var(--gold);
+  content: "Searching";
+}
+
+.qa-answer[data-loading="true"]::after {
+  animation: qa-pulse 0.9s ease-in-out infinite;
+  color: var(--gold);
+  content: "...";
+  display: inline-block;
+  letter-spacing: 0.18em;
+  margin-left: 6px;
+}
+
+@keyframes qa-pulse {
+  0% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+}
+
 .history-head {
   align-items: center;
   display: flex;
