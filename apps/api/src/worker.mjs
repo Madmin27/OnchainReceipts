@@ -413,6 +413,8 @@ function formatNativeAmount(value, symbol) {
 
 async function answerAccountingQuestion(request, env) {
   if (!env.AI_API_KEY) throw httpError(503, "AI_API_KEY is not configured.");
+  const project = await maybeProject(request, env);
+  const usage = project ? await prepareQuotaCharge(env, project.id) : null;
   const body = await readJson(request);
   const question = String(body.question || "").trim().slice(0, 500);
   if (!question) throw httpError(400, "Missing question.");
@@ -462,11 +464,27 @@ async function answerAccountingQuestion(request, env) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw httpError(response.status, payload.error?.message || "AI provider request failed.");
   const answer = payload.choices?.[0]?.message?.content || "";
+  if (project && usage && !usage.usesFreeAllowance) {
+    await env.DB.prepare(
+      `INSERT INTO credit_ledger (id, project_id, source, delta, balance_after, reason)
+       VALUES (?, ?, 'ai_usage', -1, ?, 'paid AI accounting answer')`
+    ).bind(`cl_${crypto.randomUUID()}`, project.id, usage.paidBalanceAfter).run();
+  }
   return {
     answer: String(answer).trim().slice(0, 1200) || "AI could not prepare an answer from the provided accounting context.",
     source: "ai",
     model,
     route,
+    usage: project ? {
+      counted: true,
+      amount: 1,
+      reason: usage.usesFreeAllowance ? "free monthly API allowance" : "paid AI accounting answer",
+      remaining: usage.remaining,
+    } : {
+      counted: false,
+      amount: 0,
+      reason: "public panel request",
+    },
   };
 }
 
@@ -814,11 +832,17 @@ async function recordRejectedPayment(env, transfer, projectId, reason) {
 }
 
 async function requireProject(request, env) {
-  const auth = request.headers.get("Authorization") || "";
-  const apiKey = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  const apiKey = readBearerToken(request);
   if (!apiKey) throw httpError(401, "Missing API key.");
-  const hash = await sha256(apiKey);
-  const project = await env.DB.prepare("SELECT * FROM projects WHERE api_key_hash = ? AND status = 'active'").bind(hash).first();
+  const project = await projectForApiKey(env, apiKey);
+  if (!project) throw httpError(401, "Invalid API key.");
+  return project;
+}
+
+async function maybeProject(request, env) {
+  const apiKey = readBearerToken(request);
+  if (!apiKey) return null;
+  const project = await projectForApiKey(env, apiKey);
   if (!project) throw httpError(401, "Invalid API key.");
   return project;
 }
@@ -884,6 +908,30 @@ async function getBalance(env, projectId) {
     "SELECT COALESCE(SUM(delta), 0) AS balance FROM credit_ledger WHERE project_id = ?"
   ).bind(projectId).first();
   return Number(row?.balance || 0);
+}
+
+async function prepareQuotaCharge(env, projectId, amount = 1) {
+  const usage = await projectUsageSnapshot(env, projectId);
+  const usesFreeAllowance = usage.freeRemaining >= amount;
+  if (!usesFreeAllowance && usage.paidBalance < amount) {
+    throw httpError(402, "Free API allowance is exhausted and paid request balance is empty.");
+  }
+  const paidBalanceAfter = usesFreeAllowance ? usage.paidBalance : usage.paidBalance - amount;
+  return {
+    usesFreeAllowance,
+    paidBalanceAfter,
+    remaining: Math.max(usage.freeRemaining - amount, 0) + paidBalanceAfter,
+  };
+}
+
+async function projectForApiKey(env, apiKey) {
+  const hash = await sha256(apiKey);
+  return env.DB.prepare("SELECT * FROM projects WHERE api_key_hash = ? AND status = 'active'").bind(hash).first();
+}
+
+function readBearerToken(request) {
+  const auth = request.headers.get("Authorization") || "";
+  return auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
 }
 
 async function getReceiptCount(env, projectId) {

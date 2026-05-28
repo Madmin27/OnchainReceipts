@@ -177,6 +177,38 @@
             Connect wallet
           </button>
         </div>
+        <section class="credit-panel" aria-label="API request balance and Base top-up">
+          <div>
+            <p class="eyebrow">Builder API</p>
+            <h3>Project request balance</h3>
+            <p>
+              Public panel usage stays free. API projects get 1,000 free requests, then can top up
+              paid request balance with native USDC on Base.
+            </p>
+            <p id="creditStatus" class="form-status">Enter a project ID and API key to load request balance.</p>
+            <p id="topUpInstructions" class="topup-instructions" hidden></p>
+          </div>
+          <div class="credit-fields">
+            <label for="projectIdInput">Project ID</label>
+            <input id="projectIdInput" autocomplete="off" spellcheck="false" placeholder="project_demo" />
+            <label for="topUpAmountInput">Top-up USDC</label>
+            <input id="topUpAmountInput" inputmode="decimal" autocomplete="off" placeholder="5" />
+          </div>
+          <div class="credit-fields">
+            <label for="apiKeyInput">API key</label>
+            <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="txr_..." />
+            <label for="billingWalletInput">Billing wallet</label>
+            <input id="billingWalletInput" autocomplete="off" spellcheck="false" placeholder="0x..." />
+          </div>
+          <div class="credit-balance" aria-live="polite">
+            <span class="mini-label">Available requests</span>
+            <strong id="creditBalance">Unavailable</strong>
+            <div class="qa-actions">
+              <button id="checkCredits" class="button secondary" type="button">Check balance</button>
+              <button id="createTopUp" class="button primary" type="button">Create top-up</button>
+            </div>
+          </div>
+        </section>
         <section class="accounting-panel" aria-label="Pre-accounting dashboard">
           <div>
             <p class="eyebrow">Pre-accounting</p>

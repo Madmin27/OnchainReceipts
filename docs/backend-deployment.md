@@ -84,6 +84,14 @@ The API returns the plaintext API key once. Store it securely. D1 stores only th
 6. A 5 USDC top-up adds 10,000 paid API requests.
 7. If no free allowance and no paid request balance remain, API returns `402`.
 
+## Metered endpoints
+
+- `POST /v1/receipts` is metered.
+- `POST /v1/ai/accounting-answer` is metered only when the request includes a valid `Authorization: Bearer <apiKey>` header.
+- Public panel calls to `POST /v1/ai/accounting-answer` without an API key stay free.
+- `GET /v1/projects/:projectId/credits`, `POST /v1/credits/topups`, and `GET /v1/credits/topups/:paymentId` are not metered.
+- `GET /v1/receipts/:receiptId` and `PATCH /v1/receipts/:receiptId` are currently not metered.
+
 ## Security checks
 
 - No private keys or wallet approvals.

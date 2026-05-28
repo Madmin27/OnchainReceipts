@@ -2381,18 +2381,21 @@ walletProviderSelect.addEventListener("change", () => {
 checkCreditsButton?.addEventListener("click", async () => {
   const inputs = requireApiAuthInputs();
   if (!inputs) return;
-  setCreditStatus("Checking credit balance...");
+  setCreditStatus("Checking API request balance...");
   try {
     const response = await apiFetch(`/v1/projects/${encodeURIComponent(inputs.projectId)}/credits`, {
       headers: { Authorization: `Bearer ${inputs.apiKey}` },
     });
     if (!response.ok) throw new Error(`API returned HTTP ${response.status}`);
     const payload = await response.json();
-    creditBalance.textContent = `${payload.balance} credits`;
-    setCreditStatus(`Overdraft tolerance: ${payload.overdraftLimit} credits. Receipts used: ${payload.receipts}.`, "success");
+    creditBalance.textContent = `${Number(payload.totalAvailable || 0)} requests`;
+    setCreditStatus(
+      `Free left: ${Number(payload.freeRemaining || 0)}/${Number(payload.freeAllowance || 0)}. Paid balance: ${Number(payload.paidBalance || 0)} requests. Receipt records: ${Number(payload.receipts || 0)}.`,
+      "success"
+    );
   } catch (error) {
     creditBalance.textContent = "Unavailable";
-    setCreditStatus(error instanceof Error ? error.message : "Could not load credit balance.", "error");
+    setCreditStatus(error instanceof Error ? error.message : "Could not load API request balance.", "error");
   }
 });
 
@@ -2425,10 +2428,10 @@ createTopUpButton?.addEventListener("click", async () => {
         `From: ${payload.billingWallet}`,
         `To: ${payload.receivingAddress}`,
         `Payment ID: ${payload.paymentId}`,
-        `Credits after confirmation: +${payload.creditAmount}`,
+        `Paid requests after confirmation: +${payload.creditAmount}`,
       ].join("\n");
     }
-    setCreditStatus("Top-up created. The watcher credits it after the Base USDC transfer confirms.", "success");
+    setCreditStatus("Top-up created. The watcher adds paid requests after the Base USDC transfer confirms.", "success");
   } catch (error) {
     setCreditStatus(error instanceof Error ? error.message : "Could not create top-up.", "error");
   }
