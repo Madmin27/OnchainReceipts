@@ -37,13 +37,14 @@
       <section class="hero">
         <div class="hero-copy">
           <p class="eyebrow">Onchain pre-accounting</p>
-          <h1>Pre-accounting infrastructure for Base wallets and dapps.</h1>
+          <h1>Onchain pre-accounting for Base wallets.</h1>
           <p class="lede">
-            TxReceipts turns wallet activity into verified receipts, categorized ledgers, and
-            monthly reconciliation reports for users, teams, builders, and accountants.
+            TxReceipts is not a block explorer. TxReceipts is a pre-accounting workspace for
+            onchain wallets. Review wallet activity as categorized ledger rows, printable receipts,
+            and monthly accounting reports.
           </p>
           <div class="hero-actions">
-            <a class="button primary" href="#demo">Open demo</a>
+            <a class="button primary" href="#demo">Use TxReceipts</a>
           </div>
           <div class="hero-proof" aria-label="Core product points">
             <span>Base mainnet first</span>
@@ -56,7 +57,7 @@
       <section id="product" class="section">
         <div class="section-title">
           <p class="eyebrow">Product</p>
-          <h2>A working panel for wallet bookkeeping.</h2>
+          <h2>Explorers are not accounting tools.</h2>
         </div>
         <div class="feature-grid">
           <article>
@@ -86,11 +87,11 @@
       <section id="assistant" class="section assistant-section">
         <div class="assistant-copy">
           <p class="eyebrow">AI layer</p>
-          <h2>Ask accounting questions after the wallet data is organized.</h2>
+          <h2>Template-first answers. Optional AI when templates do not fit.</h2>
           <p>
-            The first product is a pre-accounting workspace. Base MCP fits as the next layer:
-            a read-focused assistant that explains monthly spend, income, fees, categories, and
-            exception rows using compact data the user can inspect.
+            The first product is a Base-first pre-accounting workspace. Ready questions are
+            deterministic and recalculated for the selected wallet and network. AI stays optional
+            and only receives compact accounting JSON.
           </p>
         </div>
         <div class="assistant-console" aria-label="Ask your Base wallet preview">
@@ -137,10 +138,11 @@
         <div class="demo-panel">
           <div>
             <p class="eyebrow">Prototype</p>
-            <h2>Generate a bookkeeping-ready onchain receipt.</h2>
+            <h2>Use a Base-first pre-accounting workspace.</h2>
             <p>
-              Paste a transaction hash or connect a wallet to classify activity, review fees, add
-              accounting context, and create CSV, PDF, or short printable receipts.
+              Connect a wallet or paste a transaction hash to classify activity as income,
+              expense, swap, fee, subscription, transfer, or uncategorized, then export the
+              result for accounting review.
             </p>
           </div>
         </div>
@@ -195,16 +197,16 @@
         </section>
         <section class="monthly-ledger" aria-label="Monthly wallet ledger">
           <div class="section-title compact">
-            <p class="eyebrow">Monthly wallet ledger</p>
-            <h3>Current loaded period</h3>
+            <p class="eyebrow">Monthly summary</p>
+            <h3>Current loaded Base-first accounting view</h3>
           </div>
           <div class="ledger-metrics">
             <div>
-              <span class="mini-label">Income rows</span>
+              <span class="mini-label">Incoming</span>
               <strong id="monthlyIncome">0</strong>
             </div>
             <div>
-              <span class="mini-label">Expense rows</span>
+              <span class="mini-label">Outgoing</span>
               <strong id="monthlyExpenses">0</strong>
             </div>
             <div>
@@ -214,6 +216,14 @@
             <div>
               <span class="mini-label">App/protocol fees</span>
               <strong id="monthlyAppFees">Review</strong>
+            </div>
+            <div>
+              <span class="mini-label">Swaps</span>
+              <strong id="monthlySwaps">0</strong>
+            </div>
+            <div>
+              <span class="mini-label">Subscriptions</span>
+              <strong id="monthlySubscriptions">0</strong>
             </div>
             <div>
               <span class="mini-label">Uncategorized</span>
@@ -251,14 +261,23 @@
             <button type="button" data-question="Is this income or expense?">
               Income/expense?
             </button>
+            <button type="button" data-question="Is this a business expense?">
+              Business expense?
+            </button>
             <button type="button" data-question="How much gas did I pay?">Gas fee?</button>
             <button type="button" data-question="Calculate the fees I paid in the last 7 days.">
               7-day fees?
             </button>
+            <button type="button" data-question="Show app fees.">App fees?</button>
+            <button type="button" data-question="Show protocol fees.">Protocol fees?</button>
+            <button type="button" data-question="Show subscription rows.">Subscriptions?</button>
             <button type="button" data-question="Which tokens moved?">Token transfers?</button>
             <button type="button" data-question="Is this receipt verified?">Verified?</button>
             <button type="button" data-question="How much did I spend this month?">
               Monthly spend?
+            </button>
+            <button type="button" data-question="Show the largest expenses.">
+              Largest expenses
             </button>
             <button type="button" data-question="Which dapp did I use the most?">
               Top dapp?
@@ -266,8 +285,8 @@
             <button type="button" data-question="Show uncategorized transactions.">
               Uncategorized?
             </button>
-            <button type="button" data-question="Prepare accountant summary.">
-              Accountant summary
+            <button type="button" data-question="Export accountant summary.">
+              Export accountant summary
             </button>
           </div>
           <form id="qaForm" class="qa-form">
@@ -284,6 +303,7 @@
           <div id="qaAnswer" class="qa-answer">
             Select a transaction row or paste a tx hash. Ready questions use deterministic network
             data only. Freeform questions use AI only for in-scope onchain pre-accounting analysis.
+            AI questions are logged locally so they can later become deterministic ready answers.
           </div>
         </section>
         <form id="txForm" class="tx-form">
@@ -303,11 +323,25 @@
             Choose a wallet activity or paste a transaction hash.
           </p>
         </form>
+        <section class="tx-actions-panel" aria-label="Transaction detail actions">
+          <div class="section-title compact">
+            <p class="eyebrow">Transaction detail</p>
+            <h3>Receipt and accounting actions</h3>
+          </div>
+          <div class="tx-action-buttons">
+            <button id="addMemoButton" class="button secondary" type="button">Add memo</button>
+            <button id="markBusinessExpenseButton" class="button secondary" type="button">Mark as business expense</button>
+            <button id="markInternalTransferButton" class="button secondary" type="button">Mark as internal transfer</button>
+            <button id="downloadReceiptButton" class="button secondary" type="button">Download receipt</button>
+            <button id="exportRowButton" class="button secondary" type="button">Export row</button>
+          </div>
+          <p id="txActionStatus" class="form-status">Select a transaction to apply accounting actions.</p>
+        </section>
         <section class="history-panel" aria-label="Wallet transaction history">
           <div class="history-head">
             <div>
               <p class="eyebrow">Wallet history</p>
-              <h3>Recent network activity</h3>
+              <h3>Recent accounting ledger rows</h3>
             </div>
           </div>
           <div class="history-tabs" role="tablist" aria-label="History filters">
@@ -319,6 +353,16 @@
           </div>
           <div id="historyStatus" class="form-status">
             Connect a wallet to load the latest network activity automatically.
+          </div>
+          <div class="history-grid-head" aria-hidden="true">
+            <span>Transaction</span>
+            <span>Direction</span>
+            <span>Category</span>
+            <span>Counterparty</span>
+            <span>Gas</span>
+            <span>Fee</span>
+            <span>Receipt</span>
+            <span>Memo</span>
           </div>
           <div id="historyList" class="history-list"></div>
           <button id="loadMoreHistory" class="button secondary load-more" type="button" hidden>

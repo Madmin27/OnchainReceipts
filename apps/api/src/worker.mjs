@@ -9,6 +9,7 @@ import {
   validateObservedTransfer,
   validateTopUpIntent,
 } from "./billing.mjs";
+import { detectQuestionRoute, routingNote } from "./questionRouter.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 
@@ -67,6 +68,7 @@ async function answerAccountingQuestion(request, env) {
   const question = String(body.question || "").trim().slice(0, 500);
   if (!question) throw httpError(400, "Missing question.");
   const context = compactAiContext(body.context || {});
+  const route = detectQuestionRoute(question, context);
   const baseUrl = (env.AI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "");
   const model = env.AI_MODEL || "gpt-4.1-mini";
   const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -98,6 +100,7 @@ async function answerAccountingQuestion(request, env) {
             "Evidence must cite concrete context fields such as tx hash, status, method, sent, received, gas, direction, category, feeValue, gasUsed, gasPrice, or timestamps.",
             "If the data is incomplete, say Confidence: low in the Missing part.",
             "If data is missing, say exactly what is missing and what the user should load.",
+            routingNote(route),
           ].join(" "),
         },
         {
@@ -114,6 +117,7 @@ async function answerAccountingQuestion(request, env) {
     answer: String(answer).trim().slice(0, 1200) || "AI could not prepare an answer from the provided accounting context.",
     source: "ai",
     model,
+    route,
   };
 }
 

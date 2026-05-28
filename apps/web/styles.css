@@ -551,10 +551,6 @@ dd {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.ledger-metrics {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
 .accounting-metrics div,
 .ledger-metrics div {
   background: #151312;
@@ -583,6 +579,42 @@ dd {
   color: var(--muted);
   font-size: 14px;
   line-height: 1.5;
+}
+
+.tx-actions-panel {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  padding: 18px;
+}
+
+.tx-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.tx-action-buttons .button {
+  min-width: 180px;
+}
+
+.history-grid-head {
+  color: var(--blue-soft);
+  display: grid;
+  font-size: 12px;
+  font-weight: 760;
+  gap: 10px;
+  grid-template-columns: 1.2fr repeat(7, minmax(0, 1fr));
+  letter-spacing: 0.08em;
+  margin-top: 12px;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.history-summary {
+  min-width: 0;
 }
 
 .credit-panel {
@@ -839,14 +871,14 @@ dd {
 }
 
 .history-item {
-  align-items: center;
+  align-items: start;
   background: #151312;
   border: 1px solid var(--line);
   border-radius: 8px;
   cursor: pointer;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   padding: 14px;
   text-align: left;
   width: 100%;
@@ -866,21 +898,36 @@ dd {
 }
 
 .history-meta,
-.history-ledger,
-.history-value {
+.history-column-label {
   color: var(--muted);
   font-size: 13px;
 }
 
-.history-ledger {
-  color: var(--blue-soft);
-  font-weight: 720;
-  text-transform: capitalize;
+.history-columns {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 10px;
 }
 
-.history-value {
-  font-weight: 760;
-  text-align: right;
+.history-column {
+  background: #1d1a18;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.history-column-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.history-column-value {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .history-receipt-button {
@@ -1031,8 +1078,17 @@ dd {
     grid-template-columns: 1fr;
   }
 
-  .history-value {
-    text-align: left;
+  .history-grid-head {
+    display: none;
+  }
+
+  .history-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .tx-action-buttons .button,
+  .history-receipt-button {
+    width: 100%;
   }
 
   .hero {

@@ -30,14 +30,19 @@ const READY_QUESTION_METADATA = {
   "Summarize this wallet.": "Fields used: loaded rows, accounting direction, accounting category, verification status, network scope.",
   "Summarize this transaction.": "Fields used: selected receipt title, purpose, sent/received values, status, date.",
   "Is this income or expense?": "Fields used: selected ledger row direction, category, memo, verification status.",
+  "Is this a business expense?": "Fields used: selected ledger row category, direction, memo override, verification status.",
   "How much gas did I pay?": "Fields used: selected receipt gas value, receipt status, accounting note.",
   "Calculate the fees I paid in the last 7 days.": "Fields used: loaded transaction fee fields from the last 7 days on the current network.",
+  "Show app fees.": "Fields used: loaded rows classified as app_fee, numeric row values, current network scope.",
+  "Show protocol fees.": "Fields used: loaded rows classified as protocol_fee, numeric row values, current network scope.",
+  "Show subscription rows.": "Fields used: loaded rows classified as subscription, numeric row values, timestamps, tx hashes.",
   "Which tokens moved?": "Fields used: selected receipt sent tokens, received tokens, rendered receipt rows.",
   "Is this receipt verified?": "Fields used: selected receipt status, evidence summary, method.",
   "How much did I spend this month?": "Fields used: loaded rows, expense direction counts, estimated outgoing numeric values, current network scope.",
+  "Show the largest expenses.": "Fields used: loaded expense rows, numeric values, timestamps, tx hashes.",
   "Which dapp did I use the most?": "Fields used: loaded row titles grouped by visible activity count.",
   "Show uncategorized transactions.": "Fields used: loaded rows with uncategorized category, timestamp, title, tx hash.",
-  "Prepare accountant summary.": "Fields used: loaded records, income/expense counts, weekly fee summary, uncategorized count, verification count.",
+  "Export accountant summary.": "Fields used: loaded records, income/expense counts, fee summaries, uncategorized count, verification count, export actions.",
 };
 const READY_QUESTION_SET = new Set([...quickQuestionButtons].map(button => String(button.dataset.question || button.textContent || "").trim()).filter(Boolean));
 const downloadMonthlyCsvButton = document.querySelector("#downloadMonthlyCsv");
@@ -54,8 +59,16 @@ const monthlyIncome = document.querySelector("#monthlyIncome");
 const monthlyExpenses = document.querySelector("#monthlyExpenses");
 const monthlyGasFees = document.querySelector("#monthlyGasFees");
 const monthlyAppFees = document.querySelector("#monthlyAppFees");
+const monthlySwaps = document.querySelector("#monthlySwaps");
+const monthlySubscriptions = document.querySelector("#monthlySubscriptions");
 const monthlyUncategorized = document.querySelector("#monthlyUncategorized");
 const monthlyVerified = document.querySelector("#monthlyVerified");
+const addMemoButton = document.querySelector("#addMemoButton");
+const markBusinessExpenseButton = document.querySelector("#markBusinessExpenseButton");
+const markInternalTransferButton = document.querySelector("#markInternalTransferButton");
+const downloadReceiptButton = document.querySelector("#downloadReceiptButton");
+const exportRowButton = document.querySelector("#exportRowButton");
+const txActionStatus = document.querySelector("#txActionStatus");
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -74,6 +87,7 @@ const MOBILE_WALLET_OPTIONS = [
   { id: "mobile-solflare", name: "Solflare", family: "solana" },
 ];
 const QUESTION_LOG_KEY = "txreceipts_question_logs_v1";
+const ACCOUNTING_OVERRIDES_KEY = "txreceipts_accounting_overrides_v1";
 const AI_ALLOWED_INTENTS = new Set(["WALLET_SUMMARY", "MONTHLY_SPENDING", "WEEKLY_FEES", "ACCOUNTANT_SUMMARY", "EXPLAIN_TRANSACTION", "UNCATEGORIZED", "DAPP_USAGE", "TOKEN_TRANSFERS"]);
 const DETERMINISTIC_INTENTS = new Set([
   "WALLET_SUMMARY",
@@ -81,6 +95,11 @@ const DETERMINISTIC_INTENTS = new Set([
   "RECENT_TRANSACTION_FEES",
   "NATIVE_ASSET_FLOW",
   "MONTHLY_NATIVE_SENT",
+  "BUSINESS_EXPENSE",
+  "APP_FEES",
+  "PROTOCOL_FEES",
+  "SUBSCRIPTIONS",
+  "LARGEST_EXPENSES",
   "INCOME_EXPENSE",
   "MONTHLY_SPENDING",
   "DAPP_USAGE",
@@ -205,10 +224,49 @@ function setCreditStatus(message, tone = "neutral") {
   creditStatus.dataset.tone = tone;
 }
 
+function setTxActionStatus(message, tone = "neutral") {
+  if (!txActionStatus) return;
+  txActionStatus.textContent = message;
+  txActionStatus.dataset.tone = tone;
+}
+
 function setQaAnswer(message, source = "template") {
   if (!qaAnswer) return;
   qaAnswer.textContent = message;
   qaAnswer.dataset.source = source;
+}
+
+function readAccountingOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem(ACCOUNTING_OVERRIDES_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function writeAccountingOverrides(overrides) {
+  localStorage.setItem(ACCOUNTING_OVERRIDES_KEY, JSON.stringify(overrides));
+}
+
+function accountingOverrideKey(txHash) {
+  return `${currentNetwork().id}:${(connectedWallet || "wallet").toLowerCase()}:${String(txHash || "").toLowerCase()}`;
+}
+
+function getAccountingOverride(txHash) {
+  if (!txHash) return null;
+  const overrides = readAccountingOverrides();
+  return overrides[accountingOverrideKey(txHash)] || null;
+}
+
+function setAccountingOverride(txHash, patch) {
+  const overrides = readAccountingOverrides();
+  const key = accountingOverrideKey(txHash);
+  overrides[key] = {
+    ...(overrides[key] || {}),
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  writeAccountingOverrides(overrides);
 }
 
 function setQaLoading(isLoading) {
@@ -443,8 +501,12 @@ function normalizeSolanaTx(item) {
 }
 
 function accountingCategoryForItem(item) {
+  const override = getAccountingOverride(item.hash);
+  if (override?.category) return override.category;
   const text = `${item.title} ${item.subtitle} ${item.value}`.toLowerCase();
   if (/failed|error/.test(text)) return "uncategorized";
+  if (/app fee|service fee|platform fee/.test(text)) return "app_fee";
+  if (/protocol fee|bridge fee|router fee|lp fee/.test(text)) return "protocol_fee";
   if (/swap|exchange|router/.test(text)) return "swap";
   if (/subscription|renew/.test(text)) return "subscription";
   if (/creator|support|mint/.test(text)) return "creator_payment";
@@ -457,15 +519,18 @@ function accountingCategoryForItem(item) {
 }
 
 function accountingDirectionForItem(item) {
+  const override = getAccountingOverride(item.hash);
+  if (override?.direction) return override.direction;
   const category = accountingCategoryForItem(item);
   if (category === "swap") return "swap";
+  if (category === "internal_transfer") return "transfer";
   if (category === "gas_fee" || item.direction === "outgoing") return "expense";
   if (item.direction === "incoming") return "income";
-  if (category === "internal_transfer") return "transfer";
   return "unknown";
 }
 
 function accountingMetaForItem(item) {
+  const override = getAccountingOverride(item.hash);
   const category = accountingCategoryForItem(item);
   const direction = accountingDirectionForItem(item);
   const status = /failed|error/i.test(`${item.title} ${item.value}`) ? "failed" : "verified";
@@ -473,8 +538,53 @@ function accountingMetaForItem(item) {
     direction,
     category,
     status,
-    memo: `${category.replaceAll("_", " ")} candidate from loaded ${currentNetwork().name} row`,
+    memo: override?.memo || `${category.replaceAll("_", " ")} candidate from loaded ${currentNetwork().name} row`,
   };
+}
+
+function selectedLedgerItem() {
+  const txHash = txInput?.value.trim();
+  if (!txHash) return null;
+  return buildMonthlyReport().items.find(item => item.hash === txHash) || null;
+}
+
+function formatFeeText(item) {
+  if (currentNetwork().family === "solana") {
+    return item.fee ? `${lamportsToSol(BigInt(item.fee || 0))} SOL` : "Not available";
+  }
+  const feeWei = blockscoutFeeWei(item);
+  if (feeWei <= 0n) return "Not available";
+  return `${formatUnits(feeWei, ETH_DECIMALS, 8)} ${currentNetwork().nativeCurrency?.symbol || "ETH"}`;
+}
+
+function formatGasText(item) {
+  if (currentNetwork().family === "solana") return "Not available";
+  const gasUsed = item.gas_used || item.gasUsed || item.gas;
+  return gasUsed ? `${gasUsed}` : "Not available";
+}
+
+function exportLedgerRow(item) {
+  const payload = {
+    network: currentNetwork().id,
+    wallet: connectedWallet,
+    tx: item.hash,
+    timestamp: item.timestamp,
+    title: item.title,
+    subtitle: item.subtitle,
+    value: item.value,
+    gas: formatGasText(item),
+    fee: formatFeeText(item),
+    accounting: item.accounting,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${currentNetwork().id}-${safeDisplay(item.hash, 18)}-accounting-row.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function combinedHistoryItems() {
@@ -507,26 +617,43 @@ function renderHistory() {
 
   for (const item of items) {
     const row = document.createElement("div");
-    const text = document.createElement("span");
+    const summary = document.createElement("div");
     const title = document.createElement("strong");
     const meta = document.createElement("span");
-    const ledgerMeta = document.createElement("span");
-    const value = document.createElement("span");
+    const details = document.createElement("div");
     const receiptAction = document.createElement("button");
     const accounting = accountingMetaForItem(item);
     row.className = "history-item";
+    summary.className = "history-summary";
     title.textContent = safeDisplay(item.title);
     meta.className = "history-meta";
-    meta.textContent = `${safeDisplay(item.subtitle, 100)} - ${formatDate(item.timestamp)}`;
-    ledgerMeta.className = "history-ledger";
-    ledgerMeta.textContent = `${accounting.direction} - ${accounting.category} - ${accounting.status}`;
-    value.className = "history-value";
-    value.textContent = safeDisplay(item.value, 48);
+    meta.textContent = `${shortHash(item.hash)} - ${formatDate(item.timestamp)} - ${safeDisplay(item.value, 48)}`;
+    details.className = "history-columns";
+    [
+      ["Direction", accounting.direction],
+      ["Category", accounting.category],
+      ["Counterparty", safeDisplay(item.subtitle, 56)],
+      ["Gas", formatGasText(item)],
+      ["Fee", formatFeeText(item)],
+      ["Receipt", accounting.status],
+      ["Memo", accounting.memo],
+    ].forEach(([label, detailValue]) => {
+      const cell = document.createElement("div");
+      const cellLabel = document.createElement("span");
+      const cellValue = document.createElement("strong");
+      cell.className = "history-column";
+      cellLabel.className = "history-column-label";
+      cellLabel.textContent = label;
+      cellValue.className = "history-column-value";
+      cellValue.textContent = safeDisplay(detailValue, label === "Memo" ? 88 : 42);
+      cell.append(cellLabel, cellValue);
+      details.appendChild(cell);
+    });
     receiptAction.className = "history-receipt-button";
     receiptAction.type = "button";
     receiptAction.textContent = "Receipt";
-    text.append(title, meta, ledgerMeta);
-    row.append(text, value, receiptAction);
+    summary.append(title, meta, details);
+    row.append(summary, receiptAction);
     row.addEventListener("click", async () => {
       await selectTransaction(item.hash);
     });
@@ -543,6 +670,7 @@ function renderHistory() {
 async function selectTransaction(txHash) {
   txInput.value = txHash;
   setQaContext(`Selected ${currentNetwork().name} tx: ${shortHash(txHash)}`);
+  setTxActionStatus(`Selected ${currentNetwork().name} tx: ${shortHash(txHash)}. You can add memo, mark category, download receipt, or export the row.`, "neutral");
   setStatus("Transaction selected. Receipt context is being prepared.", "neutral");
   await generateReceipt(txHash, { download: false, quiet: true });
 }
@@ -1040,6 +1168,10 @@ function buildMonthlyReport() {
   const ledgerItems = items.map(item => ({ ...item, accounting: accountingMetaForItem(item) }));
   const outgoing = ledgerItems.filter(item => item.accounting.direction === "expense");
   const incoming = ledgerItems.filter(item => item.accounting.direction === "income");
+  const swaps = ledgerItems.filter(item => item.accounting.category === "swap");
+  const subscriptions = ledgerItems.filter(item => item.accounting.category === "subscription");
+  const appFees = ledgerItems.filter(item => item.accounting.category === "app_fee");
+  const protocolFees = ledgerItems.filter(item => item.accounting.category === "protocol_fee");
   const uncategorized = ledgerItems.filter(item => item.accounting.category === "uncategorized");
   const verified = ledgerItems.filter(item => item.accounting.status === "verified");
   const needsReview = ledgerItems.filter(item => item.accounting.direction === "unknown" || item.accounting.category === "uncategorized" || item.accounting.status === "failed");
@@ -1058,6 +1190,12 @@ function buildMonthlyReport() {
     incomingCount: incoming.length,
     tokenRecords: items.filter(item => item.kind === "token").length,
     needsReviewCount: needsReview.length,
+    swapCount: swaps.length,
+    subscriptionCount: subscriptions.length,
+    appFeeCount: appFees.length,
+    protocolFeeCount: protocolFees.length,
+    appFeeTotal: appFees.reduce((sum, item) => sum + parseAmount(item.value), 0),
+    protocolFeeTotal: protocolFees.reduce((sum, item) => sum + parseAmount(item.value), 0),
     weeklyFeeRecords: weeklyFees.records,
     weeklyFeeTotal: weeklyFees.total,
     weeklyFeeAsset: weeklyFees.asset,
@@ -1065,9 +1203,10 @@ function buildMonthlyReport() {
     verifiedReceiptCount: verified.length,
     totalIncomeRows: incoming.length,
     totalExpenseRows: outgoing.length,
-    appProtocolFeeStatus: "Review dapp metadata",
+    appProtocolFeeStatus: `${appFees.length} app / ${protocolFees.length} protocol rows`,
     estimatedOutgoingValue: outgoing.reduce((sum, item) => sum + parseAmount(item.value), 0),
     estimatedIncomeValue: incoming.reduce((sum, item) => sum + parseAmount(item.value), 0),
+    largestExpenseRows: [...outgoing].sort((left, right) => parseAmount(right.value) - parseAmount(left.value)).slice(0, 5),
     topActivity: top ? `${top[0]} (${top[1]} records)` : "Not available",
     items: ledgerItems,
   };
@@ -1190,6 +1329,8 @@ function updateAccountingPanel() {
   if (monthlyExpenses) monthlyExpenses.textContent = String(report.totalExpenseRows);
   if (monthlyGasFees) monthlyGasFees.textContent = `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`;
   if (monthlyAppFees) monthlyAppFees.textContent = report.appProtocolFeeStatus;
+  if (monthlySwaps) monthlySwaps.textContent = String(report.swapCount);
+  if (monthlySubscriptions) monthlySubscriptions.textContent = String(report.subscriptionCount);
   if (monthlyUncategorized) monthlyUncategorized.textContent = String(report.uncategorizedCount);
   if (monthlyVerified) monthlyVerified.textContent = String(report.verifiedReceiptCount);
 }
@@ -1269,12 +1410,16 @@ function detectIntent(question) {
     ["WALLET_SUMMARY", ["wallet summary", "summarize this wallet", "wallet report", "cuzdan", "cuzdani ozetle"]],
     ["WEEKLY_FEES", ["son 1 hafta", "son bir hafta", "1 haftada", "bir haftada", "last 7", "last week", "weekly fee", "weekly gas", "feeleri", "fee'leri"]],
     ["BUSINESS_EXPENSE", ["business expense", "isletme gideri", "mark as business"]],
+    ["APP_FEES", ["app fee", "app fees", "uygulama ucreti", "uygulama ücreti", "platform fee"]],
+    ["PROTOCOL_FEES", ["protocol fee", "protocol fees", "router fee", "bridge fee"]],
+    ["SUBSCRIPTIONS", ["subscription", "subscriptions", "abonelik", "abonelikler"]],
     ["INCOME_EXPENSE", ["income or expense", "gelir mi", "gider mi", "income", "expense"]],
     ["GAS_FEE", ["gas", "fee", "gaz", "ücret", "ucret", "komisyon", "masraf"]],
     ["TOKEN_TRANSFERS", ["token", "transfer", "swap", "ne aldım", "ne aldim", "ne gönderdim", "ne gonderdim"]],
     ["TRANSACTION_STATUS", ["başarılı", "basarili", "failed", "success", "status", "durum", "onaylandı", "onaylandi"]],
     ["VERIFY_RECEIPT", ["verified", "doğrulandı", "dogrulandi", "güvenli", "guvenli", "intent"]],
     ["MONTHLY_SPENDING", ["ay", "month", "monthly", "harcadım", "harcadim", "spend", "spent", "toplam"]],
+    ["LARGEST_EXPENSES", ["largest expenses", "largest expense", "biggest expenses", "en buyuk gider", "en büyük gider", "top expenses"]],
     ["DAPP_USAGE", ["dapp", "app", "uygulama", "most", "en çok", "en cok"]],
     ["UNCATEGORIZED", ["uncategorized", "kategori", "kategorisiz", "review", "inceleme"]],
     ["ACCOUNTANT_SUMMARY", ["accountant", "muhasebeci", "summary", "ozet", "rapor hazirla"]],
@@ -1321,6 +1466,55 @@ function templateAnswer(intent) {
       ["Last 7 days network fees", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
       ["Estimated outgoing numeric total", report.estimatedOutgoingValue.toFixed(6)],
     ], "loaded rows, expense direction counts, estimated outgoing numeric values, current network scope");
+  }
+  if (intent === "BUSINESS_EXPENSE") {
+    if (!selectedLedgerItem) {
+      return deterministicBlock("business expense", [
+        ["Status", "Select a transaction row or paste a tx hash first"],
+        ["Data availability", "Ledger row is not available yet"],
+      ], "selected ledger row category, direction, memo override, verification status");
+    }
+    const isBusinessExpense = selectedLedgerItem.accounting.direction === "expense" && selectedLedgerItem.accounting.category !== "internal_transfer";
+    return deterministicBlock("business expense", [
+      ["Transaction", shortHash(selectedLedgerItem.hash)],
+      ["Business expense", isBusinessExpense ? "Yes, expense candidate" : "No, needs review"],
+      ["Category", selectedLedgerItem.accounting.category],
+      ["Memo", selectedLedgerItem.accounting.memo],
+    ], "selected ledger row category, direction, memo override, verification status");
+  }
+  if (intent === "APP_FEES") {
+    const rows = report.items.filter(item => item.accounting.category === "app_fee");
+    return deterministicBlock("app fees", [
+      ["Scope", currentNetworkScopeText()],
+      ["App fee rows", rows.length],
+      ["Estimated app fee total", report.appFeeTotal.toFixed(6)],
+      ["Review list", rows.slice(0, 5).map(item => `${shortHash(item.hash)} ${item.value}`).join("; ") || "No app fee rows in loaded activity"],
+    ], "loaded rows classified as app_fee, numeric row values, current network scope");
+  }
+  if (intent === "PROTOCOL_FEES") {
+    const rows = report.items.filter(item => item.accounting.category === "protocol_fee");
+    return deterministicBlock("protocol fees", [
+      ["Scope", currentNetworkScopeText()],
+      ["Protocol fee rows", rows.length],
+      ["Estimated protocol fee total", report.protocolFeeTotal.toFixed(6)],
+      ["Review list", rows.slice(0, 5).map(item => `${shortHash(item.hash)} ${item.value}`).join("; ") || "No protocol fee rows in loaded activity"],
+    ], "loaded rows classified as protocol_fee, numeric row values, current network scope");
+  }
+  if (intent === "SUBSCRIPTIONS") {
+    const rows = report.items.filter(item => item.accounting.category === "subscription");
+    return deterministicBlock("subscription rows", [
+      ["Scope", currentNetworkScopeText()],
+      ["Subscription rows", rows.length],
+      ["Estimated subscription total", rows.reduce((sum, item) => sum + parseAmount(item.value), 0).toFixed(6)],
+      ["Review list", rows.slice(0, 5).map(item => `${formatDate(item.timestamp)} ${shortHash(item.hash)} ${item.value}`).join("; ") || "No subscription rows in loaded activity"],
+    ], "loaded rows classified as subscription, numeric row values, timestamps, tx hashes");
+  }
+  if (intent === "LARGEST_EXPENSES") {
+    return deterministicBlock("largest expenses", [
+      ["Scope", currentNetworkScopeText()],
+      ["Rows reviewed", report.totalExpenseRows],
+      ["Top expenses", report.largestExpenseRows.map(item => `${shortHash(item.hash)} ${item.value}`).join("; ") || "No expense rows in loaded activity"],
+    ], "loaded expense rows, numeric values, timestamps, tx hashes");
   }
   if (intent === "NATIVE_ASSET_FLOW") {
     const flow = parseNativeAssetFlow(questionText);
@@ -1447,6 +1641,15 @@ function templateAnswer(intent) {
       ["Review list", rows || "No uncategorized rows in the loaded activity"],
     ], "loaded rows with uncategorized category, timestamp, title, tx hash");
   }
+  if (questionText === "Export accountant summary.") {
+    return deterministicBlock("accountant export summary", [
+      ["Scope", currentNetworkScopeText()],
+      ["Wallet", report.wallet],
+      ["CSV export", "Use Download CSV"],
+      ["PDF export", "Use Print PDF"],
+      ["Ready rows", `${report.totalRecords} loaded / ${report.needsReviewCount} need review`],
+    ], "loaded records, income/expense counts, fee summaries, uncategorized count, verification count, export actions");
+  }
   if (intent === "ACCOUNTANT_SUMMARY") {
     return deterministicBlock("accountant summary", [
       ["Scope", currentNetworkScopeText()],
@@ -1456,6 +1659,8 @@ function templateAnswer(intent) {
       ["Expense rows", report.totalExpenseRows],
       ["Gas fees", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
       ["App/protocol fees", report.appProtocolFeeStatus],
+      ["Swaps", report.swapCount],
+      ["Subscriptions", report.subscriptionCount],
       ["Uncategorized rows", report.uncategorizedCount],
       ["Verified records", report.verifiedReceiptCount],
       ["Next step", "Review uncategorized rows, then export CSV or print PDF"],
@@ -1651,6 +1856,62 @@ function logQuestion(question, intent, source) {
   });
   localStorage.setItem(QUESTION_LOG_KEY, JSON.stringify(logs.slice(-100)));
 }
+
+addMemoButton?.addEventListener("click", () => {
+  const txHash = txInput?.value.trim();
+  if (!txHash) {
+    setTxActionStatus("Select a transaction before adding a memo.", "error");
+    return;
+  }
+  const currentMemo = getAccountingOverride(txHash)?.memo || "";
+  const memo = window.prompt("Add accounting memo", currentMemo);
+  if (memo === null) return;
+  setAccountingOverride(txHash, { memo: memo.trim() });
+  renderHistory();
+  setTxActionStatus(`Memo saved for ${shortHash(txHash)}.`, "success");
+});
+
+markBusinessExpenseButton?.addEventListener("click", () => {
+  const txHash = txInput?.value.trim();
+  if (!txHash) {
+    setTxActionStatus("Select a transaction before marking business expense.", "error");
+    return;
+  }
+  setAccountingOverride(txHash, { category: "purchase", direction: "expense", memo: "Marked as business expense" });
+  renderHistory();
+  setTxActionStatus(`Marked ${shortHash(txHash)} as business expense.`, "success");
+});
+
+markInternalTransferButton?.addEventListener("click", () => {
+  const txHash = txInput?.value.trim();
+  if (!txHash) {
+    setTxActionStatus("Select a transaction before marking internal transfer.", "error");
+    return;
+  }
+  setAccountingOverride(txHash, { category: "internal_transfer", direction: "transfer", memo: "Marked as internal transfer" });
+  renderHistory();
+  setTxActionStatus(`Marked ${shortHash(txHash)} as internal transfer.`, "success");
+});
+
+downloadReceiptButton?.addEventListener("click", async () => {
+  const txHash = txInput?.value.trim();
+  if (!txHash) {
+    setTxActionStatus("Select a transaction before downloading a receipt.", "error");
+    return;
+  }
+  await generateAndDownloadReceipt(txHash);
+  setTxActionStatus(`Receipt downloaded for ${shortHash(txHash)}.`, "success");
+});
+
+exportRowButton?.addEventListener("click", () => {
+  const item = selectedLedgerItem();
+  if (!item) {
+    setTxActionStatus("Select a loaded transaction row before exporting.", "error");
+    return;
+  }
+  exportLedgerRow(item);
+  setTxActionStatus(`Exported accounting row for ${shortHash(item.hash)}.`, "success");
+});
 
 function compactAccountingContext() {
   const report = buildMonthlyReport();

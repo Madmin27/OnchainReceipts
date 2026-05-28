@@ -1,12 +1,27 @@
 # TxReceipts
 
-Pre-accounting infrastructure for onchain wallets, payments, and dapps.
+Onchain pre-accounting for Base wallets.
 
-TxReceipts turns wallet activity into verified receipts, categorized ledgers, monthly summaries, and reconciliation-ready records. The long-term goal is not just to decode a transaction hash. It is to help users and accountants understand income, expenses, fees, token movements, and exception rows, then produce clean reports and short printable transaction notes when needed.
+TxReceipts is not a block explorer.
+
+TxReceipts is a pre-accounting workspace for onchain wallets. It turns wallet activity into categorized ledger rows, printable receipts, monthly reports, and export-ready accounting outputs. The goal is to help users, teams, dapps, and accountants understand income, expenses, swaps, gas fees, app fees, protocol fees, subscriptions, and uncategorized rows without reading explorer logs.
 
 ## Why this exists
 
 Block explorers are precise, but most people cannot turn raw logs, internal calls, router paths, gas fields, and token transfers into monthly bookkeeping. Wallet previews help before signing, but after the transaction users still need records that an accountant can review.
+
+## Product shape
+
+1. Hero: Onchain pre-accounting for Base wallets.
+2. Problem: Explorers are not accounting tools.
+3. Product: Wallet ledger plus receipts plus monthly reports.
+4. Demo: Connect wallet or paste tx hash.
+5. Ready questions: Gas, spend, income, top dapp, uncategorized, fees, subscriptions, largest expenses.
+6. AI layer: Optional assistant, template-first.
+7. Dapp API: Add business context to transactions.
+8. Security: Read-only, no approvals, no private keys.
+9. Exports: CSV, PDF, printable notes.
+10. Open-source and Base-first.
 
 TxReceipts is designed for:
 
@@ -45,18 +60,16 @@ V1 is intentionally narrow:
 
 - Base mainnet first, with experimental multi-network lookup in the demo
 - wallet-connected pre-accounting inbox
-- transaction timeline
+- wallet ledger with income, expense, swap, transfer, gas fee, app fee, protocol fee, subscription, and uncategorized rows
 - short printable transaction note from transaction hash
-- monthly summary
+- monthly summary and accountant-ready report
 - Excel-readable CSV wallet report export
 - print-to-PDF wallet accounting report
-- monthly wallet ledger with income, expense, gas, uncategorized, and verified record counts
-- zero-token ready-question assistant for wallet accounting questions
-- server-side low-cost AI fallback for unknown accounting questions
+- deterministic ready-question assistant for accounting questions
+- server-side AI fallback only when template answers do not fit
 - pre-accounting panel with selected-network review counts and export readiness
-- open accounting record and receipt schema
-- dapp intent schema and SDK draft
-- AI assistant plan for read-only Base wallet questions
+- open accounting receipt schema and dapp intent schema
+- read-only MCP plan for wallet analysis, not transaction execution
 
 V2 adds:
 
@@ -115,9 +128,9 @@ The current prototype uses a zero-token assistant pattern:
 
 - ready-question buttons for common wallet accounting questions;
 - Turkish and English keyword routing before any AI call;
-- template answers for gas fees, token movements, status, verification, monthly spend, and top activity;
+- template answers for gas fees, app fees, protocol fees, subscriptions, largest expenses, uncategorized rows, and export actions;
 - selected-network scope, so answers focus only on the connected network's loaded data;
-- local logging of unknown questions as future ready-question candidates;
+- local logging of AI questions as future ready-question candidates;
 - AI fallback preserved as a controlled server-side layer for questions that templates cannot answer.
 
 See [docs/ai-assistant.md](docs/ai-assistant.md).
@@ -181,10 +194,8 @@ See [docs/security-model.md](docs/security-model.md).
 
 MIT. See [LICENSE](LICENSE).
 
-## Temporary deployment note
+## Deployment note
 
-The web app and SDK are temporarily pointed at `https://txreceipts-api.evpc77.workers.dev` because `https://api.txreceipts.com.tr` has not fully settled yet.
+The web app prefers `https://api.txreceipts.com.tr` and keeps a browser-side fallback to `https://txreceipts-api.evpc77.workers.dev` for resilience while DNS and mobile wallet routing settle.
 
-When `api.txreceipts.com.tr` is stable again, switch the frontend and SDK defaults back to that custom API hostname.
-
-Keep this in mind before changing AI providers or fallback endpoints so the temporary Workers URL is not mistaken for the long-term production API domain.
+If you integrate with the SDK or scripts, set `baseUrl` explicitly when you need to pin a specific endpoint during rollout.
