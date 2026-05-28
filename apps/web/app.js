@@ -7,6 +7,8 @@ const connectWalletButton = document.querySelector("#connectWallet");
 const walletLabel = document.querySelector("#walletLabel");
 const networkSelect = document.querySelector("#networkSelect");
 const walletProviderSelect = document.querySelector("#walletProviderSelect");
+const targetAddressForm = document.querySelector("#targetAddressForm");
+const targetAddressInput = document.querySelector("#targetAddressInput");
 const loadMoreHistoryButton = document.querySelector("#loadMoreHistory");
 const historyStatus = document.querySelector("#historyStatus");
 const historyList = document.querySelector("#historyList");
@@ -88,6 +90,7 @@ const MOBILE_WALLET_OPTIONS = [
 ];
 const QUESTION_LOG_KEY = "txreceipts_question_logs_v1";
 const ACCOUNTING_OVERRIDES_KEY = "txreceipts_accounting_overrides_v1";
+const TARGET_ADDRESS_KEY = "txreceipts_target_address_v1";
 const AI_ALLOWED_INTENTS = new Set(["WALLET_SUMMARY", "MONTHLY_SPENDING", "WEEKLY_FEES", "ACCOUNTANT_SUMMARY", "EXPLAIN_TRANSACTION", "UNCATEGORIZED", "DAPP_USAGE", "TOKEN_TRANSFERS"]);
 const DETERMINISTIC_INTENTS = new Set([
   "WALLET_SUMMARY",
@@ -123,6 +126,7 @@ const knownTokens = {
 
 let connectedWallet = null;
 let walletProvider = null;
+let targetAddress = null;
 let activeHistoryTab = "all";
 let visibleHistoryLimit = PAGE_SIZE;
 let historyState = {
@@ -248,8 +252,53 @@ function writeAccountingOverrides(overrides) {
   localStorage.setItem(ACCOUNTING_OVERRIDES_KEY, JSON.stringify(overrides));
 }
 
+function currentTargetAddress() {
+  return targetAddress || connectedWallet || null;
+}
+
+function readTargetAddress() {
+  return localStorage.getItem(TARGET_ADDRESS_KEY) || "";
+}
+
+function writeTargetAddress(value) {
+  if (!value) {
+    localStorage.removeItem(TARGET_ADDRESS_KEY);
+    return;
+  }
+  localStorage.setItem(TARGET_ADDRESS_KEY, value);
+}
+
+function validAddressForCurrentNetwork(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  if (currentNetwork().family === "solana") return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(text);
+  return /^0x[a-fA-F0-9]{40}$/.test(text);
+}
+
+function addressPlaceholder() {
+  return currentNetwork().family === "solana" ? "Solana address" : "0x wallet address";
+}
+
+function syncTargetAddressInput() {
+  if (!targetAddressInput) return;
+  targetAddressInput.placeholder = addressPlaceholder();
+  targetAddressInput.value = currentTargetAddress() || "";
+}
+
+function setTargetAddress(address, { load = true, persist = true } = {}) {
+  targetAddress = address ? String(address).trim() : null;
+  if (persist) writeTargetAddress(targetAddress);
+  syncTargetAddressInput();
+  if (!load) return;
+  if (currentTargetAddress() && validAddressForCurrentNetwork(currentTargetAddress())) {
+    loadHistory();
+    return;
+  }
+  resetHistory();
+}
+
 function accountingOverrideKey(txHash) {
-  return `${currentNetwork().id}:${(connectedWallet || "wallet").toLowerCase()}:${String(txHash || "").toLowerCase()}`;
+  return `${currentNetwork().id}:${(currentTargetAddress() || "wallet").toLowerCase()}:${String(txHash || "").toLowerCase()}`;
 }
 
 function getAccountingOverride(txHash) {
@@ -414,10 +463,11 @@ function pageParamsToQuery(params) {
 }
 
 function normalizeTx(item) {
+  const wallet = currentTargetAddress();
   const from = item.from?.hash || "";
   const to = item.to?.hash || "";
-  const isIncoming = sameAddress(to, connectedWallet) && !sameAddress(from, connectedWallet);
-  const isOutgoing = sameAddress(from, connectedWallet);
+  const isIncoming = sameAddress(to, wallet) && !sameAddress(from, wallet);
+  const isOutgoing = sameAddress(from, wallet);
   const method = item.method || item.decoded_input?.method_call?.split("(")[0] || "transaction";
   return {
     kind: "tx",
@@ -437,6 +487,7 @@ function normalizeTx(item) {
 }
 
 function normalizeTransfer(item) {
+  const wallet = currentTargetAddress();
   const from = item.from?.hash || "";
   const to = item.to?.hash || "";
   const tokenType = item.token_type || item.token?.type || "token";
@@ -446,8 +497,8 @@ function normalizeTransfer(item) {
   const amount = isNft
     ? `#${item.total?.token_id || "token"}`
     : `${formatDecimalUnits(item.total?.value || "0", decimals)} ${symbol}`;
-  const isIncoming = sameAddress(to, connectedWallet) && !sameAddress(from, connectedWallet);
-  const isOutgoing = sameAddress(from, connectedWallet);
+  const isIncoming = sameAddress(to, wallet) && !sameAddress(from, wallet);
+  const isOutgoing = sameAddress(from, wallet);
 
   return {
     kind: isNft ? "nft" : "token",
@@ -493,7 +544,7 @@ function normalizeSolanaTx(item) {
     kind: "tx",
     hash: safeDisplay(item.signature, 96),
     title: failed ? "Solana transaction failed" : "Solana transaction",
-    subtitle: `${shortHash(connectedWallet)} - slot ${item.slot || "unknown"}`,
+    subtitle: `${shortHash(currentTargetAddress() || "wallet")} - slot ${item.slot || "unknown"}`,
     timestamp: item.blockTime ? new Date(item.blockTime * 1000).toISOString() : null,
     value: failed ? "failed" : "ok",
     direction: "other",
@@ -566,7 +617,7 @@ function formatGasText(item) {
 function exportLedgerRow(item) {
   const payload = {
     network: currentNetwork().id,
-    wallet: connectedWallet,
+    wallet: currentTargetAddress(),
     tx: item.hash,
     timestamp: item.timestamp,
     title: item.title,
@@ -597,8 +648,8 @@ function renderHistory() {
   historyList.textContent = "";
   updateAccountingPanel();
 
-  if (!connectedWallet) {
-    setHistoryStatus(`Connect a wallet to load the latest ${currentNetwork().name} activity automatically.`);
+  if (!currentTargetAddress()) {
+    setHistoryStatus(`Connect a wallet or enter an address to load the latest ${currentNetwork().name} activity.`);
     loadMoreHistoryButton.hidden = true;
     return;
   }
@@ -676,8 +727,9 @@ async function selectTransaction(txHash) {
 }
 
 async function loadHistory({ more = false } = {}) {
-  if (!connectedWallet) {
-    setHistoryStatus("Connect a wallet first.", "error");
+  const wallet = currentTargetAddress();
+  if (!wallet) {
+    setHistoryStatus("Connect a wallet or enter an address first.", "error");
     return;
   }
 
@@ -693,8 +745,8 @@ async function loadHistory({ more = false } = {}) {
     const txParams = more ? pageParamsToQuery(historyState.txNext) : null;
     const transferParams = more ? pageParamsToQuery(historyState.transferNext) : null;
     const [txPayload, transferPayload] = await Promise.all([
-      fetchJson(buildUrl(`/api/v2/addresses/${connectedWallet}/transactions`, txParams)),
-      fetchJson(buildUrl(`/api/v2/addresses/${connectedWallet}/token-transfers`, transferParams)),
+      fetchJson(buildUrl(`/api/v2/addresses/${wallet}/transactions`, txParams)),
+      fetchJson(buildUrl(`/api/v2/addresses/${wallet}/token-transfers`, transferParams)),
     ]);
 
     historyState.transactions = more
@@ -716,6 +768,11 @@ async function loadHistory({ more = false } = {}) {
 }
 
 async function loadSolanaHistory({ more = false } = {}) {
+  const wallet = currentTargetAddress();
+  if (!wallet) {
+    setHistoryStatus("Connect a wallet or enter an address first.", "error");
+    return;
+  }
   if (!more) {
     visibleHistoryLimit = PAGE_SIZE;
   }
@@ -725,7 +782,7 @@ async function loadSolanaHistory({ more = false } = {}) {
   let hasMore = false;
   for (let attempt = 0; attempt < SOLANA_HISTORY_PAGE_ATTEMPTS && signatures.length < PAGE_SIZE; attempt += 1) {
     const limit = PAGE_SIZE - signatures.length;
-    const params = [connectedWallet, { limit, ...(before ? { before } : {}) }];
+    const params = [wallet, { limit, ...(before ? { before } : {}) }];
     const page = await solanaRpc("getSignaturesForAddress", params);
     signatures.push(...page);
     before = page.at(-1)?.signature;
@@ -1133,15 +1190,21 @@ function setWallet(address, chainId) {
   connectedWallet = address || null;
   const chainLabel = currentNetwork().family === "solana" ? currentNetwork().name : `chain ${parseInt(chainId || "0x0", 16)}`;
   walletLabel.textContent = address ? `${shortHash(address)} - ${chainLabel}` : "Not connected";
-  connectWalletButton.textContent = address ? "Wallet connected" : "Connect wallet";
+  connectWalletButton.textContent = address ? "Disconnect" : "Connect wallet";
   if (address && currentNetwork().family === "evm" && billingWalletInput && !billingWalletInput.value.trim()) {
     billingWalletInput.value = address;
   }
   if (connectedWallet) {
+    setTargetAddress(connectedWallet, { load: false, persist: true });
     loadHistory();
   } else {
     walletProvider = null;
-    resetHistory();
+    syncTargetAddressInput();
+    if (currentTargetAddress() && validAddressForCurrentNetwork(currentTargetAddress())) {
+      loadHistory();
+    } else {
+      resetHistory();
+    }
   }
 }
 
@@ -1210,7 +1273,7 @@ function buildMonthlyReport() {
   const top = [...byTitle.entries()].sort((a, b) => b[1] - a[1])[0];
   return {
     network: currentNetwork().name,
-    wallet: connectedWallet || "Not connected",
+    wallet: currentTargetAddress() || "Not selected",
     totalRecords: items.length,
     outgoingCount: outgoing.length,
     incomingCount: incoming.length,
@@ -1332,9 +1395,9 @@ function buildWeeklyFeeSummary() {
 function updateAccountingPanel() {
   const report = buildMonthlyReport();
   if (accountingScope) {
-    accountingScope.textContent = connectedWallet
-      ? `${currentNetwork().name} only. Wallet ${shortHash(connectedWallet)}. ${report.totalRecords} loaded records ready for review.`
-      : `Connect a wallet to prepare a ${currentNetwork().name} report.`;
+    accountingScope.textContent = currentTargetAddress()
+      ? `${currentNetwork().name} only. Wallet ${shortHash(currentTargetAddress())}. ${report.totalRecords} loaded records ready for review.`
+      : `Connect a wallet or use an address to prepare a ${currentNetwork().name} report.`;
   }
   if (accountingOutgoing) accountingOutgoing.textContent = String(report.outgoingCount);
   if (accountingIncoming) accountingIncoming.textContent = String(report.incomingCount);
@@ -1344,7 +1407,7 @@ function updateAccountingPanel() {
   if (accountingExceptions) {
     accountingExceptions.textContent = report.totalRecords
       ? `Exceptions: ${report.needsReviewCount} uncategorized or failed rows`
-      : "Exceptions: connect wallet";
+      : "Exceptions: connect wallet or use address";
   }
   if (accountingExports) {
     accountingExports.textContent = report.totalRecords
@@ -1946,7 +2009,7 @@ function compactAccountingContext() {
   return {
     network: currentNetwork().name,
     scope: currentNetworkScopeText(),
-    wallet: connectedWallet || null,
+    wallet: currentTargetAddress() || null,
     selectedTx,
     report: {
       totalRecords: report.totalRecords,
@@ -2036,12 +2099,12 @@ async function answerQuestion(question, options = {}) {
 async function downloadMonthlyCsv() {
   const report = buildMonthlyReport();
   const csvReceiptIds = await Promise.all(report.items.map(async item => {
-    if (!item.hash || !connectedWallet) return "";
+    if (!item.hash || !currentTargetAddress()) return "";
     return generateReceiptId({
       chainId: currentNetwork().decimalChainId || currentNetwork().chainId || currentNetwork().id,
       network: currentNetwork().name,
       txHash: item.hash,
-      ownerWallet: connectedWallet,
+      ownerWallet: currentTargetAddress(),
     });
   }));
   const rows = [
@@ -2256,6 +2319,18 @@ connectWalletButton.addEventListener("click", async () => {
   }
 });
 
+targetAddressForm?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const address = targetAddressInput?.value.trim() || "";
+  if (!validAddressForCurrentNetwork(address)) {
+    setHistoryStatus(currentNetwork().family === "solana" ? "Enter a valid Solana address." : "Enter a valid 0x wallet address.", "error");
+    return;
+  }
+  setTargetAddress(address, { load: false, persist: true });
+  setStatus(`Using ${shortHash(address)} on ${currentNetwork().name}.`, "success");
+  await loadHistory();
+});
+
 loadMoreHistoryButton.addEventListener("click", () => {
   const allItems = allHistoryItems();
   if (visibleHistoryLimit < allItems.length) {
@@ -2278,8 +2353,12 @@ historyTabs.forEach(tabButton => {
 networkSelect.addEventListener("change", async () => {
   populateWalletProviders({ preserveSelection: false });
   syncWalletToSelectedNetwork();
+  syncTargetAddressInput();
   resetHistory();
-  txStatus.textContent = `Selected ${currentNetwork().name}. Paste a tx hash or connect a wallet.`;
+  txStatus.textContent = `Selected ${currentNetwork().name}. Paste a tx hash, connect a wallet, or use an address.`;
+  if (currentTargetAddress() && validAddressForCurrentNetwork(currentTargetAddress())) {
+    loadHistory();
+  }
   if (!connectedWallet || !walletProvider) return;
   if (currentNetwork().family === "solana") {
     loadHistory();
@@ -2698,5 +2777,11 @@ async function downloadReceiptPng() {
 
 populateNetworks();
 populateWalletProviders({ preserveSelection: false });
+setTargetAddress(readTargetAddress(), { load: false, persist: false });
 setTimeout(() => populateWalletProviders(), 300);
-resetHistory();
+syncTargetAddressInput();
+if (currentTargetAddress() && validAddressForCurrentNetwork(currentTargetAddress())) {
+  loadHistory();
+} else {
+  resetHistory();
+}

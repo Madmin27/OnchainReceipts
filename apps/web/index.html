@@ -159,6 +159,20 @@
             <label for="walletProviderSelect">Wallet</label>
             <select id="walletProviderSelect"></select>
           </div>
+          <div>
+            <label for="targetAddressInput">Use address</label>
+            <form id="targetAddressForm" class="wallet-address-row">
+              <input
+                id="targetAddressInput"
+                name="targetAddress"
+                inputmode="text"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="0x..."
+              />
+              <button class="button secondary" type="submit">Use address</button>
+            </form>
+          </div>
           <button id="connectWallet" class="button primary wallet-button" type="button">
             Connect wallet
           </button>

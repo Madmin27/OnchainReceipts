@@ -472,7 +472,7 @@ dd {
   color: var(--paper);
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(0, 1fr) 180px 220px minmax(170px, auto);
+  grid-template-columns: minmax(0, 1fr) 180px 220px minmax(280px, 1.1fr) minmax(170px, auto);
   margin-bottom: 16px;
   padding: 18px;
 }
@@ -503,6 +503,27 @@ dd {
   min-height: 46px;
   padding: 10px 12px;
   width: 100%;
+}
+
+.wallet-address-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.wallet-address-row input {
+  background: var(--field);
+  border: 1px solid #ded6cc;
+  border-radius: 7px;
+  color: #111412;
+  font: inherit;
+  min-height: 46px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.wallet-address-row .button {
+  min-height: 46px;
 }
 
 .wallet-button {
