@@ -147,19 +147,27 @@
           </div>
         </div>
         <div class="wallet-panel">
-          <div>
-            <span class="mini-label">Wallet</span>
-            <strong id="walletLabel">Not connected</strong>
+          <div class="wallet-panel-top">
+            <div class="wallet-summary">
+              <span class="mini-label">Wallet</span>
+              <strong id="walletLabel">Not connected</strong>
+            </div>
+            <div>
+              <label for="networkSelect">Network</label>
+              <select id="networkSelect"></select>
+            </div>
+            <div>
+              <label for="walletProviderSelect">Wallet</label>
+              <select id="walletProviderSelect"></select>
+            </div>
+            <button id="connectWallet" class="button primary wallet-button" type="button">
+              Connect wallet
+            </button>
           </div>
-          <div>
-            <label for="networkSelect">Network</label>
-            <select id="networkSelect"></select>
+          <div class="wallet-panel-divider" aria-hidden="true">
+            <span>Or</span>
           </div>
-          <div>
-            <label for="walletProviderSelect">Wallet</label>
-            <select id="walletProviderSelect"></select>
-          </div>
-          <div>
+          <div class="wallet-panel-bottom">
             <label for="targetAddressInput">Use address</label>
             <form id="targetAddressForm" class="wallet-address-row">
               <input
@@ -173,9 +181,6 @@
               <button class="button secondary" type="submit">Use address</button>
             </form>
           </div>
-          <button id="connectWallet" class="button primary wallet-button" type="button">
-            Connect wallet
-          </button>
         </div>
         <section class="credit-panel" aria-label="API request balance and Base top-up">
           <div>

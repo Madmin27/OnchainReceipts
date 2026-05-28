@@ -465,16 +465,56 @@ dd {
 }
 
 .wallet-panel {
-  align-items: center;
+  align-items: stretch;
   background: #1c1917;
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--paper);
   display: grid;
-  gap: 18px;
-  grid-template-columns: minmax(0, 1fr) 180px 220px minmax(280px, 1.1fr) minmax(170px, auto);
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
   margin-bottom: 16px;
   padding: 18px;
+}
+
+.wallet-panel-top {
+  align-items: end;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(220px, 1fr) 180px 220px auto;
+}
+
+.wallet-summary {
+  min-width: 0;
+}
+
+.wallet-panel-bottom {
+  display: grid;
+  gap: 6px;
+}
+
+.wallet-panel-divider {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.wallet-panel-divider::before,
+.wallet-panel-divider::after {
+  background: rgba(255, 255, 255, 0.12);
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+
+.wallet-panel-divider span {
+  color: var(--blue-soft);
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .wallet-panel .mini-label,
@@ -509,6 +549,7 @@ dd {
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
+  max-width: 620px;
 }
 
 .wallet-address-row input {
@@ -524,11 +565,14 @@ dd {
 
 .wallet-address-row .button {
   min-height: 46px;
+  min-width: 144px;
 }
 
 .wallet-button {
   align-self: end;
-  width: 100%;
+  min-height: 46px;
+  padding: 10px 18px;
+  width: auto;
 }
 
 .tx-form {
@@ -1095,8 +1139,19 @@ dd {
   .accounting-panel,
   .ledger-metrics,
   .wallet-panel,
+  .wallet-panel-top,
   .history-item {
     grid-template-columns: 1fr;
+  }
+
+  .wallet-address-row {
+    grid-template-columns: 1fr;
+    max-width: none;
+  }
+
+  .wallet-button,
+  .wallet-address-row .button {
+    width: 100%;
   }
 
   .history-grid-head {
