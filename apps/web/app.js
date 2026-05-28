@@ -66,6 +66,13 @@ const MAX_QR_BYTES = 80_000;
 const RECEIPT_WIDTH = 1720;
 const RECEIPT_HEIGHT = 1900;
 const API_BASE_URLS = ["https://api.txreceipts.com.tr", "https://txreceipts-api.evpc77.workers.dev"];
+const MOBILE_WALLET_OPTIONS = [
+  { id: "mobile-metamask", name: "MetaMask", family: "evm" },
+  { id: "mobile-coinbase", name: "Coinbase Wallet", family: "evm" },
+  { id: "mobile-trust", name: "Trust Wallet", family: "evm" },
+  { id: "mobile-phantom", name: "Phantom", family: "solana" },
+  { id: "mobile-solflare", name: "Solflare", family: "solana" },
+];
 const QUESTION_LOG_KEY = "txreceipts_question_logs_v1";
 const AI_ALLOWED_INTENTS = new Set(["WALLET_SUMMARY", "MONTHLY_SPENDING", "WEEKLY_FEES", "ACCOUNTANT_SUMMARY", "EXPLAIN_TRANSACTION", "UNCATEGORIZED", "DAPP_USAGE", "TOKEN_TRANSFERS"]);
 const DETERMINISTIC_INTENTS = new Set([
@@ -127,6 +134,29 @@ function currentNetwork() {
   return networks.find(network => network.id === networkSelect.value) || networks[0];
 }
 
+function isMobileBrowser() {
+  return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || "");
+}
+
+function mobileWalletOption(id) {
+  return MOBILE_WALLET_OPTIONS.find(option => option.id === id) || null;
+}
+
+function currentDappUrl() {
+  return window.location.href;
+}
+
+function mobileWalletLaunchUrl(id) {
+  const currentUrl = currentDappUrl();
+  const strippedUrl = currentUrl.replace(/^https?:\/\//i, "");
+  if (id === "mobile-metamask") return `https://metamask.app.link/dapp/${strippedUrl}`;
+  if (id === "mobile-coinbase") return `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(currentUrl)}`;
+  if (id === "mobile-trust") return `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(currentUrl)}`;
+  if (id === "mobile-phantom") return `https://phantom.app/ul/browse/${encodeURIComponent(currentUrl)}?ref=${encodeURIComponent(window.location.origin)}`;
+  if (id === "mobile-solflare") return `https://solflare.com/ul/v1/browse/${encodeURIComponent(currentUrl)}?ref=${encodeURIComponent(window.location.origin)}`;
+  return null;
+}
+
 function networkByFamily(family) {
   return networks.find(network => network.family === family) || networks[0];
 }
@@ -138,11 +168,21 @@ function networkRpcUrls(network) {
 }
 
 function selectedWalletInfo() {
-  return window.TxReceiptsWallets?.getInfo(walletProviderSelect.value) || null;
+  return window.TxReceiptsWallets?.getInfo(walletProviderSelect.value)
+    || mobileWalletOption(walletProviderSelect.value)
+    || null;
 }
 
 function walletOptions() {
-  return window.TxReceiptsWallets?.list() || [];
+  const discovered = window.TxReceiptsWallets?.list() || [];
+  if (!isMobileBrowser()) return discovered;
+  const merged = [...discovered];
+  MOBILE_WALLET_OPTIONS.forEach(option => {
+    if (!merged.some(item => item.id === option.id || (item.family === option.family && normalizeWalletLabel(item.name) === normalizeWalletLabel(option.name)))) {
+      merged.push(option);
+    }
+  });
+  return merged;
 }
 
 function normalizeWalletLabel(value) {
@@ -1792,7 +1832,9 @@ function populateWalletProviders({ preserveSelection = true } = {}) {
   compatible.forEach(wallet => {
     const option = document.createElement("option");
     option.value = wallet.id;
-    option.textContent = `${wallet.name} (${wallet.family})`;
+    option.textContent = mobileWalletOption(wallet.id)
+      ? `${wallet.name} (${wallet.family}, open app)`
+      : `${wallet.name} (${wallet.family})`;
     walletProviderSelect.appendChild(option);
   });
   const previousStillValid = preserveSelection && compatible.some(wallet => wallet.id === previousValue);
@@ -1874,7 +1916,13 @@ connectWalletButton.addEventListener("click", async () => {
     const provider = selectedProvider();
     const info = selectedWalletInfo();
     if (!provider) {
-      setStatus("No injected wallet found. Install MetaMask or a compatible wallet.", "error");
+      const launchUrl = info ? mobileWalletLaunchUrl(info.id) : null;
+      if (launchUrl) {
+        setStatus(`Opening ${info.name}. Continue inside the wallet app to connect.`, "neutral");
+        window.location.href = launchUrl;
+        return;
+      }
+      setStatus("No injected wallet found. Open this page inside MetaMask, Coinbase Wallet, Trust Wallet, Phantom, or another compatible wallet.", "error");
       return;
     }
 
