@@ -20,8 +20,21 @@ const topUpAmountInput = document.querySelector("#topUpAmountInput");
 const billingWalletInput = document.querySelector("#billingWalletInput");
 const createTopUpButton = document.querySelector("#createTopUp");
 const topUpInstructions = document.querySelector("#topUpInstructions");
+const topUpStatusBadge = document.querySelector("#topUpStatusBadge");
+const topUpStatusMessage = document.querySelector("#topUpStatusMessage");
+const topUpStatusMeta = document.querySelector("#topUpStatusMeta");
+const topUpStatusPaymentId = document.querySelector("#topUpStatusPaymentId");
+const topUpStatusAmount = document.querySelector("#topUpStatusAmount");
+const topUpStatusWallet = document.querySelector("#topUpStatusWallet");
+const topUpStatusTxHash = document.querySelector("#topUpStatusTxHash");
+const topUpHistoryStatus = document.querySelector("#topUpHistoryStatus");
+const topUpHistoryBody = document.querySelector("#topUpHistoryBody");
+
+const TOPUP_STATE_KEY = "txreceipts_api_topup_state_v1";
+const TOPUP_POLL_INTERVAL_MS = 15000;
 
 let connectedWallet = "";
+let activeTopUpPoll = null;
 
 function setWalletStatus(message, tone = "neutral") {
   if (!apiWalletStatus) return;
@@ -33,6 +46,12 @@ function setCreditStatus(message, tone = "neutral") {
   if (!creditStatus) return;
   creditStatus.textContent = message;
   creditStatus.dataset.tone = tone;
+}
+
+function setTopUpHistoryStatus(message, tone = "neutral") {
+  if (!topUpHistoryStatus) return;
+  topUpHistoryStatus.textContent = message;
+  topUpHistoryStatus.dataset.tone = tone;
 }
 
 async function apiFetch(path, options = {}) {
@@ -117,6 +136,146 @@ function requireApiAuthInputs() {
   return inputs;
 }
 
+function readTopUpState() {
+  try {
+    return JSON.parse(localStorage.getItem(TOPUP_STATE_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function writeTopUpState(state) {
+  localStorage.setItem(TOPUP_STATE_KEY, JSON.stringify(state));
+}
+
+function clearTopUpPolling() {
+  if (!activeTopUpPoll) return;
+  clearInterval(activeTopUpPoll);
+  activeTopUpPoll = null;
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function truncateMiddle(value, start = 8, end = 6) {
+  const text = String(value || "");
+  if (!text) return "-";
+  if (text.length <= start + end + 3) return text;
+  return `${text.slice(0, start)}...${text.slice(-end)}`;
+}
+
+function renderCurrentTopUp(topUp) {
+  if (!topUpStatusBadge || !topUpStatusMessage) return;
+  if (!topUp) {
+    topUpStatusBadge.textContent = "No active payment";
+    topUpStatusBadge.dataset.status = "idle";
+    topUpStatusMessage.textContent = "Create a top-up intent to start payment tracking.";
+    topUpStatusMessage.dataset.tone = "neutral";
+    if (topUpStatusMeta) topUpStatusMeta.hidden = true;
+    return;
+  }
+  const status = String(topUp.status || "waiting_for_payment");
+  topUpStatusBadge.textContent = status.replaceAll("_", " ");
+  topUpStatusBadge.dataset.status = status;
+  const statusTone = status === "credited" ? "success" : status === "rejected" || status === "expired" ? "error" : "neutral";
+  topUpStatusMessage.textContent = status === "credited"
+    ? `Payment ${topUp.paymentId} was credited. Paid requests were added to the project balance.`
+    : status === "expired"
+      ? `Payment intent ${topUp.paymentId} expired before a matching transfer was confirmed.`
+      : `Waiting for ${topUp.amountUsdc} USDC from ${truncateMiddle(topUp.billingWallet)} to ${truncateMiddle(topUp.receivingAddress)}.`;
+  topUpStatusMessage.dataset.tone = statusTone;
+  if (topUpStatusMeta) topUpStatusMeta.hidden = false;
+  if (topUpStatusPaymentId) topUpStatusPaymentId.textContent = topUp.paymentId || "-";
+  if (topUpStatusAmount) topUpStatusAmount.textContent = topUp.amountUsdc ? `${topUp.amountUsdc} USDC` : "-";
+  if (topUpStatusWallet) topUpStatusWallet.textContent = truncateMiddle(topUp.billingWallet);
+  if (topUpStatusTxHash) topUpStatusTxHash.textContent = truncateMiddle(topUp.txHash || "-");
+}
+
+function renderTopUpHistory(items) {
+  if (!topUpHistoryBody) return;
+  const rows = Array.isArray(items) ? items : [];
+  if (!rows.length) {
+    topUpHistoryBody.innerHTML = "<tr><td colspan=\"6\">No top-ups yet for this project.</td></tr>";
+    return;
+  }
+  topUpHistoryBody.innerHTML = rows.map(item => `
+    <tr>
+      <td>${item.paymentId}</td>
+      <td><span class="status-pill api-status-pill" data-status="${item.status}">${String(item.status || "waiting_for_payment").replaceAll("_", " ")}</span></td>
+      <td>${item.amountUsdc} USDC</td>
+      <td>${truncateMiddle(item.billingWallet)}</td>
+      <td>${formatDateTime(item.creditedAt || item.createdAt || item.expiresAt)}</td>
+      <td>${item.txHash ? truncateMiddle(item.txHash) : "-"}</td>
+    </tr>
+  `).join("");
+}
+
+async function loadTopUpHistory(inputs, options = {}) {
+  setTopUpHistoryStatus(options.silent ? topUpHistoryStatus.textContent : "Loading top-up history...");
+  try {
+    const response = await apiFetch("/v1/credits/topups", {
+      headers: { Authorization: `Bearer ${inputs.apiKey}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `API returned HTTP ${response.status}`);
+    renderTopUpHistory(payload.items || []);
+    setTopUpHistoryStatus(`Loaded ${Number((payload.items || []).length)} recent top-ups.`, "success");
+    return payload.items || [];
+  } catch (error) {
+    renderTopUpHistory([]);
+    setTopUpHistoryStatus(error instanceof Error ? error.message : "Could not load top-up history.", "error");
+    return [];
+  }
+}
+
+async function loadTopUpStatus(inputs, paymentId, options = {}) {
+  if (!paymentId) {
+    renderCurrentTopUp(null);
+    return null;
+  }
+  try {
+    const response = await apiFetch(`/v1/credits/topups/${encodeURIComponent(paymentId)}`, {
+      headers: { Authorization: `Bearer ${inputs.apiKey}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `API returned HTTP ${response.status}`);
+    renderCurrentTopUp(payload);
+    if (options.persist !== false) writeTopUpState({ projectId: inputs.projectId, paymentId: payload.paymentId });
+    if (payload.status !== "waiting_for_payment") clearTopUpPolling();
+    return payload;
+  } catch (error) {
+    renderCurrentTopUp(null);
+    if (!options.silent) {
+      setTopUpHistoryStatus(error instanceof Error ? error.message : "Could not load payment status.", "error");
+    }
+    clearTopUpPolling();
+    return null;
+  }
+}
+
+function startTopUpPolling(inputs, paymentId) {
+  clearTopUpPolling();
+  if (!paymentId) return;
+  activeTopUpPoll = window.setInterval(async () => {
+    const topUp = await loadTopUpStatus(inputs, paymentId, { silent: true });
+    if (!topUp || topUp.status !== "waiting_for_payment") {
+      clearTopUpPolling();
+      await loadTopUpHistory(inputs, { silent: true });
+      const response = await apiFetch(`/v1/projects/${encodeURIComponent(inputs.projectId)}/credits`, {
+        headers: { Authorization: `Bearer ${inputs.apiKey}` },
+      }).catch(() => null);
+      if (response?.ok) {
+        const payload = await response.json().catch(() => ({}));
+        creditBalance.textContent = `${Number(payload.totalAvailable || 0)} requests`;
+      }
+    }
+  }, TOPUP_POLL_INTERVAL_MS);
+}
+
 async function connectWallet() {
   const provider = selectedProvider();
   if (!provider) {
@@ -152,6 +311,12 @@ checkCreditsButton?.addEventListener("click", async () => {
       `Free left: ${Number(payload.freeRemaining || 0)}/${Number(payload.freeAllowance || 0)}. Paid balance: ${Number(payload.paidBalance || 0)} requests. Receipt records: ${Number(payload.receipts || 0)}.`,
       "success"
     );
+    const storedTopUp = readTopUpState();
+    await loadTopUpHistory(inputs);
+    if (storedTopUp?.projectId === inputs.projectId && storedTopUp?.paymentId) {
+      const topUp = await loadTopUpStatus(inputs, storedTopUp.paymentId);
+      if (topUp?.status === "waiting_for_payment") startTopUpPolling(inputs, storedTopUp.paymentId);
+    }
   } catch (error) {
     creditBalance.textContent = "Unavailable";
     setCreditStatus(error instanceof Error ? error.message : "Could not load API request balance.", "error");
@@ -191,6 +356,10 @@ createTopUpButton?.addEventListener("click", async () => {
         `Paid requests after confirmation: +${payload.creditAmount}`,
       ].join("\n");
     }
+    writeTopUpState({ projectId: inputs.projectId, paymentId: payload.paymentId });
+    renderCurrentTopUp(payload);
+    await loadTopUpHistory(inputs, { silent: true });
+    startTopUpPolling(inputs, payload.paymentId);
     setCreditStatus("Top-up created. The watcher adds paid requests after the Base USDC transfer confirms.", "success");
   } catch (error) {
     setCreditStatus(error instanceof Error ? error.message : "Could not create top-up.", "error");
@@ -205,3 +374,4 @@ window.addEventListener("txreceipts:walletsChanged", syncWalletOptions);
 
 syncWalletOptions();
 setWalletStatus("Choose an EVM wallet and connect it on Base.", "neutral");
+renderCurrentTopUp(null);

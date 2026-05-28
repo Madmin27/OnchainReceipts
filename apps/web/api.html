@@ -17,7 +17,7 @@
     <link rel="apple-touch-icon" href="./assets/txreceipts-brand.jpg" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body class="api-page">
     <header class="topbar">
       <a class="brand" href="./index.html#top" aria-label="TxReceipts home">
         <img class="brand-mark" src="./assets/txreceipts-brand.jpg" alt="" aria-hidden="true" />
@@ -33,7 +33,7 @@
       </nav>
     </header>
 
-    <main id="top">
+    <main id="top" class="api-shell">
       <section class="api-hero">
         <p class="eyebrow">Builder API</p>
         <h1>Manage API request credits from one page.</h1>
@@ -55,17 +55,21 @@
             <p id="apiWalletStatus" class="form-status">Choose an EVM wallet and connect it on Base.</p>
           </div>
           <div class="api-wallet-fields">
-            <label for="apiWalletProvider">Wallet provider</label>
-            <select id="apiWalletProvider"></select>
-            <label for="billingWalletInput">Billing wallet</label>
-            <input id="billingWalletInput" autocomplete="off" spellcheck="false" placeholder="0x..." />
+            <div class="api-field-group">
+              <label for="apiWalletProvider">Wallet provider</label>
+              <select id="apiWalletProvider"></select>
+            </div>
+            <div class="api-field-group">
+              <label for="billingWalletInput">Billing wallet</label>
+              <input id="billingWalletInput" autocomplete="off" spellcheck="false" placeholder="0x..." />
+            </div>
           </div>
           <div class="api-wallet-action">
             <button id="apiConnectWallet" class="button primary" type="button">Connect wallet</button>
           </div>
         </section>
 
-        <section class="credit-panel" aria-label="API request balance and Base top-up">
+        <section class="credit-panel api-credit-panel" aria-label="API request balance and Base top-up">
           <div>
             <p class="eyebrow">Project credits</p>
             <h3>Check balance and create top-up</h3>
@@ -77,26 +81,92 @@
             <p id="topUpInstructions" class="topup-instructions" hidden></p>
           </div>
           <div class="credit-fields">
-            <label for="projectIdInput">Project ID</label>
-            <input id="projectIdInput" autocomplete="off" spellcheck="false" placeholder="project_demo" />
-            <label for="topUpAmountInput">Top-up USDC</label>
-            <input id="topUpAmountInput" inputmode="decimal" autocomplete="off" placeholder="5" />
-          </div>
-          <div class="credit-fields">
-            <label for="apiKeyInput">API key</label>
-            <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="txr_..." />
-            <label for="creditBalance">Available requests</label>
-            <div class="credit-balance" aria-live="polite">
-              <strong id="creditBalance">Unavailable</strong>
+            <div class="api-field-group">
+              <label for="projectIdInput">Project ID</label>
+              <input id="projectIdInput" autocomplete="off" spellcheck="false" placeholder="project_demo" />
+            </div>
+            <div class="api-field-group">
+              <label for="topUpAmountInput">Top-up USDC</label>
+              <input id="topUpAmountInput" inputmode="decimal" autocomplete="off" placeholder="5" />
             </div>
           </div>
-          <div class="credit-balance" aria-live="polite">
+          <div class="credit-fields">
+            <div class="api-field-group">
+              <label for="apiKeyInput">API key</label>
+              <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="txr_..." />
+            </div>
+            <div class="api-field-group">
+              <label for="creditBalance">Available requests</label>
+              <div class="credit-balance" aria-live="polite">
+                <strong id="creditBalance">Unavailable</strong>
+              </div>
+            </div>
+          </div>
+          <div class="credit-balance api-actions-card" aria-live="polite">
             <span class="mini-label">Actions</span>
             <strong>Base USDC</strong>
             <div class="qa-actions">
               <button id="checkCredits" class="button secondary" type="button">Check balance</button>
               <button id="createTopUp" class="button primary" type="button">Create top-up</button>
             </div>
+          </div>
+        </section>
+
+        <section class="history-panel api-topup-status-panel" aria-label="Current top-up status">
+          <div class="history-head api-topup-head">
+            <div>
+              <p class="eyebrow">Payment status</p>
+              <h3>Track the latest top-up</h3>
+            </div>
+            <span id="topUpStatusBadge" class="status-pill api-status-pill">No active payment</span>
+          </div>
+          <p id="topUpStatusMessage" class="form-status">Create a top-up intent to start payment tracking.</p>
+          <div id="topUpStatusMeta" class="history-columns api-topup-meta" hidden>
+            <div class="history-column">
+              <span class="history-column-label">Payment ID</span>
+              <strong id="topUpStatusPaymentId" class="history-column-value">-</strong>
+            </div>
+            <div class="history-column">
+              <span class="history-column-label">Amount</span>
+              <strong id="topUpStatusAmount" class="history-column-value">-</strong>
+            </div>
+            <div class="history-column">
+              <span class="history-column-label">Billing wallet</span>
+              <strong id="topUpStatusWallet" class="history-column-value">-</strong>
+            </div>
+            <div class="history-column">
+              <span class="history-column-label">Tx hash</span>
+              <strong id="topUpStatusTxHash" class="history-column-value">-</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="history-panel api-topup-history-panel" aria-label="Top-up history">
+          <div class="history-head api-topup-head">
+            <div>
+              <p class="eyebrow">History</p>
+              <h3>Recent top-ups</h3>
+            </div>
+          </div>
+          <p id="topUpHistoryStatus" class="form-status">Enter a project ID and API key to load top-up history.</p>
+          <div class="api-topup-table-wrap">
+            <table class="api-topup-table">
+              <thead>
+                <tr>
+                  <th>Payment ID</th>
+                  <th>Status</th>
+                  <th>Amount</th>
+                  <th>Billing wallet</th>
+                  <th>Created</th>
+                  <th>Tx hash</th>
+                </tr>
+              </thead>
+              <tbody id="topUpHistoryBody">
+                <tr>
+                  <td colspan="6">No top-up history loaded yet.</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </section>
       </section>

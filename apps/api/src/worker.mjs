@@ -105,6 +105,10 @@ export async function handleRequest(request, env) {
       const project = await requireProject(request, env);
       return json(await createTopUp(request, env, project), env, request, 201);
     }
+    if (request.method === "GET" && url.pathname === "/v1/credits/topups") {
+      const project = await requireProject(request, env);
+      return json(await listTopUps(env, project.id), env, request);
+    }
     const topUpMatch = url.pathname.match(/^\/v1\/credits\/topups\/([^/]+)$/);
     if (request.method === "GET" && topUpMatch) {
       const project = await requireProject(request, env);
@@ -560,6 +564,21 @@ async function getTopUp(env, projectId, paymentId) {
   const row = await env.DB.prepare("SELECT * FROM topups WHERE id = ? AND project_id = ?").bind(paymentId, projectId).first();
   if (!row) throw httpError(404, "Top-up not found.");
   return mapTopUp(row);
+}
+
+async function listTopUps(env, projectId) {
+  const rows = await env.DB.prepare(
+    `SELECT * FROM topups
+     WHERE project_id = ?
+     ORDER BY created_at DESC
+     LIMIT 20`
+  ).bind(projectId).all();
+  const items = (rows.results || []).map(mapTopUp);
+  return {
+    items,
+    pendingCount: items.filter(item => item.status === "waiting_for_payment").length,
+    creditedCount: items.filter(item => item.status === "credited").length,
+  };
 }
 
 async function projectCredits(env, projectId) {
@@ -1049,9 +1068,12 @@ async function readJson(request) {
 }
 
 function mapTopUp(row) {
+  const now = Date.now();
+  const expiresAt = row.expires_at || null;
+  const isExpired = row.status === "waiting_for_payment" && expiresAt && Date.parse(expiresAt) < now;
   return {
     paymentId: row.id,
-    status: row.status,
+    status: isExpired ? "expired" : row.status,
     network: "base",
     chainId: BASE_CHAIN_ID,
     token: { symbol: "USDC", address: BASE_USDC_ADDRESS, decimals: 6 },
@@ -1059,7 +1081,9 @@ function mapTopUp(row) {
     creditAmount: row.credit_amount,
     receivingAddress: row.receiving_address,
     billingWallet: row.billing_wallet,
-    expiresAt: row.expires_at,
+    expiresAt,
+    createdAt: row.created_at,
+    creditedAt: row.credited_at || undefined,
     txHash: row.tx_hash || undefined,
   };
 }
