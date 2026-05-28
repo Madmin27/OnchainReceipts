@@ -2476,7 +2476,7 @@ async function generateReceipt(txHash, { download = false, quiet = false } = {})
       fetchExplorerTokenTransfers(txHash),
       fetchExplorerInternalTransfers(txHash),
     ]);
-    receipt = buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers, internalTransfers);
+    receipt = await buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers, internalTransfers);
     setQaContext(`Selected ${network.name} tx: ${shortHash(txHash)} - ${receipt.status}`);
     try {
       receipt.qrDataUrl = await fetchQrDataUrl(receipt.explorerUrl);
@@ -2502,7 +2502,7 @@ async function generateSolanaReceipt(signature, { download = false, quiet = fals
     setStatus("Transaction not found on Solana yet.", "error");
     return;
   }
-  receipt = buildSolanaReceipt(signature, tx);
+  receipt = await buildSolanaReceipt(signature, tx);
   setQaContext(`Selected ${network.name} tx: ${shortHash(signature)} - ${receipt.status}`);
   try {
     receipt.qrDataUrl = await fetchQrDataUrl(receipt.explorerUrl);
