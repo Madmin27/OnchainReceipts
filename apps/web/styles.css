@@ -95,6 +95,15 @@ nav a[aria-current="page"] {
   max-width: 760px;
 }
 
+.api-hero {
+  border-top: 1px solid var(--line);
+  padding: 12vh 5vw 4vh;
+}
+
+.api-hero .lede {
+  max-width: 760px;
+}
+
 .hero-copy {
   max-width: 760px;
 }
@@ -696,6 +705,58 @@ dd {
   padding: 18px;
 }
 
+.api-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.api-wallet-panel {
+  align-items: end;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.75fr) auto;
+  margin-bottom: 16px;
+  padding: 18px;
+}
+
+.api-wallet-panel h3,
+.api-wallet-panel p {
+  margin-bottom: 0;
+}
+
+.api-wallet-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.api-wallet-fields label {
+  color: var(--blue-soft);
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.api-wallet-fields select,
+.api-wallet-fields input {
+  background: var(--field);
+  border: 1px solid #ded6cc;
+  border-radius: 7px;
+  color: #111412;
+  font: inherit;
+  min-height: 46px;
+  min-width: 0;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.api-wallet-action {
+  align-self: end;
+}
+
 .credit-panel h3,
 .credit-panel p {
   margin-bottom: 0;
@@ -1138,6 +1199,7 @@ dd {
   .pricing-grid,
   .tx-row,
   .credit-panel,
+  .api-wallet-panel,
   .accounting-panel,
   .ledger-metrics,
   .wallet-panel,

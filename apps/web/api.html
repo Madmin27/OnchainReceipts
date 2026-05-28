@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://api.txreceipts.com.tr https://txreceipts-api.evpc77.workers.dev"
+    />
+    <title>API | TxReceipts</title>
+    <meta
+      name="description"
+      content="Connect a wallet, check request balance, and create Base USDC top-up intents for the TxReceipts API."
+    />
+    <meta name="theme-color" content="#111111" />
+    <link rel="icon" href="./assets/txreceipts-brand.jpg" type="image/jpeg" />
+    <link rel="apple-touch-icon" href="./assets/txreceipts-brand.jpg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./index.html#top" aria-label="TxReceipts home">
+        <img class="brand-mark" src="./assets/txreceipts-brand.jpg" alt="" aria-hidden="true" />
+        <span>TxReceipts</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="./index.html#product">Product</a>
+        <a href="./index.html#assistant">AI</a>
+        <a href="./index.html#security">Security</a>
+        <a aria-current="page" href="./api.html">API</a>
+        <a href="./pricing.html">Teams</a>
+        <a href="./index.html#demo">Demo</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="api-hero">
+        <p class="eyebrow">Builder API</p>
+        <h1>Manage API request credits from one page.</h1>
+        <p class="lede">
+          Connect an EVM wallet, prefill the billing wallet, inspect free and paid request balance,
+          and create Base USDC top-up intents for your TxReceipts project.
+        </p>
+      </section>
+
+      <section class="section pricing-detail api-layout">
+        <section class="api-wallet-panel" aria-label="Connect billing wallet">
+          <div>
+            <p class="eyebrow">Wallet</p>
+            <h3>Connect a Base-compatible wallet</h3>
+            <p>
+              The connected wallet is used to prefill the billing wallet field for Base USDC
+              top-ups.
+            </p>
+            <p id="apiWalletStatus" class="form-status">Choose an EVM wallet and connect it on Base.</p>
+          </div>
+          <div class="api-wallet-fields">
+            <label for="apiWalletProvider">Wallet provider</label>
+            <select id="apiWalletProvider"></select>
+            <label for="billingWalletInput">Billing wallet</label>
+            <input id="billingWalletInput" autocomplete="off" spellcheck="false" placeholder="0x..." />
+          </div>
+          <div class="api-wallet-action">
+            <button id="apiConnectWallet" class="button primary" type="button">Connect wallet</button>
+          </div>
+        </section>
+
+        <section class="credit-panel" aria-label="API request balance and Base top-up">
+          <div>
+            <p class="eyebrow">Project credits</p>
+            <h3>Check balance and create top-up</h3>
+            <p>
+              Each project gets the first 1,000 API requests free. After that, top up paid request
+              balance with native USDC on Base.
+            </p>
+            <p id="creditStatus" class="form-status">Enter a project ID and API key to load request balance.</p>
+            <p id="topUpInstructions" class="topup-instructions" hidden></p>
+          </div>
+          <div class="credit-fields">
+            <label for="projectIdInput">Project ID</label>
+            <input id="projectIdInput" autocomplete="off" spellcheck="false" placeholder="project_demo" />
+            <label for="topUpAmountInput">Top-up USDC</label>
+            <input id="topUpAmountInput" inputmode="decimal" autocomplete="off" placeholder="5" />
+          </div>
+          <div class="credit-fields">
+            <label for="apiKeyInput">API key</label>
+            <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="txr_..." />
+            <label for="creditBalance">Available requests</label>
+            <div class="credit-balance" aria-live="polite">
+              <strong id="creditBalance">Unavailable</strong>
+            </div>
+          </div>
+          <div class="credit-balance" aria-live="polite">
+            <span class="mini-label">Actions</span>
+            <strong>Base USDC</strong>
+            <div class="qa-actions">
+              <button id="checkCredits" class="button secondary" type="button">Check balance</button>
+              <button id="createTopUp" class="button primary" type="button">Create top-up</button>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>TxReceipts API billing is isolated from the free public panel.</span>
+      <a href="./index.html#top">Back to product</a>
+    </footer>
+
+    <script src="./wallets.js?v=20260528-2"></script>
+    <script src="./api.js?v=20260528-1"></script>
+  </body>
+</html>
