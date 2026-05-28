@@ -110,7 +110,12 @@ function syncWalletOptions() {
   });
   walletProviderSelect.disabled = false;
   connectWalletButton.disabled = false;
-  if (wallets.some(wallet => wallet.id === current)) walletProviderSelect.value = current;
+  if (wallets.some(wallet => wallet.id === current)) {
+    walletProviderSelect.value = current;
+    return;
+  }
+  const preferred = wallets.find(wallet => String(wallet.name || "").toLowerCase().includes("metamask"));
+  walletProviderSelect.value = (preferred || wallets[0]).id;
 }
 
 function selectedProvider() {

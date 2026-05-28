@@ -70,27 +70,52 @@
         </section>
 
         <section class="credit-panel api-credit-panel" aria-label="API onboarding and Base top-up">
-          <div>
+          <div class="api-access-copy">
             <p class="eyebrow">API access</p>
             <h3>Start free, then pay only when you need more</h3>
             <p>
               One connected wallet can create one free API project with 1,000 requests. After the
               free requests run out, pay 5 USDC on Base to add 10,000 paid requests.
             </p>
+            <div class="api-flow-list" aria-label="API onboarding steps">
+              <div class="api-flow-step">
+                <span>1</span>
+                <p>Connect your Base wallet and create the free API key once.</p>
+              </div>
+              <div class="api-flow-step">
+                <span>2</span>
+                <p>Use the 1,000 free requests first. Your project ID and API key stay filled in here.</p>
+              </div>
+              <div class="api-flow-step">
+                <span>3</span>
+                <p>When free requests end, click the 5 USDC button and approve the wallet payment.</p>
+              </div>
+            </div>
             <p id="creditStatus" class="form-status">Connect a wallet to create your free API key.</p>
             <p id="topUpInstructions" class="topup-instructions" hidden></p>
           </div>
-          <div class="credit-fields">
-            <div class="api-field-group">
-              <label for="projectIdInput">Project ID</label>
-              <input id="projectIdInput" autocomplete="off" spellcheck="false" placeholder="Created after free signup" />
+
+          <div class="credit-balance api-credentials-card">
+            <span class="mini-label">Credentials</span>
+            <div class="credit-fields api-credentials-fields">
+              <div class="api-field-group">
+                <label for="projectIdInput">Project ID</label>
+                <input id="projectIdInput" autocomplete="off" spellcheck="false" placeholder="Created after free signup" />
+              </div>
+              <div class="api-field-group">
+                <label for="apiKeyInput">API key</label>
+                <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="Created after free signup" />
+              </div>
             </div>
-            <div class="api-field-group">
-              <label for="apiKeyInput">API key</label>
-              <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="Created after free signup" />
+            <div class="api-field-group api-balance-group">
+              <label for="creditBalance">Available requests</label>
+              <div class="credit-balance api-available-card" aria-live="polite">
+                <strong id="creditBalance">Unavailable</strong>
+              </div>
             </div>
           </div>
-          <div class="credit-fields">
+
+          <div class="credit-fields api-plan-stack">
             <div class="credit-balance api-plan-card">
               <span class="mini-label">Free starter</span>
               <strong>1,000 free requests</strong>
@@ -100,12 +125,6 @@
               <span class="mini-label">Top-up pack</span>
               <strong>10,000 paid requests</strong>
               <p>5 USDC on Base. Click once, approve in MetaMask or any EVM wallet, and the panel checks every 15 seconds.</p>
-            </div>
-            <div class="api-field-group">
-              <label for="creditBalance">Available requests</label>
-              <div class="credit-balance" aria-live="polite">
-                <strong id="creditBalance">Unavailable</strong>
-              </div>
             </div>
           </div>
           <div class="credit-balance api-actions-card" aria-live="polite">

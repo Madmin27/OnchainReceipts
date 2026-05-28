@@ -811,7 +811,8 @@ dd {
 }
 
 .api-credit-panel {
-  grid-template-columns: minmax(0, 1.1fr) minmax(220px, 0.7fr) minmax(300px, 0.9fr) minmax(180px, 0.55fr);
+  align-items: start;
+  grid-template-columns: minmax(260px, 1.05fr) minmax(280px, 0.9fr) minmax(260px, 0.8fr) minmax(210px, 0.55fr);
 }
 
 .api-credit-panel .credit-fields {
@@ -825,6 +826,64 @@ dd {
 .api-plan-card {
   display: grid;
   gap: 8px;
+}
+
+.api-access-copy {
+  display: grid;
+  gap: 14px;
+}
+
+.api-flow-list {
+  display: grid;
+  gap: 10px;
+}
+
+.api-flow-step {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.api-flow-step span {
+  align-items: center;
+  background: rgba(89, 235, 246, 0.12);
+  border: 1px solid rgba(89, 235, 246, 0.24);
+  border-radius: 999px;
+  color: var(--blue);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 760;
+  height: 24px;
+  justify-content: center;
+  margin-top: 2px;
+  width: 24px;
+}
+
+.api-flow-step p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.api-credentials-card {
+  display: grid;
+  gap: 14px;
+}
+
+.api-credentials-fields {
+  gap: 14px;
+}
+
+.api-balance-group {
+  gap: 10px;
+}
+
+.api-available-card {
+  min-height: 0;
+}
+
+.api-plan-stack {
+  align-content: start;
 }
 
 .api-plan-card p {
