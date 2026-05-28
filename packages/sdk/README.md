@@ -10,6 +10,8 @@ npm install @txreceipts/sdk
 
 The package is not published yet. This folder defines the intended public API.
 
+`user` is now deprecated as a request alias. Use `ownerWallet` for all new integrations.
+
 ## Basic usage
 
 ```ts
@@ -22,7 +24,7 @@ const txReceipts = new TxReceipts({
 const receipt = await txReceipts.createReceipt({
   chainId: 8453,
   txHash: "0x...",
-  user: "0x...",
+  ownerWallet: "0x...",
   intent: {
     type: "swap",
     summary: "Swap 25 USDC for ETH",
@@ -37,6 +39,7 @@ const receipt = await txReceipts.createReceipt({
 });
 
 console.log(receipt.receiptId);
+console.log(receipt.receiptUrl);
 console.log(receipt.credit.counted);
 console.log(receipt.artifacts.pngUrl);
 ```

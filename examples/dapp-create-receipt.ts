@@ -9,7 +9,7 @@ async function main() {
   const receipt = await receipts.createReceipt({
     chainId: 8453,
     txHash: "0xb9a64db56072ace1f738b2e3be4f716f28b7f6ac828b42859469b31b4eb803d0",
-    user: "0x5c728c75f4845dc19f1107a173268297908ac883",
+    ownerWallet: "0x5c728c75f4845dc19f1107a173268297908ac883",
     intent: {
       type: "swap",
       summary: "Swap 20 USDC through ExampleSwap",

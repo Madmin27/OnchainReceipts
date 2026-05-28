@@ -17,6 +17,8 @@ export type IntentFee = {
 export type CreateReceiptRequest = {
   chainId: number;
   txHash: string;
+  ownerWallet?: string;
+  /** @deprecated Use ownerWallet instead. This alias will be removed in a future release. */
   user?: string;
   idempotencyKey?: string;
   intent: {
@@ -36,6 +38,12 @@ export type CreateReceiptRequest = {
 
 export type CreateReceiptResponse = {
   receiptId: string;
+  network: string;
+  chainId: number;
+  txHash: string;
+  ownerWallet: string;
+  verificationStatus: string;
+  receiptUrl: string;
   status: ReceiptStatus;
   credit: {
     counted: boolean;
@@ -104,6 +112,11 @@ export class TxReceipts {
 
   async createReceipt(request: CreateReceiptRequest): Promise<CreateReceiptResponse> {
     const idempotencyKey = request.idempotencyKey || this.defaultIdempotencyKey(request);
+    const { user, ...requestWithoutUser } = request;
+    const normalizedRequest: CreateReceiptRequest = {
+      ...requestWithoutUser,
+      ownerWallet: request.ownerWallet || user,
+    };
     const response = await fetch(`${this.baseUrl}/v1/receipts`, {
       method: "POST",
       headers: {
@@ -111,7 +124,7 @@ export class TxReceipts {
         "Content-Type": "application/json",
         "Idempotency-Key": idempotencyKey,
       },
-      body: JSON.stringify(request),
+      body: JSON.stringify(normalizedRequest),
     });
 
     if (!response.ok) {

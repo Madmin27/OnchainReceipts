@@ -24,7 +24,7 @@
     },
     "receiptId": {
       "type": "string",
-      "pattern": "^or_[a-zA-Z0-9_-]+$"
+      "pattern": "^TXR-[A-Z0-9]+-[A-F0-9]{24}$"
     },
     "chainId": {
       "type": "integer",
