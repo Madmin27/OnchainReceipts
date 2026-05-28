@@ -2,8 +2,8 @@ import {
   BASE_CHAIN_ID,
   BASE_USDC_ADDRESS,
   CREDIT_OVERDRAFT_LIMIT,
+  FREE_API_REQUESTS,
   REQUIRED_CONFIRMATIONS,
-  canSpendCredit,
   creditsForUsdc,
   normalizeAddress,
   validateObservedTransfer,
@@ -18,6 +18,55 @@ const CHAIN_NETWORK_CODE = {
   137: "POLYGON",
   8453: "BASE",
   42161: "ARB",
+};
+const MCP_PROTOCOL_VERSION = "2024-11-05";
+const MCP_SERVER_INFO = { name: "txreceipts-mcp", version: "0.1.0" };
+const MCP_NETWORKS = {
+  base: {
+    id: "base",
+    name: "Base",
+    chainId: 8453,
+    rpcUrl: "https://mainnet.base.org",
+    blockscoutUrl: "https://base.blockscout.com",
+    explorerUrl: "https://basescan.org",
+    nativeSymbol: "ETH",
+  },
+  ethereum: {
+    id: "ethereum",
+    name: "Ethereum",
+    chainId: 1,
+    rpcUrl: "https://ethereum-rpc.publicnode.com",
+    blockscoutUrl: "https://eth.blockscout.com",
+    explorerUrl: "https://etherscan.io",
+    nativeSymbol: "ETH",
+  },
+  optimism: {
+    id: "optimism",
+    name: "Optimism",
+    chainId: 10,
+    rpcUrl: "https://mainnet.optimism.io",
+    blockscoutUrl: "https://optimism.blockscout.com",
+    explorerUrl: "https://optimistic.etherscan.io",
+    nativeSymbol: "ETH",
+  },
+  arbitrum: {
+    id: "arbitrum",
+    name: "Arbitrum One",
+    chainId: 42161,
+    rpcUrl: "https://arb1.arbitrum.io/rpc",
+    blockscoutUrl: "https://arbitrum.blockscout.com",
+    explorerUrl: "https://arbiscan.io",
+    nativeSymbol: "ETH",
+  },
+  polygon: {
+    id: "polygon",
+    name: "Polygon",
+    chainId: 137,
+    rpcUrl: "https://polygon-rpc.com",
+    blockscoutUrl: "https://polygon.blockscout.com",
+    explorerUrl: "https://polygonscan.com",
+    nativeSymbol: "POL",
+  },
 };
 const RECEIPT_EDITABLE_FIELDS = ["memo", "category", "accountingNote", "businessExpense"];
 
@@ -38,10 +87,16 @@ export async function handleRequest(request, env) {
   if (request.method === "GET" && url.pathname === "/health") {
     return json({ ok: true, service: "txreceipts-api" }, env, request);
   }
+  if (url.pathname === "/mcp" && request.method === "GET") {
+    return json({ ok: true, service: "txreceipts-mcp", protocolVersion: MCP_PROTOCOL_VERSION }, env, request);
+  }
 
   await ensureReceiptSchema(env);
 
   try {
+    if (url.pathname === "/mcp" && request.method === "POST") {
+      return json(await handleMcpRequest(request, env), env, request);
+    }
     if (request.method === "POST" && url.pathname === "/v1/admin/projects") {
       await requireAdmin(request, env);
       return json(await createProject(request, env), env, request, 201);
@@ -85,6 +140,275 @@ export async function handleRequest(request, env) {
   } catch (error) {
     return json({ error: error.message || "Unexpected error" }, env, request, error.status || 500);
   }
+}
+
+async function handleMcpRequest(request, env) {
+  const body = await readJson(request);
+  const method = String(body.method || "");
+  const id = body.id ?? null;
+
+  try {
+    if (method === "initialize") {
+      return mcpResult(id, {
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        capabilities: { tools: { listChanged: false } },
+        serverInfo: MCP_SERVER_INFO,
+      });
+    }
+    if (method === "notifications/initialized") {
+      return { jsonrpc: "2.0", result: {} };
+    }
+    if (method === "tools/list") {
+      return mcpResult(id, { tools: mcpTools() });
+    }
+    if (method === "tools/call") {
+      const params = body.params || {};
+      const result = await callMcpTool(params.name, params.arguments || {}, request, env);
+      return mcpResult(id, result);
+    }
+    if (method === "ping") {
+      return mcpResult(id, {});
+    }
+    return mcpError(id, -32601, `Unsupported MCP method: ${method}`);
+  } catch (error) {
+    return mcpError(id, error.status === 401 ? -32001 : -32000, error.message || "MCP tool error");
+  }
+}
+
+function mcpTools() {
+  return [
+    {
+      name: "list_networks",
+      description: "List the supported read-only TxReceipts MCP networks.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    },
+    {
+      name: "get_wallet_activity",
+      description: "Load compact wallet activity for one supported EVM network.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          wallet: { type: "string", description: "0x wallet address" },
+          network: { type: "string", enum: Object.keys(MCP_NETWORKS), default: "base" },
+          limit: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+        },
+        required: ["wallet"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "get_transaction_summary",
+      description: "Load one EVM transaction from RPC and explorer sources and summarize sent value, gas, and token movement.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          txHash: { type: "string", description: "0x transaction hash" },
+          network: { type: "string", enum: Object.keys(MCP_NETWORKS), default: "base" },
+        },
+        required: ["txHash"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "get_public_receipt",
+      description: "Fetch a public TxReceipts receipt by deterministic receiptId.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          receiptId: { type: "string", description: "TXR-NETWORK-HASH24 receipt id" },
+        },
+        required: ["receiptId"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "create_receipt",
+      description: "Create a TxReceipts receipt through the API. Requires Authorization Bearer API key on the MCP request.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          chainId: { type: "integer" },
+          txHash: { type: "string" },
+          ownerWallet: { type: "string" },
+          idempotencyKey: { type: "string" },
+          intent: {
+            type: "object",
+            properties: {
+              type: { type: "string" },
+              summary: { type: "string" },
+            },
+            required: ["type", "summary"],
+            additionalProperties: true,
+          },
+        },
+        required: ["chainId", "txHash", "ownerWallet", "intent"],
+        additionalProperties: true,
+      },
+    },
+  ];
+}
+
+async function callMcpTool(name, args, request, env) {
+  if (name === "list_networks") {
+    return mcpText({ networks: Object.values(MCP_NETWORKS) });
+  }
+  if (name === "get_wallet_activity") {
+    const wallet = normalizeOwnerWallet(args.wallet);
+    const network = mcpNetwork(String(args.network || "base"));
+    const limit = Math.max(1, Math.min(50, Number(args.limit || 20)));
+    const [transactions, tokenTransfers] = await Promise.all([
+      fetchExplorerJson(network, `/api/v2/addresses/${wallet}/transactions`, { items_count: limit }),
+      fetchExplorerJson(network, `/api/v2/addresses/${wallet}/token-transfers`, { items_count: limit }),
+    ]);
+    return mcpText({
+      wallet,
+      network: network.name,
+      totals: {
+        transactions: Array.isArray(transactions.items) ? transactions.items.length : 0,
+        tokenTransfers: Array.isArray(tokenTransfers.items) ? tokenTransfers.items.length : 0,
+      },
+      transactions: (transactions.items || []).slice(0, limit).map(item => summarizeWalletTx(item, wallet, network)),
+      tokenTransfers: (tokenTransfers.items || []).slice(0, limit).map(item => summarizeWalletTransfer(item, wallet)),
+    });
+  }
+  if (name === "get_transaction_summary") {
+    const txHash = normalizeTxHash(args.txHash);
+    const network = mcpNetwork(String(args.network || "base"));
+    const [tx, receipt, transferPayload] = await Promise.all([
+      rpcJson(network.rpcUrl, "eth_getTransactionByHash", [txHash]),
+      rpcJson(network.rpcUrl, "eth_getTransactionReceipt", [txHash]),
+      fetchExplorerJson(network, `/api/v2/transactions/${txHash}/token-transfers`).catch(() => ({ items: [] })),
+    ]);
+    if (!tx || !receipt) throw httpError(404, `Transaction not found on ${network.name}.`);
+    const block = receipt.blockNumber ? await rpcJson(network.rpcUrl, "eth_getBlockByNumber", [receipt.blockNumber, false]) : null;
+    const gasFeeWei = hexToBigInt(receipt.gasUsed) * hexToBigInt(receipt.effectiveGasPrice || tx.gasPrice);
+    return mcpText({
+      network: network.name,
+      chainId: network.chainId,
+      txHash,
+      status: receipt.status === "0x1" ? "verified" : "failed",
+      blockNumber: receipt.blockNumber ? Number.parseInt(receipt.blockNumber, 16) : null,
+      timestamp: block?.timestamp ? new Date(Number(hexToBigInt(block.timestamp)) * 1000).toISOString() : null,
+      from: tx.from,
+      to: tx.to || null,
+      value: formatNativeAmount(tx.value, network.nativeSymbol),
+      gasFee: formatNativeAmount(gasFeeWei, network.nativeSymbol),
+      method: tx.input && tx.input !== "0x" ? tx.input.slice(0, 10) : "native transfer",
+      tokenTransfers: (transferPayload.items || []).slice(0, 20).map(item => ({
+        token: item.token?.symbol || item.token?.name || item.token_type || "TOKEN",
+        amount: item.total?.value || null,
+        decimals: item.total?.decimals || item.token?.decimals || null,
+        from: item.from?.hash || null,
+        to: item.to?.hash || null,
+      })),
+      explorerUrl: `${network.explorerUrl}/tx/${txHash}`,
+    });
+  }
+  if (name === "get_public_receipt") {
+    const receiptId = String(args.receiptId || "").toUpperCase();
+    if (!/^TXR-[A-Z0-9]+-[A-F0-9]{24}$/.test(receiptId)) throw httpError(400, "Invalid receiptId.");
+    return mcpText(await getPublicReceipt(env, receiptId));
+  }
+  if (name === "create_receipt") {
+    const auth = request.headers.get("Authorization") || "";
+    if (!auth.startsWith("Bearer ")) throw httpError(401, "Missing Authorization Bearer API key on MCP request.");
+    const url = new URL(request.url);
+    const response = await fetch(`${url.origin}/v1/receipts`, {
+      method: "POST",
+      headers: {
+        Authorization: auth,
+        "Content-Type": "application/json",
+        ...(args.idempotencyKey ? { "Idempotency-Key": String(args.idempotencyKey) } : {}),
+      },
+      body: JSON.stringify(args),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw httpError(response.status, payload.error || `Receipt API returned HTTP ${response.status}`);
+    return mcpText(payload);
+  }
+  throw httpError(404, `Unknown MCP tool: ${name}`);
+}
+
+function mcpText(payload) {
+  return {
+    content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+  };
+}
+
+function mcpResult(id, result) {
+  return { jsonrpc: "2.0", id, result };
+}
+
+function mcpError(id, code, message) {
+  return { jsonrpc: "2.0", id, error: { code, message } };
+}
+
+function mcpNetwork(networkId) {
+  const network = MCP_NETWORKS[String(networkId || "base")];
+  if (!network) throw httpError(400, `Unsupported network: ${networkId}`);
+  return network;
+}
+
+async function fetchExplorerJson(network, path, params = {}) {
+  const url = new URL(path, network.blockscoutUrl);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+  });
+  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!response.ok) throw httpError(response.status, `${network.name} explorer returned HTTP ${response.status}`);
+  return response.json();
+}
+
+async function rpcJson(rpcUrl, method, params) {
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
+  });
+  if (!response.ok) throw httpError(response.status, `RPC returned HTTP ${response.status}`);
+  const payload = await response.json();
+  if (payload.error) throw httpError(502, payload.error.message || "RPC request failed.");
+  return payload.result;
+}
+
+function summarizeWalletTx(item, wallet, network) {
+  const from = String(item.from?.hash || "").toLowerCase();
+  const to = String(item.to?.hash || "").toLowerCase();
+  const direction = to === wallet && from !== wallet ? "incoming" : from === wallet ? "outgoing" : "other";
+  return {
+    txHash: item.hash,
+    timestamp: item.timestamp || null,
+    direction,
+    method: item.method || item.decoded_input?.method_call || "transaction",
+    value: item.value && item.value !== "0" ? formatNativeAmount(item.value, network.nativeSymbol) : null,
+    from: item.from?.hash || null,
+    to: item.to?.hash || null,
+    status: item.status || item.result || "ok",
+  };
+}
+
+function summarizeWalletTransfer(item, wallet) {
+  const from = String(item.from?.hash || "").toLowerCase();
+  const to = String(item.to?.hash || "").toLowerCase();
+  const direction = to === wallet && from !== wallet ? "incoming" : from === wallet ? "outgoing" : "other";
+  return {
+    txHash: item.transaction_hash,
+    timestamp: item.timestamp || null,
+    direction,
+    token: item.token?.symbol || item.token?.name || item.token_type || "TOKEN",
+    amount: item.total?.value || null,
+    decimals: item.total?.decimals || item.token?.decimals || null,
+    from: item.from?.hash || null,
+    to: item.to?.hash || null,
+  };
+}
+
+function formatNativeAmount(value, symbol) {
+  const amount = hexToBigInt(value);
+  const base = 10n ** 18n;
+  const whole = amount / base;
+  const fraction = (amount % base).toString().padStart(18, "0").slice(0, 6).replace(/0+$/, "");
+  return `${whole}${fraction ? `.${fraction}` : ""} ${symbol}`;
 }
 
 async function answerAccountingQuestion(request, env) {
@@ -221,11 +545,19 @@ async function getTopUp(env, projectId, paymentId) {
 }
 
 async function projectCredits(env, projectId) {
-  const balance = await getBalance(env, projectId);
-  const usage = await env.DB.prepare(
-    "SELECT COUNT(*) AS receipts FROM receipts WHERE project_id = ?"
-  ).bind(projectId).first();
-  return { projectId, balance, overdraftLimit: CREDIT_OVERDRAFT_LIMIT, receipts: Number(usage?.receipts || 0) };
+  const usage = await projectUsageSnapshot(env, projectId);
+  return {
+    projectId,
+    balance: usage.paidBalance,
+    overdraftLimit: CREDIT_OVERDRAFT_LIMIT,
+    receipts: usage.receipts,
+    freeAllowance: usage.freeAllowance,
+    freeUsed: usage.freeUsed,
+    freeRemaining: usage.freeRemaining,
+    paidBalance: usage.paidBalance,
+    totalAvailable: usage.totalAvailable,
+    unit: "api_requests",
+  };
 }
 
 async function createReceipt(request, env, project) {
@@ -244,17 +576,21 @@ async function createReceipt(request, env, project) {
     "SELECT * FROM receipts WHERE project_id = ? AND (id = ? OR idempotency_key = ? OR (chain_id = ? AND tx_hash = ? AND owner_wallet = ?)) LIMIT 1"
   ).bind(project.id, receiptId, idempotencyKey, chainId, txHash, ownerWallet).first();
   if (existing) {
+    const usage = await projectUsageSnapshot(env, project.id);
     return mapReceiptResponse(existing, {
-      remaining: await getBalance(env, project.id),
+      remaining: usage.totalAvailable,
       counted: false,
       amount: 0,
       reason: "duplicate chain + tx hash + owner wallet",
     }, env);
   }
 
-  const balance = await getBalance(env, project.id);
-  if (!canSpendCredit(balance, 1)) throw httpError(402, "Credit balance below -10 overdraft limit.");
-  const balanceAfter = balance - 1;
+  const usage = await projectUsageSnapshot(env, project.id);
+  const usesFreeAllowance = usage.freeRemaining > 0;
+  if (!usesFreeAllowance && usage.paidBalance < 1) {
+    throw httpError(402, "Free API allowance is exhausted and paid request balance is empty.");
+  }
+  const balanceAfter = usesFreeAllowance ? usage.paidBalance : usage.paidBalance - 1;
   const revisionId = `rr_${crypto.randomUUID().replaceAll("-", "")}`;
   const createdAt = new Date().toISOString();
   const direction = String(body.direction || "unknown").slice(0, 32);
@@ -270,10 +606,14 @@ async function createReceipt(request, env, project) {
        (id, project_id, chain_id, network, tx_hash, owner_wallet, direction, category, status, verification_status, memo, accounting_note, business_expense, idempotency_key, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'verified', ?, ?, ?, ?, ?, ?, ?)`
      ).bind(receiptId, project.id, chainId, network.toLowerCase(), txHash, ownerWallet, direction, category, verificationStatus, memo, accountingNote, businessExpense, idempotencyKey, createdAt, createdAt),
-    env.DB.prepare(
-      `INSERT INTO credit_ledger (id, project_id, source, receipt_id, delta, balance_after, reason)
-       VALUES (?, ?, 'receipt_usage', ?, -1, ?, 'verified receipt usage')`
-    ).bind(`cl_${crypto.randomUUID()}`, project.id, receiptId, balanceAfter),
+    ...(
+      usesFreeAllowance
+        ? []
+        : [env.DB.prepare(
+          `INSERT INTO credit_ledger (id, project_id, source, receipt_id, delta, balance_after, reason)
+           VALUES (?, ?, 'receipt_usage', ?, -1, ?, 'verified API request usage')`
+        ).bind(`cl_${crypto.randomUUID()}`, project.id, receiptId, balanceAfter)]
+    ),
     env.DB.prepare(
       `INSERT INTO receipt_revisions (id, receipt_id, version, changed_at, changed_by, changes_json)
        VALUES (?, ?, 1, ?, ?, ?)`
@@ -292,18 +632,19 @@ async function createReceipt(request, env, project) {
 
   const created = await env.DB.prepare("SELECT * FROM receipts WHERE id = ? LIMIT 1").bind(receiptId).first();
   return mapReceiptResponse(created, {
-    remaining: balanceAfter,
+    remaining: Math.max(usage.freeRemaining - 1, 0) + balanceAfter,
     counted: true,
     amount: 1,
-    reason: "verified receipt usage",
+    reason: usesFreeAllowance ? "free monthly API allowance" : "verified API request usage",
   }, env);
 }
 
 async function getReceipt(env, projectId, receiptId) {
   const row = await env.DB.prepare("SELECT * FROM receipts WHERE id = ? AND project_id = ? LIMIT 1").bind(String(receiptId || "").toUpperCase(), projectId).first();
   if (!row) throw httpError(404, "Receipt not found.");
+  const usage = await projectUsageSnapshot(env, projectId);
   return mapReceiptResponse(row, {
-    remaining: await getBalance(env, projectId),
+    remaining: usage.totalAvailable,
     counted: false,
     amount: 0,
     reason: "existing receipt",
@@ -360,8 +701,9 @@ async function updateReceipt(request, env, project, receiptId) {
   ]);
 
   const updated = await env.DB.prepare("SELECT * FROM receipts WHERE id = ? AND project_id = ? LIMIT 1").bind(existing.id, project.id).first();
+  const usage = await projectUsageSnapshot(env, project.id);
   return mapReceiptResponse(updated, {
-    remaining: await getBalance(env, project.id),
+    remaining: usage.totalAvailable,
     counted: false,
     amount: 0,
     reason: "receipt revision stored",
@@ -542,6 +884,32 @@ async function getBalance(env, projectId) {
     "SELECT COALESCE(SUM(delta), 0) AS balance FROM credit_ledger WHERE project_id = ?"
   ).bind(projectId).first();
   return Number(row?.balance || 0);
+}
+
+async function getReceiptCount(env, projectId) {
+  const row = await env.DB.prepare(
+    "SELECT COUNT(*) AS receipts FROM receipts WHERE project_id = ?"
+  ).bind(projectId).first();
+  return Number(row?.receipts || 0);
+}
+
+async function projectUsageSnapshot(env, projectId) {
+  const [paidBalance, receipts] = await Promise.all([
+    getBalance(env, projectId),
+    getReceiptCount(env, projectId),
+  ]);
+  const freeAllowance = FREE_API_REQUESTS;
+  const freeUsed = Math.min(receipts, freeAllowance);
+  const freeRemaining = Math.max(freeAllowance - freeUsed, 0);
+  const totalAvailable = freeRemaining + Math.max(paidBalance, 0);
+  return {
+    paidBalance,
+    receipts,
+    freeAllowance,
+    freeUsed,
+    freeRemaining,
+    totalAvailable,
+  };
 }
 
 async function sha256(value) {

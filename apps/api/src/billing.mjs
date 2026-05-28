@@ -1,11 +1,12 @@
 export const BASE_CHAIN_ID = 8453;
 export const BASE_USDC_ADDRESS = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 export const USDC_DECIMALS = 6n;
-export const CREDITS_PER_USDC = 1000n;
+export const CREDITS_PER_USDC = 2000n;
+export const FREE_API_REQUESTS = 1000;
 export const MIN_TOP_UP_USDC = "5";
 export const MAX_AUTO_TOP_UP_USDC = "10000";
 export const REQUIRED_CONFIRMATIONS = 3;
-export const CREDIT_OVERDRAFT_LIMIT = -10;
+export const CREDIT_OVERDRAFT_LIMIT = 0;
 
 export function normalizeAddress(address) {
   return String(address || "").toLowerCase();

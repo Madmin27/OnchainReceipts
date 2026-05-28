@@ -21,9 +21,10 @@ This keeps hosting close to free during launch.
 - Confirmation of registered billing wallet payments.
 - Low-cost AI fallback for accounting questions templates cannot answer.
 - Credit ledger top-up.
-- Receipt credit usage.
+- Receipt API request usage.
 - Duplicate tx hash and duplicate receipt protection.
-- -10 credit overdraft tolerance for live dapps.
+- First 1,000 API requests free per project.
+- After the free allowance, paid request balance is required.
 
 ## Deployment steps
 
@@ -78,9 +79,10 @@ The API returns the plaintext API key once. Store it securely. D1 stores only th
 1. Dapp calls `POST /v1/receipts`.
 2. API checks idempotency by `project_id + chain_id + tx_hash`.
 3. If duplicate, no extra credit is counted.
-4. If new, one credit is deducted.
-5. The request is allowed while balance remains at or above `-10`.
-6. Below `-10`, API returns `402`.
+4. If the project still has free monthly allowance remaining, the request is accepted without spending paid balance.
+5. After the first 1,000 API requests, each new request deducts one paid request unit.
+6. A 5 USDC top-up adds 10,000 paid API requests.
+7. If no free allowance and no paid request balance remain, API returns `402`.
 
 ## Security checks
 

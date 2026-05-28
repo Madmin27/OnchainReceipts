@@ -69,7 +69,7 @@ V1 is intentionally narrow:
 - server-side AI fallback only when template answers do not fit
 - pre-accounting panel with selected-network review counts and export readiness
 - open accounting receipt schema and dapp intent schema
-- read-only MCP plan for wallet analysis, not transaction execution
+- read-only MCP package for wallet analysis, not transaction execution
 
 V2 adds:
 
@@ -90,6 +90,7 @@ schema/            Receipt and dapp intent JSON schemas
 examples/          Sample receipt payloads
 packages/engine/   Planned parser and verification engine
 packages/sdk/      Dapp SDK draft
+packages/mcp-server/ Read-only MCP server package for wallet, tx, and receipt tools
 ```
 
 ## Current prototype
@@ -122,7 +123,7 @@ The core question is not only "what happened onchain?" It is "what is income, wh
 
 ## AI assistant layer
 
-The accounting engine stays first. Base MCP is planned as an opt-in assistant layer for questions like "what did I spend USDC on this month?" or "which creator payments did I receive?" rather than as the canonical verification backend.
+The accounting engine stays first. Base MCP now exists as a read-only package for questions like "what did I spend USDC on this month?" or "which creator payments did I receive?" rather than as the canonical verification backend.
 
 The current prototype uses a zero-token assistant pattern:
 
@@ -135,7 +136,7 @@ The current prototype uses a zero-token assistant pattern:
 
 See [docs/ai-assistant.md](docs/ai-assistant.md).
 
-The accounting MCP plan is documented in [docs/accounting-mcp.md](docs/accounting-mcp.md). MCP should act as a selected-network data collection layer, while reports remain deterministic and template-first. AI can stay in the product as a fallback and learning layer, but it should receive only compact accounting context.
+The accounting MCP plan is documented in [docs/accounting-mcp.md](docs/accounting-mcp.md), and the first package implementation lives in [packages/mcp-server](packages/mcp-server). MCP should act as a selected-network data collection layer, while reports remain deterministic and template-first. AI can stay in the product as a fallback and learning layer, but it should receive only compact accounting context.
 
 ## How dapps integrate
 
@@ -152,7 +153,7 @@ const receipts = new TxReceipts({
 const receipt = await receipts.createReceipt({
   chainId: 8453,
   txHash: '0x...',
-  user: '0x...',
+  ownerWallet: '0x...',
   intent: {
     type: 'swap',
     summary: 'Swap 25 USDC for ETH',
@@ -167,7 +168,7 @@ const receipt = await receipts.createReceipt({
 });
 ```
 
-The verification engine returns a `verified`, `partial`, `mismatch`, or `failed` status with downloadable artifacts, machine-readable checks, and credit accounting details. One dapp tx credit is counted only once for each `project_id + chain_id + tx_hash`.
+The verification engine returns a `verified`, `partial`, `mismatch`, or `failed` status with downloadable artifacts, machine-readable checks, and credit accounting details. Receipt IDs are deterministic and derived from `chainId + txHash + ownerWallet`, so the same wallet and transaction always regenerate the same `TxReceipts Receipt ID`.
 
 ## Payments and tx credits
 
@@ -176,13 +177,14 @@ Dapp credits start as prepaid native USDC on Base. A project can register billin
 The launch rule is simple:
 
 ```txt
-1 USDC = 1,000 verified receipt credits
+first 1,000 API requests are free
+1 USDC = 2,000 additional API requests
 minimum top-up: 5 USDC
 ```
 
 See [docs/usdc-payments.md](docs/usdc-payments.md) and [docs/sdk-billing.md](docs/sdk-billing.md).
 
-The backend deployment path is documented in [docs/backend-deployment.md](docs/backend-deployment.md). The API draft uses Cloudflare Workers and D1 to automate project credits, Base USDC top-ups, scheduled payment confirmation, and receipt credit usage.
+The backend deployment path is documented in [docs/backend-deployment.md](docs/backend-deployment.md). The API draft uses Cloudflare Workers and D1 to automate project request balances, Base USDC top-ups, scheduled payment confirmation, and receipt API usage.
 
 ## Security posture
 
