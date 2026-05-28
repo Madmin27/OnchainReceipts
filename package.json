@@ -6,7 +6,8 @@
   "license": "MIT",
   "scripts": {
     "check": "node scripts/check-static.js",
-    "test:billing": "node scripts/test-usdc-credits.js && node scripts/test-api-billing.mjs"
+    "test:billing": "node scripts/test-usdc-credits.js && node scripts/test-api-billing.mjs",
+    "mcp:start": "node packages/mcp-server/src/index.mjs"
   },
   "keywords": [
     "base",

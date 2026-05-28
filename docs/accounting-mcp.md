@@ -2,6 +2,8 @@
 
 TxReceipts should treat MCP as a selected-network data collection layer for pre-accounting, not as a general chat surface.
 
+The first implementation now lives in [packages/mcp-server](../packages/mcp-server). It is read-only by default and exposes wallet activity, transaction summary, and public receipt tools over stdio. A hosted JSON-RPC endpoint is also live at `https://api.txreceipts.com.tr/mcp`.
+
 ## Goal
 
 Help users and accountants prepare clean wallet activity reports from Base-first data:
