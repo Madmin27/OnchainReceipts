@@ -822,6 +822,18 @@ dd {
   height: 100%;
 }
 
+.api-plan-card {
+  display: grid;
+  gap: 8px;
+}
+
+.api-plan-card p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
 .api-actions-card {
   align-content: start;
   display: grid;
@@ -830,6 +842,10 @@ dd {
 
 .api-actions-card .qa-actions {
   flex-direction: column;
+}
+
+.api-actions-card strong {
+  line-height: 1.2;
 }
 
 .api-actions-card .button {

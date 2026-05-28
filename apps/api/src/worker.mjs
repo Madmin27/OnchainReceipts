@@ -5,6 +5,7 @@ import {
   FREE_API_REQUESTS,
   REQUIRED_CONFIRMATIONS,
   creditsForUsdc,
+  formatUsdcUnits,
   normalizeAddress,
   validateObservedTransfer,
   validateTopUpIntent,
@@ -21,6 +22,7 @@ const CHAIN_NETWORK_CODE = {
 };
 const MCP_PROTOCOL_VERSION = "2024-11-05";
 const MCP_SERVER_INFO = { name: "txreceipts-mcp", version: "0.1.0" };
+const ERC20_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const MCP_NETWORKS = {
   base: {
     id: "base",
@@ -101,9 +103,17 @@ export async function handleRequest(request, env) {
       await requireAdmin(request, env);
       return json(await createProject(request, env), env, request, 201);
     }
+    if (request.method === "POST" && url.pathname === "/v1/projects/free") {
+      return json(await createFreeProject(request, env), env, request, 201);
+    }
     if (request.method === "POST" && url.pathname === "/v1/credits/topups") {
       const project = await requireProject(request, env);
       return json(await createTopUp(request, env, project), env, request, 201);
+    }
+    const reconcileTopUpMatch = url.pathname.match(/^\/v1\/credits\/topups\/([^/]+)\/reconcile$/);
+    if (request.method === "POST" && reconcileTopUpMatch) {
+      const project = await requireProject(request, env);
+      return json(await reconcileTopUpTransfer(request, env, project, reconcileTopUpMatch[1]), env, request);
     }
     if (request.method === "GET" && url.pathname === "/v1/credits/topups") {
       const project = await requireProject(request, env);
@@ -508,6 +518,37 @@ function compactAiContext(context) {
 
 async function createProject(request, env) {
   const body = await readJson(request);
+  return createProjectRecord(env, body);
+}
+
+async function createFreeProject(request, env) {
+  const body = await readJson(request);
+  const billingWallet = normalizeOwnerWallet(body.billingWallet);
+  const existing = await env.DB.prepare(
+    `SELECT p.id AS project_id
+     FROM billing_wallets bw
+     JOIN projects p ON p.id = bw.project_id
+     WHERE bw.wallet_address = ? AND bw.status = 'active' AND p.status = 'active'
+     LIMIT 1`
+  ).bind(billingWallet).first();
+  if (existing) throw httpError(409, "This wallet already has a free API key.");
+
+  const created = await createProjectRecord(env, {
+    name: body.name || `Free API ${billingWallet.slice(2, 8)}`,
+    billingWallet,
+    billingWalletLabel: "Connected wallet",
+  });
+  return {
+    ...created,
+    freeAllowance: FREE_API_REQUESTS,
+    totalAvailable: FREE_API_REQUESTS,
+    paidBalance: 0,
+    unit: "api_requests",
+    signup: "free_wallet_trial",
+  };
+}
+
+async function createProjectRecord(env, body = {}) {
   const projectId = body.projectId || `project_${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
   if (!/^[a-zA-Z0-9_-]{3,64}$/.test(projectId)) throw httpError(400, "Invalid projectId.");
   const name = String(body.name || projectId).slice(0, 120);
@@ -564,6 +605,31 @@ async function getTopUp(env, projectId, paymentId) {
   const row = await env.DB.prepare("SELECT * FROM topups WHERE id = ? AND project_id = ?").bind(paymentId, projectId).first();
   if (!row) throw httpError(404, "Top-up not found.");
   return mapTopUp(row);
+}
+
+async function reconcileTopUpTransfer(request, env, project, paymentId) {
+  const body = await readJson(request);
+  const txHash = normalizeTxHash(body.txHash);
+  const topUp = await env.DB.prepare("SELECT * FROM topups WHERE id = ? AND project_id = ?").bind(paymentId, project.id).first();
+  if (!topUp) throw httpError(404, "Top-up not found.");
+  if (topUp.status !== "waiting_for_payment") {
+    return { topUp: mapTopUp(topUp), reconcile: { accepted: true, reasons: ["already_processed"], txHash: topUp.tx_hash || txHash } };
+  }
+
+  const transfer = await fetchBaseUsdcTransferByTxHash(txHash);
+  const result = await creditSpecificTopUp(env, project.id, topUp, transfer);
+  const updated = await env.DB.prepare("SELECT * FROM topups WHERE id = ? AND project_id = ?").bind(paymentId, project.id).first();
+  return {
+    topUp: mapTopUp(updated || topUp),
+    reconcile: {
+      accepted: result.accepted,
+      reasons: result.reasons,
+      txHash,
+      amountUsdc: result.amountUsdc,
+      creditAmount: result.creditAmount,
+      confirmations: Number(transfer.confirmations || 0),
+    },
+  };
 }
 
 async function listTopUps(env, projectId) {
@@ -815,6 +881,82 @@ export async function processExplorerTransfer(env, item) {
   return validation;
 }
 
+async function creditSpecificTopUp(env, projectId, topUp, transfer) {
+  const credited = await env.DB.prepare("SELECT tx_hash FROM payment_ledger WHERE status = 'credited' AND tx_hash = ?").bind(transfer.txHash).first();
+  const validation = validateObservedTransfer(transfer, {
+    treasuryAddress: env.TREASURY_ADDRESS,
+    billingWallets: topUp.billing_wallet ? [topUp.billing_wallet] : [],
+    creditedTxHashes: credited ? [credited.tx_hash] : [],
+  });
+  const reasons = [...validation.reasons];
+  if (!topUp.billing_wallet) reasons.push("missing_billing_wallet");
+  if (validation.accepted && String(validation.amountUsdc) !== String(topUp.amount_usdc)) reasons.push("topup_amount_mismatch");
+  if (new Date(topUp.expires_at).getTime() <= Date.now()) reasons.push("topup_expired");
+  if (reasons.length > 0) {
+    return {
+      accepted: false,
+      reasons,
+      amountUsdc: validation.amountUsdc,
+      creditAmount: 0,
+    };
+  }
+
+  const balanceAfter = await getBalance(env, projectId) + validation.creditAmount;
+  const creditedAt = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO payment_ledger (id, project_id, chain_id, token_address, from_address, to_address, tx_hash, amount_usdc, status, confirmed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'credited', ?)`
+    ).bind(
+      `pl_${crypto.randomUUID()}`,
+      projectId,
+      BASE_CHAIN_ID,
+      BASE_USDC_ADDRESS,
+      normalizeAddress(transfer.fromAddress),
+      normalizeAddress(transfer.toAddress),
+      transfer.txHash,
+      validation.amountUsdc,
+      creditedAt,
+    ),
+    env.DB.prepare("UPDATE topups SET status = 'credited', tx_hash = ?, credited_at = ? WHERE id = ? AND project_id = ?")
+      .bind(transfer.txHash, creditedAt, topUp.id, projectId),
+    env.DB.prepare(
+      `INSERT INTO credit_ledger (id, project_id, source, payment_id, delta, balance_after, reason)
+       VALUES (?, ?, 'usdc_topup', ?, ?, ?, 'Base USDC top-up confirmed from wallet panel')`
+    ).bind(`cl_${crypto.randomUUID()}`, projectId, topUp.id, validation.creditAmount, balanceAfter),
+  ]);
+  return validation;
+}
+
+async function fetchBaseUsdcTransferByTxHash(txHash) {
+  const rpcUrl = MCP_NETWORKS.base.rpcUrl;
+  const [receipt, latestBlock] = await Promise.all([
+    rpcJson(rpcUrl, "eth_getTransactionReceipt", [txHash]),
+    rpcJson(rpcUrl, "eth_blockNumber", []),
+  ]);
+  if (!receipt) throw httpError(404, "Transaction receipt not found on Base.");
+  const logs = Array.isArray(receipt.logs) ? receipt.logs : [];
+  const transferLog = logs.find(log => (
+    normalizeAddress(log.address) === BASE_USDC_ADDRESS
+    && String(log.topics?.[0] || "").toLowerCase() === ERC20_TRANSFER_TOPIC
+    && Array.isArray(log.topics)
+    && log.topics.length >= 3
+  ));
+  if (!transferLog) throw httpError(404, "No Base USDC transfer found in this transaction.");
+
+  const blockNumber = Number(hexToBigInt(receipt.blockNumber || "0x0"));
+  const latest = Number(hexToBigInt(latestBlock || "0x0"));
+  return {
+    chainId: BASE_CHAIN_ID,
+    tokenAddress: BASE_USDC_ADDRESS,
+    fromAddress: topicToAddress(transferLog.topics[1]),
+    toAddress: topicToAddress(transferLog.topics[2]),
+    amountUsdc: formatUsdcUnits(hexToBigInt(transferLog.data || "0x0")),
+    txHash,
+    confirmations: blockNumber > 0 ? Math.max(latest - blockNumber + 1, 0) : 0,
+  };
+}
+
 function formatExplorerTokenAmount(item) {
   const value = BigInt(item.total?.value || "0");
   const decimals = BigInt(item.total?.decimals || item.token?.decimals || "6");
@@ -1013,6 +1155,12 @@ function normalizeOwnerWallet(value) {
   const ownerWallet = normalizeAddress(value);
   if (!/^0x[a-f0-9]{40}$/.test(ownerWallet)) throw httpError(400, "Invalid ownerWallet.");
   return ownerWallet;
+}
+
+function topicToAddress(value) {
+  const topic = String(value || "").toLowerCase().replace(/^0x/, "");
+  if (topic.length < 40) throw httpError(400, "Invalid transfer topic.");
+  return `0x${topic.slice(-40)}`;
 }
 
 function receiptUrl(receiptId, env) {

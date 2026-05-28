@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://api.txreceipts.com.tr https://txreceipts-api.evpc77.workers.dev"
+      content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://api.txreceipts.com.tr https://txreceipts-api.evpc77.workers.dev https://mainnet.base.org"
     />
     <title>API | TxReceipts</title>
     <meta
       name="description"
-      content="Connect a wallet, check request balance, and create Base USDC top-up intents for the TxReceipts API."
+      content="Create a free TxReceipts API key, then top up 10,000 paid requests with one 5 USDC Base wallet approval."
     />
     <meta name="theme-color" content="#111111" />
     <link rel="icon" href="./assets/txreceipts-brand.jpg" type="image/jpeg" />
@@ -36,10 +36,10 @@
     <main id="top" class="api-shell">
       <section class="api-hero">
         <p class="eyebrow">Builder API</p>
-        <h1>Manage API request credits from one page.</h1>
+        <h1>Create a free API key, then top up in one wallet approval.</h1>
         <p class="lede">
-          Connect an EVM wallet, prefill the billing wallet, inspect free and paid request balance,
-          and create Base USDC top-up intents for your TxReceipts project.
+          Connect a Base wallet once. This page creates one free 1,000-request API key for that
+          wallet, then lets you buy 10,000 more requests for 5 USDC with a single wallet prompt.
         </p>
       </section>
 
@@ -69,31 +69,37 @@
           </div>
         </section>
 
-        <section class="credit-panel api-credit-panel" aria-label="API request balance and Base top-up">
+        <section class="credit-panel api-credit-panel" aria-label="API onboarding and Base top-up">
           <div>
-            <p class="eyebrow">Project credits</p>
-            <h3>Check balance and create top-up</h3>
+            <p class="eyebrow">API access</p>
+            <h3>Start free, then pay only when you need more</h3>
             <p>
-              Each project gets the first 1,000 API requests free. After that, top up paid request
-              balance with native USDC on Base.
+              One connected wallet can create one free API project with 1,000 requests. After the
+              free requests run out, pay 5 USDC on Base to add 10,000 paid requests.
             </p>
-            <p id="creditStatus" class="form-status">Enter a project ID and API key to load request balance.</p>
+            <p id="creditStatus" class="form-status">Connect a wallet to create your free API key.</p>
             <p id="topUpInstructions" class="topup-instructions" hidden></p>
           </div>
           <div class="credit-fields">
             <div class="api-field-group">
               <label for="projectIdInput">Project ID</label>
-              <input id="projectIdInput" autocomplete="off" spellcheck="false" placeholder="project_demo" />
+              <input id="projectIdInput" autocomplete="off" spellcheck="false" placeholder="Created after free signup" />
             </div>
             <div class="api-field-group">
-              <label for="topUpAmountInput">Top-up USDC</label>
-              <input id="topUpAmountInput" inputmode="decimal" autocomplete="off" placeholder="5" />
+              <label for="apiKeyInput">API key</label>
+              <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="Created after free signup" />
             </div>
           </div>
           <div class="credit-fields">
-            <div class="api-field-group">
-              <label for="apiKeyInput">API key</label>
-              <input id="apiKeyInput" autocomplete="off" spellcheck="false" placeholder="txr_..." />
+            <div class="credit-balance api-plan-card">
+              <span class="mini-label">Free starter</span>
+              <strong>1,000 free requests</strong>
+              <p>One time per connected wallet. When you create the key here, this browser keeps a local copy.</p>
+            </div>
+            <div class="credit-balance api-plan-card">
+              <span class="mini-label">Top-up pack</span>
+              <strong>10,000 paid requests</strong>
+              <p>5 USDC on Base. Click once, approve in MetaMask or any EVM wallet, and the panel checks every 15 seconds.</p>
             </div>
             <div class="api-field-group">
               <label for="creditBalance">Available requests</label>
@@ -104,10 +110,11 @@
           </div>
           <div class="credit-balance api-actions-card" aria-live="polite">
             <span class="mini-label">Actions</span>
-            <strong>Base USDC</strong>
+            <strong>Wallet flow</strong>
             <div class="qa-actions">
-              <button id="checkCredits" class="button secondary" type="button">Check balance</button>
-              <button id="createTopUp" class="button primary" type="button">Create top-up</button>
+              <button id="createFreeProject" class="button primary" type="button">Create free API key</button>
+              <button id="checkCredits" class="button secondary" type="button">Refresh balance</button>
+              <button id="createTopUp" class="button primary" type="button">Pay 5 USDC for 10,000 credits</button>
             </div>
           </div>
         </section>
@@ -148,7 +155,7 @@
               <h3>Recent top-ups</h3>
             </div>
           </div>
-          <p id="topUpHistoryStatus" class="form-status">Enter a project ID and API key to load top-up history.</p>
+          <p id="topUpHistoryStatus" class="form-status">Create or paste an API key to load top-up history.</p>
           <div class="api-topup-table-wrap">
             <table class="api-topup-table">
               <thead>
@@ -173,11 +180,11 @@
     </main>
 
     <footer class="footer">
-      <span>TxReceipts API billing is isolated from the free public panel.</span>
+      <span>TxReceipts API billing now starts with a one-time free wallet signup.</span>
       <a href="./index.html#top">Back to product</a>
     </footer>
 
     <script src="./wallets.js?v=20260528-2"></script>
-    <script src="./api.js?v=20260528-1"></script>
+    <script src="./api.js?v=20260528-2"></script>
   </body>
 </html>
