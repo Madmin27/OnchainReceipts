@@ -12,6 +12,16 @@ import {
 import { detectQuestionRoute, routingNote } from "./questionRouter.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
+const RECEIPT_BASE_URL = "https://txreceipts.com.tr";
+const CHAIN_NETWORK_CODE = {
+  1: "ETH",
+  137: "POLYGON",
+  8453: "BASE",
+  42161: "ARB",
+};
+const RECEIPT_EDITABLE_FIELDS = ["memo", "category", "accountingNote", "businessExpense"];
+
+let schemaReadyPromise = null;
 
 export default {
   async fetch(request, env) {
@@ -28,6 +38,8 @@ export async function handleRequest(request, env) {
   if (request.method === "GET" && url.pathname === "/health") {
     return json({ ok: true, service: "txreceipts-api" }, env, request);
   }
+
+  await ensureReceiptSchema(env);
 
   try {
     if (request.method === "POST" && url.pathname === "/v1/admin/projects") {
@@ -52,6 +64,19 @@ export async function handleRequest(request, env) {
     if (request.method === "POST" && url.pathname === "/v1/receipts") {
       const project = await requireProject(request, env);
       return json(await createReceipt(request, env, project), env, request, 201);
+    }
+    const receiptMatch = url.pathname.match(/^\/v1\/receipts\/([^/]+)$/);
+    if (request.method === "GET" && receiptMatch) {
+      const project = await requireProject(request, env);
+      return json(await getReceipt(env, project.id, receiptMatch[1]), env, request);
+    }
+    if (request.method === "PATCH" && receiptMatch) {
+      const project = await requireProject(request, env);
+      return json(await updateReceipt(request, env, project, receiptMatch[1]), env, request);
+    }
+    const publicReceiptMatch = url.pathname.match(/^\/r\/(TXR-[A-Z0-9]+-[A-F0-9]{24})$/);
+    if (request.method === "GET" && publicReceiptMatch) {
+      return json(await getPublicReceipt(env, publicReceiptMatch[1]), env, request);
     }
     if (request.method === "POST" && url.pathname === "/v1/ai/accounting-answer") {
       return json(await answerAccountingQuestion(request, env), env, request);
@@ -205,47 +230,142 @@ async function projectCredits(env, projectId) {
 
 async function createReceipt(request, env, project) {
   const body = await readJson(request);
-  if (Number(body.chainId) !== BASE_CHAIN_ID) throw httpError(400, "Only Base receipts are billable in the launch API.");
-  if (!/^0x[a-fA-F0-9]{64}$/.test(String(body.txHash || ""))) throw httpError(400, "Invalid txHash.");
+  const chainId = normalizeChainId(body.chainId);
+  const network = networkCodeForChainId(chainId);
+  if (chainId !== BASE_CHAIN_ID) throw httpError(400, "Only Base receipts are billable in the launch API.");
+  const txHash = normalizeTxHash(body.txHash);
+  const ownerWallet = normalizeOwnerWallet(body.ownerWallet || body.user);
+  const receiptId = await generateReceiptId({ chainId, network, txHash, ownerWallet });
   const idempotencyKey = request.headers.get("Idempotency-Key")
     || body.idempotencyKey
-    || `${project.id}:${body.chainId}:${String(body.txHash).toLowerCase()}`;
+    || `${project.id}:${chainId}:${txHash}:${ownerWallet}`;
 
   const existing = await env.DB.prepare(
-    "SELECT id, status FROM receipts WHERE project_id = ? AND (idempotency_key = ? OR tx_hash = ?)"
-  ).bind(project.id, idempotencyKey, String(body.txHash).toLowerCase()).first();
+    "SELECT * FROM receipts WHERE project_id = ? AND (id = ? OR idempotency_key = ? OR (chain_id = ? AND tx_hash = ? AND owner_wallet = ?)) LIMIT 1"
+  ).bind(project.id, receiptId, idempotencyKey, chainId, txHash, ownerWallet).first();
   if (existing) {
-    return {
-      receiptId: existing.id,
-      status: existing.status,
-      credit: { counted: false, amount: 0, reason: "duplicate project + chain + tx hash", remaining: await getBalance(env, project.id) },
-      artifacts: {},
-      verification: { checks: [] },
-    };
+    return mapReceiptResponse(existing, {
+      remaining: await getBalance(env, project.id),
+      counted: false,
+      amount: 0,
+      reason: "duplicate chain + tx hash + owner wallet",
+    }, env);
   }
 
   const balance = await getBalance(env, project.id);
   if (!canSpendCredit(balance, 1)) throw httpError(402, "Credit balance below -10 overdraft limit.");
-  const receiptId = `or_base_${String(body.txHash).slice(2, 10)}_${crypto.randomUUID().slice(0, 8)}`;
   const balanceAfter = balance - 1;
+  const revisionId = `rr_${crypto.randomUUID().replaceAll("-", "")}`;
+  const createdAt = new Date().toISOString();
+  const direction = String(body.direction || "unknown").slice(0, 32);
+  const category = String(body.category || body.intent?.type || "unknown").slice(0, 64);
+  const verificationStatus = "verified";
+  const memo = body.memo ? String(body.memo).slice(0, 500) : null;
+  const accountingNote = body.accountingNote ? String(body.accountingNote).slice(0, 1000) : null;
+  const businessExpense = body.businessExpense ? 1 : 0;
 
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO receipts (id, project_id, chain_id, tx_hash, status, idempotency_key) VALUES (?, ?, ?, ?, 'verified', ?)"
-    ).bind(receiptId, project.id, BASE_CHAIN_ID, String(body.txHash).toLowerCase(), idempotencyKey),
+      `INSERT INTO receipts
+       (id, project_id, chain_id, network, tx_hash, owner_wallet, direction, category, status, verification_status, memo, accounting_note, business_expense, idempotency_key, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'verified', ?, ?, ?, ?, ?, ?, ?)`
+     ).bind(receiptId, project.id, chainId, network.toLowerCase(), txHash, ownerWallet, direction, category, verificationStatus, memo, accountingNote, businessExpense, idempotencyKey, createdAt, createdAt),
     env.DB.prepare(
       `INSERT INTO credit_ledger (id, project_id, source, receipt_id, delta, balance_after, reason)
        VALUES (?, ?, 'receipt_usage', ?, -1, ?, 'verified receipt usage')`
     ).bind(`cl_${crypto.randomUUID()}`, project.id, receiptId, balanceAfter),
+    env.DB.prepare(
+      `INSERT INTO receipt_revisions (id, receipt_id, version, changed_at, changed_by, changes_json)
+       VALUES (?, ?, 1, ?, ?, ?)`
+    ).bind(revisionId, receiptId, createdAt, project.id, JSON.stringify({
+      receiptId,
+      chainId,
+      network: network.toLowerCase(),
+      txHash,
+      ownerWallet,
+      direction,
+      category,
+      status: "verified",
+      verificationStatus,
+    })),
   ]);
 
-  return {
-    receiptId,
-    status: "verified",
-    credit: { counted: true, amount: 1, reason: "verified receipt usage", remaining: balanceAfter },
-    artifacts: {},
-    verification: { checks: [{ name: "credit_available", status: "pass" }] },
-  };
+  const created = await env.DB.prepare("SELECT * FROM receipts WHERE id = ? LIMIT 1").bind(receiptId).first();
+  return mapReceiptResponse(created, {
+    remaining: balanceAfter,
+    counted: true,
+    amount: 1,
+    reason: "verified receipt usage",
+  }, env);
+}
+
+async function getReceipt(env, projectId, receiptId) {
+  const row = await env.DB.prepare("SELECT * FROM receipts WHERE id = ? AND project_id = ? LIMIT 1").bind(String(receiptId || "").toUpperCase(), projectId).first();
+  if (!row) throw httpError(404, "Receipt not found.");
+  return mapReceiptResponse(row, {
+    remaining: await getBalance(env, projectId),
+    counted: false,
+    amount: 0,
+    reason: "existing receipt",
+  }, env);
+}
+
+async function getPublicReceipt(env, receiptId) {
+  const row = await env.DB.prepare("SELECT * FROM receipts WHERE id = ? LIMIT 1").bind(String(receiptId || "").toUpperCase()).first();
+  if (!row) throw httpError(404, "Receipt not found.");
+  return mapPublicReceipt(row, env);
+}
+
+async function updateReceipt(request, env, project, receiptId) {
+  const body = await readJson(request);
+  const existing = await env.DB.prepare("SELECT * FROM receipts WHERE id = ? AND project_id = ? LIMIT 1").bind(String(receiptId || "").toUpperCase(), project.id).first();
+  if (!existing) throw httpError(404, "Receipt not found.");
+
+  const changes = {};
+  for (const field of RECEIPT_EDITABLE_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(body, field)) {
+      changes[field] = body[field];
+    }
+  }
+  if (Object.keys(changes).length === 0) throw httpError(400, "No supported receipt revision fields provided.");
+
+  const nextCategory = Object.prototype.hasOwnProperty.call(changes, "category")
+    ? String(changes.category || existing.category || "unknown").slice(0, 64)
+    : existing.category;
+  const nextMemo = Object.prototype.hasOwnProperty.call(changes, "memo")
+    ? String(changes.memo || "").slice(0, 500)
+    : existing.memo;
+  const nextAccountingNote = Object.prototype.hasOwnProperty.call(changes, "accountingNote")
+    ? String(changes.accountingNote || "").slice(0, 1000)
+    : existing.accounting_note;
+  const nextBusinessExpense = Object.prototype.hasOwnProperty.call(changes, "businessExpense")
+    ? Number(Boolean(changes.businessExpense))
+    : Number(existing.business_expense || 0);
+  const nextUpdatedAt = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(
+      "UPDATE receipts SET category = ?, memo = ?, accounting_note = ?, business_expense = ?, updated_at = ? WHERE id = ? AND project_id = ?"
+    ).bind(nextCategory, nextMemo, nextAccountingNote, nextBusinessExpense, nextUpdatedAt, existing.id, project.id),
+    env.DB.prepare(
+      `INSERT INTO receipt_revisions (id, receipt_id, version, changed_at, changed_by, changes_json)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind(
+      `rr_${crypto.randomUUID().replaceAll("-", "")}`,
+      existing.id,
+      Number(await nextReceiptRevisionVersion(env, existing.id)),
+      nextUpdatedAt,
+      project.id,
+      JSON.stringify(changes),
+    ),
+  ]);
+
+  const updated = await env.DB.prepare("SELECT * FROM receipts WHERE id = ? AND project_id = ? LIMIT 1").bind(existing.id, project.id).first();
+  return mapReceiptResponse(updated, {
+    remaining: await getBalance(env, project.id),
+    counted: false,
+    amount: 0,
+    reason: "receipt revision stored",
+  }, env);
 }
 
 async function scanBaseUsdcTransfers(env) {
@@ -361,6 +481,56 @@ async function requireProject(request, env) {
   return project;
 }
 
+async function ensureReceiptSchema(env) {
+  if (!schemaReadyPromise) {
+    schemaReadyPromise = (async () => {
+      const columns = await env.DB.prepare("PRAGMA table_info(receipts)").all();
+      const existingColumns = new Set((columns.results || []).map(row => row.name));
+      const statements = [];
+      const missingColumns = [
+        ["network", "TEXT"],
+        ["owner_wallet", "TEXT"],
+        ["direction", "TEXT"],
+        ["category", "TEXT"],
+        ["verification_status", "TEXT"],
+        ["memo", "TEXT"],
+        ["accounting_note", "TEXT"],
+        ["business_expense", "INTEGER NOT NULL DEFAULT 0"],
+        ["updated_at", "TEXT"],
+      ];
+      for (const [name, definition] of missingColumns) {
+        if (!existingColumns.has(name)) {
+          statements.push(env.DB.prepare(`ALTER TABLE receipts ADD COLUMN ${name} ${definition}`));
+        }
+      }
+      statements.push(
+        env.DB.prepare(
+          `CREATE TABLE IF NOT EXISTS receipt_revisions (
+            id TEXT PRIMARY KEY,
+            receipt_id TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            changed_at TEXT NOT NULL,
+            changed_by TEXT,
+            changes_json TEXT NOT NULL,
+            FOREIGN KEY (receipt_id) REFERENCES receipts(id)
+          )`
+        ),
+      );
+      statements.push(
+        env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS receipts_chain_tx_owner_unique ON receipts(chain_id, tx_hash, owner_wallet)")
+      );
+      statements.push(
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS receipt_revisions_receipt_id_idx ON receipt_revisions(receipt_id, version)")
+      );
+      if (statements.length > 0) await env.DB.batch(statements);
+    })().catch(error => {
+      schemaReadyPromise = null;
+      throw error;
+    });
+  }
+  return schemaReadyPromise;
+}
+
 async function requireAdmin(request, env) {
   const auth = request.headers.get("Authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
@@ -378,6 +548,80 @@ async function sha256(value) {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function generateReceiptId({ chainId, network, txHash, ownerWallet }) {
+  const source = `${String(chainId)}:${String(txHash).toLowerCase()}:${String(ownerWallet).toLowerCase()}`;
+  const hash = (await sha256(source)).slice(0, 24).toUpperCase();
+  return `TXR-${String(network).toUpperCase()}-${hash}`;
+}
+
+function normalizeChainId(value) {
+  const chainId = Number(value);
+  if (!Number.isInteger(chainId) || !CHAIN_NETWORK_CODE[chainId]) throw httpError(400, "Unsupported chainId.");
+  return chainId;
+}
+
+function networkCodeForChainId(chainId) {
+  const code = CHAIN_NETWORK_CODE[Number(chainId)];
+  if (!code) throw httpError(400, "Unsupported chainId.");
+  return code;
+}
+
+function normalizeTxHash(value) {
+  const txHash = String(value || "").toLowerCase();
+  if (!/^0x[a-f0-9]{64}$/.test(txHash)) throw httpError(400, "Invalid txHash.");
+  return txHash;
+}
+
+function normalizeOwnerWallet(value) {
+  const ownerWallet = normalizeAddress(value);
+  if (!/^0x[a-f0-9]{40}$/.test(ownerWallet)) throw httpError(400, "Invalid ownerWallet.");
+  return ownerWallet;
+}
+
+function receiptUrl(receiptId, env) {
+  const baseUrl = String(env.PUBLIC_APP_URL || RECEIPT_BASE_URL).replace(/\/+$/, "");
+  return `${baseUrl}/r/${receiptId}`;
+}
+
+async function nextReceiptRevisionVersion(env, receiptId) {
+  const row = await env.DB.prepare(
+    "SELECT COALESCE(MAX(version), 0) + 1 AS version FROM receipt_revisions WHERE receipt_id = ?"
+  ).bind(receiptId).first();
+  return Number(row?.version || 1);
+}
+
+function mapPublicReceipt(row, env = {}) {
+  return {
+    receiptId: row.id,
+    network: String(row.network || networkCodeForChainId(row.chain_id)).toLowerCase(),
+    chainId: Number(row.chain_id),
+    txHash: row.tx_hash,
+    ownerWallet: row.owner_wallet,
+    verificationStatus: row.verification_status || row.status,
+    direction: row.direction || "unknown",
+    category: row.category || "unknown",
+    memo: row.memo || undefined,
+    accountingNote: row.accounting_note || undefined,
+    businessExpense: Boolean(row.business_expense),
+    receiptUrl: receiptUrl(row.id, env),
+  };
+}
+
+function mapReceiptResponse(row, credit, env = {}) {
+  return {
+    ...mapPublicReceipt(row, env),
+    status: row.status,
+    credit: {
+      counted: Boolean(credit?.counted),
+      amount: Number(credit?.amount || 0),
+      reason: credit?.reason || "existing receipt",
+      remaining: credit?.remaining,
+    },
+    artifacts: {},
+    verification: { checks: [{ name: "credit_available", status: "pass" }] },
+  };
 }
 
 async function readJson(request) {
@@ -416,7 +660,7 @@ function corsResponse(body, env, request, status = 200, headers = {}) {
       ...headers,
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Headers": "Authorization, Content-Type, Idempotency-Key",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
       "Vary": "Origin",
     },
   });

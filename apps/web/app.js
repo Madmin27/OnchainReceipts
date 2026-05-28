@@ -963,7 +963,19 @@ function evidenceText(network, block) {
   return `${network.name} block ${block || "pending"}; explorer QR and full tx hash included`;
 }
 
-function buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers = [], internalTransfers = []) {
+async function sha256Hex(value) {
+  const bytes = new TextEncoder().encode(String(value || ""));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function generateReceiptId({ chainId, network, txHash, ownerWallet }) {
+  const source = `${String(chainId)}:${String(txHash || "").toLowerCase()}:${String(ownerWallet || "").toLowerCase()}`;
+  const hash = (await sha256Hex(source)).slice(0, 24).toUpperCase();
+  return `TXR-${String(network || "UNKNOWN").toUpperCase()}-${hash}`;
+}
+
+async function buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers = [], internalTransfers = []) {
   const network = currentNetwork();
   const transfers = explorerTransfers.length ? explorerTransfers : parseTransfers(txReceipt.logs || []);
   const summary = summarizeTransfers(tx, transfers);
@@ -1013,9 +1025,15 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers =
     + Number(Boolean(summary.firstReceived && summary.firstReceived !== summary.firstSent));
   const undisplayedTransferCount = Math.max(transfers.length - primaryTransferCount - observedRows.length, 0);
   const blockNumber = String(parseInt(txReceipt.blockNumber, 16));
+  const receiptId = await generateReceiptId({
+    chainId: network.decimalChainId || network.chainId || network.id,
+    network: network.name,
+    txHash,
+    ownerWallet: tx.from,
+  });
 
   return {
-    id: `or_${network.id}_${txHash.slice(2, 10)}`,
+    id: receiptId,
     title: inferTitle(summary, tx),
     purpose: inferReceiptPurpose(summary, tx, transfers),
     counterparty: tx.to ? `${shortHash(tx.to)} contract` : "Contract creation",
@@ -1062,7 +1080,7 @@ function lamportsToSol(lamports) {
   return `${formatUnits(BigInt(Math.max(Number(lamports || 0), 0)), 9n, 9)} SOL`;
 }
 
-function buildSolanaReceipt(signature, tx) {
+async function buildSolanaReceipt(signature, tx) {
   const network = currentNetwork();
   const meta = tx?.meta || {};
   const message = tx?.transaction?.message || {};
@@ -1072,8 +1090,14 @@ function buildSolanaReceipt(signature, tx) {
   const failed = Boolean(meta.err);
   const blockTime = tx?.blockTime ? new Date(tx.blockTime * 1000) : null;
   const explorerUrl = `${network.explorerUrl}/tx/${signature}`;
+  const receiptId = await generateReceiptId({
+    chainId: network.cluster || network.id,
+    network: network.name,
+    txHash: signature,
+    ownerWallet: signer,
+  });
   return {
-    id: `or_${network.id}_${signature.slice(0, 8)}`,
+    id: receiptId,
     title: "Solana transaction",
     purpose: "Wallet activity record",
     counterparty: "Solana program interaction",
@@ -2009,8 +2033,17 @@ async function answerQuestion(question, options = {}) {
   }
 }
 
-function downloadMonthlyCsv() {
+async function downloadMonthlyCsv() {
   const report = buildMonthlyReport();
+  const csvReceiptIds = await Promise.all(report.items.map(async item => {
+    if (!item.hash || !connectedWallet) return "";
+    return generateReceiptId({
+      chainId: currentNetwork().decimalChainId || currentNetwork().chainId || currentNetwork().id,
+      network: currentNetwork().name,
+      txHash: item.hash,
+      ownerWallet: connectedWallet,
+    });
+  }));
   const rows = [
     ["network", report.network],
     ["wallet", report.wallet],
@@ -2024,10 +2057,11 @@ function downloadMonthlyCsv() {
     ["verified_records", report.verifiedReceiptCount],
     ["gas_fees_native", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
     [],
-    ["Date", "Network", "Tx Hash", "Direction", "Category", "Counterparty", "Value", "Gas Native", "App Fee USD", "Protocol Fee USD", "Memo", "Verification Status"],
-    ...report.items.map(item => [
+    ["Date", "Network", "Receipt ID", "Tx Hash", "Direction", "Category", "Counterparty", "Value", "Gas Native", "App Fee USD", "Protocol Fee USD", "Memo", "Verification Status"],
+    ...report.items.map((item, index) => [
       item.timestamp || "",
       report.network,
+      csvReceiptIds[index],
       item.hash,
       item.accounting.direction,
       item.accounting.category,
@@ -2559,8 +2593,8 @@ async function renderReceiptCanvas(data) {
   drawText(context, data.title, 112, 228, { size: 64, weight: 800, maxLength: 42 });
   drawText(context, "Purpose", 112, 278, { color: "#5c655f", size: 20, maxLength: 12 });
   drawText(context, data.purpose || "Transaction record", 212, 278, { size: 22, weight: 800, maxLength: 36 });
-  drawText(context, "Receipt ID", 660, 278, { color: "#5c655f", size: 20, maxLength: 12 });
-  drawText(context, data.id, 780, 278, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 22, weight: 800, maxLength: 32 });
+  drawText(context, "TxReceipts Receipt ID", 660, 278, { color: "#5c655f", size: 20, maxLength: 22 });
+  drawText(context, data.id, 920, 278, { family: "ui-monospace, SFMono-Regular, Consolas, monospace", size: 22, weight: 800, maxLength: 40 });
   roundedRect(context, 1408, 114, 180, 68, 34);
   context.fillStyle = data.status === "Verified" ? "#fff0c6" : "#ffe4e4";
   context.fill();
