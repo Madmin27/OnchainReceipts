@@ -98,7 +98,7 @@ export class TxReceipts {
       throw new Error("TxReceipts requires an API key.");
     }
     this.apiKey = options.apiKey;
-    this.baseUrl = options.baseUrl || "https://txreceipts-api.evpc77.workers.dev";
+    this.baseUrl = options.baseUrl || "https://api.txreceipts.com.tr";
     this.projectId = options.projectId;
   }
 
