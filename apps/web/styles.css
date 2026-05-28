@@ -491,6 +491,7 @@ dd {
 .wallet-panel-bottom {
   display: grid;
   gap: 6px;
+  justify-items: end;
 }
 
 .wallet-panel-divider {
@@ -550,6 +551,7 @@ dd {
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
   max-width: 620px;
+  width: min(620px, 100%);
 }
 
 .wallet-address-row input {
@@ -1146,7 +1148,10 @@ dd {
 
   .wallet-address-row {
     grid-template-columns: 1fr;
+    justify-self: stretch;
+    justify-items: stretch;
     max-width: none;
+    width: 100%;
   }
 
   .wallet-button,
