@@ -149,7 +149,7 @@ function currentDappUrl() {
 function mobileWalletLaunchUrl(id) {
   const currentUrl = currentDappUrl();
   const strippedUrl = currentUrl.replace(/^https?:\/\//i, "");
-  if (id === "mobile-metamask") return `https://metamask.app.link/dapp/${strippedUrl}`;
+  if (id === "mobile-metamask") return `https://link.metamask.io/dapp/${strippedUrl}`;
   if (id === "mobile-coinbase") return `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(currentUrl)}`;
   if (id === "mobile-trust") return `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(currentUrl)}`;
   if (id === "mobile-phantom") return `https://phantom.app/ul/browse/${encodeURIComponent(currentUrl)}?ref=${encodeURIComponent(window.location.origin)}`;
