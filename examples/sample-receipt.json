@@ -1,10 +1,10 @@
 {
   "version": "0.1",
-  "receiptId": "or_demo_base_swap_001",
+  "receiptId": "TXR-BASE-9F3A8C21B7E44D91A02F67AA",
   "chainId": 8453,
   "txHash": "0x1111111111111111111111111111111111111111111111111111111111111111",
   "status": "verified",
-  "issuedAt": "2026-05-17T09:15:00Z",
+  "issuedAt": "2026-05-17T09:14:42Z",
   "block": {
     "number": 30214511,
     "timestamp": "2026-05-17T09:14:42Z"

@@ -1028,7 +1028,7 @@ function buildReceiptFromChain(txHash, tx, txReceipt, block, explorerTransfers =
           dateStyle: "medium",
           timeStyle: "short",
         })
-      : new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
+      : "Block timestamp unavailable",
     tx: shortHash(txHash),
     fullTxHash: txHash,
     from: shortHash(tx.from),
@@ -1070,7 +1070,7 @@ function buildSolanaReceipt(signature, tx) {
   const signer = accountKeys[0]?.pubkey || accountKeys[0] || connectedWallet;
   const fee = meta.fee || 0;
   const failed = Boolean(meta.err);
-  const blockTime = tx?.blockTime ? new Date(tx.blockTime * 1000) : new Date();
+  const blockTime = tx?.blockTime ? new Date(tx.blockTime * 1000) : null;
   const explorerUrl = `${network.explorerUrl}/tx/${signature}`;
   return {
     id: `or_${network.id}_${signature.slice(0, 8)}`,
@@ -1081,7 +1081,9 @@ function buildSolanaReceipt(signature, tx) {
     evidence: evidenceText(network, String(tx?.slot || "pending")),
     app: safeDisplay(signer, 44),
     network: network.name,
-    date: blockTime.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }),
+    date: blockTime
+      ? blockTime.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+      : "Block timestamp unavailable",
     tx: shortHash(signature),
     fullTxHash: signature,
     from: shortHash(signer),
