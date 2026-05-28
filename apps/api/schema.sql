@@ -35,14 +35,36 @@ CREATE TABLE IF NOT EXISTS receipts (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
   chain_id INTEGER NOT NULL,
+  network TEXT NOT NULL,
   tx_hash TEXT NOT NULL,
+  owner_wallet TEXT NOT NULL,
+  direction TEXT,
+  category TEXT,
   status TEXT NOT NULL,
+  verification_status TEXT,
+  memo TEXT,
+  accounting_note TEXT,
+  business_expense INTEGER NOT NULL DEFAULT 0,
   idempotency_key TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(project_id, chain_id, tx_hash),
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(chain_id, tx_hash, owner_wallet),
   UNIQUE(project_id, idempotency_key),
   FOREIGN KEY (project_id) REFERENCES projects(id)
 );
+
+CREATE TABLE IF NOT EXISTS receipt_revisions (
+  id TEXT PRIMARY KEY,
+  receipt_id TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  changed_at TEXT NOT NULL,
+  changed_by TEXT,
+  changes_json TEXT NOT NULL,
+  FOREIGN KEY (receipt_id) REFERENCES receipts(id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS receipts_chain_tx_owner_unique ON receipts(chain_id, tx_hash, owner_wallet);
+CREATE INDEX IF NOT EXISTS receipt_revisions_receipt_id_idx ON receipt_revisions(receipt_id, version);
 
 CREATE TABLE IF NOT EXISTS credit_ledger (
   id TEXT PRIMARY KEY,
