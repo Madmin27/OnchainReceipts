@@ -1,17 +1,23 @@
 :root {
-  --bg: #111111;
-  --paper: #1b1918;
-  --ink: #fffaf0;
-  --muted: #b7ada4;
-  --line: #3a3330;
-  --blue: #21c7bd;
-  --blue-soft: #8de8df;
-  --green: #946300;
-  --green-bg: #fff0c6;
+  --bg: #0b0b12;
+  --paper: #15131a;
+  --ink: #f0eeff;
+  --muted: #9490a8;
+  --line: #2a2738;
+  --blue: #6c72ff;
+  --blue-soft: #a5abff;
+  --green: #7acc6d;
+  --green-bg: rgba(122, 204, 109, 0.12);
   --gold: #ffc75a;
-  --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  --app-bg: #151312;
+  --purple: #b86aff;
+  --purple-soft: #d9a8ff;
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --app-bg: #0f0d14;
   --field: #ffffff;
+  --glass-bg: rgba(11, 11, 18, 0.78);
+  --glow-blue: 0 0 24px rgba(108, 114, 255, 0.12);
+  --glow-gold: 0 0 24px rgba(255, 199, 90, 0.12);
 }
 
 * {
@@ -38,11 +44,13 @@ a {
 
 .topbar {
   align-items: center;
-  background: rgba(17, 17, 17, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: var(--glass-bg);
   border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
-  min-height: 72px;
+  min-height: 68px;
   padding: 0 5vw;
   position: sticky;
   top: 0;
@@ -190,7 +198,7 @@ h3 {
 
 .button {
   border: 1px solid var(--ink);
-  border-radius: 7px;
+  border-radius: 10px;
   cursor: pointer;
   display: inline-flex;
   font: inherit;
@@ -214,13 +222,13 @@ h3 {
 }
 
 .button:not(:disabled):hover {
-  box-shadow: 0 10px 24px rgba(33, 199, 189, 0.18);
-  transform: translateY(-1px);
+  box-shadow: var(--glow-blue);
+  transform: translateY(-2px);
 }
 
 .button:not(:disabled):active {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
-  transform: translateY(1px) scale(0.99);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(1px) scale(0.98);
 }
 
 .button:focus-visible,
@@ -231,9 +239,9 @@ h3 {
 }
 
 .button.primary {
-  background: var(--gold);
+  background: linear-gradient(135deg, var(--gold), #ffb347);
   border-color: var(--gold);
-  color: #111111;
+  color: #0b0b12;
 }
 
 .button.secondary {
@@ -243,6 +251,7 @@ h3 {
 
 .button.secondary:hover {
   border-color: var(--blue);
+  box-shadow: var(--glow-blue);
 }
 
 .receipt-card,
@@ -252,7 +261,15 @@ h3 {
 .artifact {
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.feature-grid article:hover,
+.pricing-grid article:hover {
+  border-color: rgba(108, 114, 255, 0.35);
+  box-shadow: var(--glow-blue);
+  transform: translateY(-2px);
 }
 
 .receipt-card {
@@ -503,9 +520,21 @@ dd {
 }
 
 .demo-section {
-  background: radial-gradient(circle at top left, rgba(33, 199, 189, 0.22), transparent 30%),
-    radial-gradient(circle at top right, rgba(255, 199, 90, 0.14), transparent 32%),
+  background: radial-gradient(circle at top left, rgba(108, 114, 255, 0.18), transparent 30%),
+    radial-gradient(circle at top right, rgba(255, 199, 90, 0.12), transparent 32%),
     var(--app-bg);
+  position: relative;
+}
+
+.demo-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--blue), var(--gold), transparent);
+  opacity: 0.4;
 }
 
 .demo-panel {
@@ -737,7 +766,7 @@ dd {
   align-items: end;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   display: grid;
   gap: 18px;
   grid-template-columns: minmax(0, 1fr) minmax(230px, 0.65fr) minmax(230px, 0.65fr) minmax(210px, 0.45fr);
@@ -1262,31 +1291,44 @@ dd {
   border-color: var(--blue);
 }
 
-.history-item--incoming-token {
-  background: linear-gradient(180deg, rgba(18, 54, 39, 0.96), rgba(21, 19, 18, 0.98));
-  border-color: rgba(89, 197, 137, 0.34);
+.history-item--incoming-token,
+.history-item--incoming {
+  background: linear-gradient(180deg, rgba(46, 120, 80, 0.20), rgba(21, 19, 18, 0.96));
+  border-color: rgba(122, 204, 109, 0.30);
 }
 
-.history-item--incoming-token:hover {
-  border-color: rgba(118, 223, 164, 0.62);
+.history-item--incoming-token:hover,
+.history-item--incoming:hover {
+  border-color: rgba(122, 204, 109, 0.60);
 }
 
-.history-item--outgoing-token {
-  background: linear-gradient(180deg, rgba(62, 23, 30, 0.96), rgba(21, 19, 18, 0.98));
-  border-color: rgba(176, 76, 94, 0.34);
+.history-item--outgoing-token,
+.history-item--outgoing {
+  background: linear-gradient(180deg, rgba(180, 60, 80, 0.20), rgba(21, 19, 18, 0.96));
+  border-color: rgba(214, 99, 122, 0.30);
 }
 
-.history-item--outgoing-token:hover {
-  border-color: rgba(214, 99, 122, 0.58);
+.history-item--outgoing-token:hover,
+.history-item--outgoing:hover {
+  border-color: rgba(214, 99, 122, 0.60);
 }
 
 .history-item--swap {
-  background: linear-gradient(180deg, rgba(20, 33, 64, 0.96), rgba(21, 19, 18, 0.98));
-  border-color: rgba(87, 126, 219, 0.34);
+  background: linear-gradient(180deg, rgba(108, 114, 255, 0.16), rgba(21, 19, 18, 0.96));
+  border-color: rgba(108, 114, 255, 0.30);
 }
 
 .history-item--swap:hover {
-  border-color: rgba(110, 154, 255, 0.62);
+  border-color: rgba(108, 114, 255, 0.60);
+}
+
+.history-item--nft {
+  background: linear-gradient(180deg, rgba(184, 106, 255, 0.16), rgba(21, 19, 18, 0.96));
+  border-color: rgba(184, 106, 255, 0.30);
+}
+
+.history-item--nft:hover {
+  border-color: rgba(184, 106, 255, 0.60);
 }
 
 .history-item strong,
@@ -1318,16 +1360,22 @@ dd {
   padding: 10px;
 }
 
-.history-item--incoming-token .history-column {
+.history-item--incoming-token .history-column,
+.history-item--incoming .history-column {
   background: rgba(24, 45, 34, 0.88);
 }
 
-.history-item--outgoing-token .history-column {
+.history-item--outgoing-token .history-column,
+.history-item--outgoing .history-column {
   background: rgba(52, 22, 28, 0.88);
 }
 
 .history-item--swap .history-column {
   background: rgba(24, 36, 66, 0.88);
+}
+
+.history-item--nft .history-column {
+  background: rgba(44, 24, 66, 0.88);
 }
 
 .history-column-label {
@@ -1604,10 +1652,147 @@ dd {
   display: grid;
 }
 
+/* ==========================================================
+   PRINT STYLES — PDF v2
+   ========================================================== */
+
 /* Print container — hidden on screen, visible on print via @media */
 .print-container {
   display: none;
 }
+
+/* --- Print Preview Overlay (screen only) --- */
+.print-preview-overlay {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: #f0f2f5;
+  overflow-y: auto;
+}
+
+.print-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: #1a1a2e;
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.print-preview-title {
+  font-weight: 700;
+  font-size: 13px;
+  flex: 1;
+}
+
+.print-preview-count {
+  font-size: 11px;
+  color: #aaa;
+}
+
+.print-preview-btn {
+  background: #0052ff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 7px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.print-preview-btn.secondary {
+  background: #444;
+}
+
+.print-preview-btn:hover {
+  opacity: 0.85;
+}
+
+/* Print report in preview */
+.print-preview-overlay .print-report {
+  max-width: 8.5in;
+  margin: 20px auto;
+  background: #ffffff;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.12);
+  padding: 0.5in 0.4in;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color: #111;
+}
+
+/* --- Empty State --- */
+.print-report-empty .print-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+  font-size: 11pt;
+}
+
+.print-report-empty .print-empty-state p {
+  margin: 8px 0;
+}
+
+/* --- Print Error --- */
+.print-error {
+  color: #c62828;
+  background: #ffebee;
+  border: 1px solid #ef9a9a;
+  border-radius: 4px;
+  padding: 20px;
+  font-size: 11pt;
+  text-align: center;
+}
+
+/* --- Wallet + Token Row --- */
+.print-wallet-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+  align-items: stretch;
+}
+
+.print-wallet-row .print-wallet {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.print-tokens {
+  background: #f5f7fa;
+  border: 1px solid #dde1e6;
+  border-radius: 4px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 8pt;
+  white-space: nowrap;
+}
+
+.print-token-list {
+  font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+  font-size: 7.5pt;
+  color: #0052ff;
+}
+
+/* --- Column Width Classes --- */
+.col-idx { width: 3%; }
+.col-date { width: 12%; }
+.col-dir { width: 6%; }
+.col-cat { width: 8%; }
+.col-title { width: 13%; }
+.col-party { width: 12%; }
+.col-value { width: 12%; }
+.col-gas { width: 10%; }
+.col-status { width: 7%; }
+.col-hash { width: 17%; }
+
+/* ========================================================== */
 
 @media print {
   /* Hide all UI chrome */
@@ -1624,7 +1809,9 @@ dd {
   .qa-form,
   .quick-questions,
   .qa-actions,
-  .footer {
+  .footer,
+  .print-preview-overlay,
+  .print-preview-toolbar {
     display: none !important;
   }
 
@@ -1658,8 +1845,21 @@ dd {
 
   .print-report {
     max-width: 100%;
-    padding: 0.4in 0.3in;
+    padding: 0;
+    margin: 0;
     font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  /* --- Page size & margins --- */
+  @page {
+    size: A4 portrait;
+    margin: 0.6in 0.4in 0.5in 0.4in;
+  }
+
+  /* Prevent page break inside sections */
+  .print-report {
+    orphans: 4;
+    widows: 4;
   }
 
   /* --- Header --- */
@@ -1668,12 +1868,12 @@ dd {
     justify-content: space-between;
     align-items: flex-start;
     border-bottom: 2px solid #1a1a2e;
-    padding-bottom: 12px;
-    margin-bottom: 16px;
+    padding-bottom: 10px;
+    margin-bottom: 14px;
   }
 
   .print-title {
-    font-size: 18pt;
+    font-size: 17pt;
     font-weight: 700;
     color: #1a1a2e;
     margin: 0 0 2px 0;
@@ -1687,12 +1887,12 @@ dd {
   }
 
   .print-base-badge {
-    font-size: 8pt;
+    font-size: 7.5pt;
     font-weight: 600;
     color: #0052ff;
     background: #e8f0fe;
-    padding: 4px 10px;
-    border-radius: 4px;
+    padding: 3px 8px;
+    border-radius: 3px;
     white-space: nowrap;
   }
 
@@ -1701,12 +1901,12 @@ dd {
     background: #f5f7fa;
     border: 1px solid #dde1e6;
     border-radius: 4px;
-    padding: 8px 12px;
-    margin-bottom: 14px;
+    padding: 6px 10px;
+    margin-bottom: 12px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 8pt;
+    gap: 6px;
+    font-size: 7.5pt;
     word-break: break-all;
   }
 
@@ -1718,7 +1918,7 @@ dd {
 
   .print-code {
     font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
-    font-size: 7.5pt;
+    font-size: 7pt;
     color: #1a1a2e;
     background: transparent;
   }
@@ -1727,31 +1927,31 @@ dd {
   .print-totals {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    margin-bottom: 16px;
+    gap: 6px;
+    margin-bottom: 14px;
   }
 
   .print-total-item {
     background: #f0f4ff;
     border: 1px solid #d0d8e8;
-    border-radius: 4px;
-    padding: 8px 10px;
+    border-radius: 3px;
+    padding: 6px 8px;
     text-align: center;
   }
 
   .print-total-label {
     display: block;
-    font-size: 7pt;
+    font-size: 6.5pt;
     font-weight: 600;
     color: #555;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 3px;
+    letter-spacing: 0.4px;
+    margin-bottom: 2px;
   }
 
   .print-total-value {
     display: block;
-    font-size: 10pt;
+    font-size: 9.5pt;
     font-weight: 700;
     color: #1a1a2e;
   }
@@ -1764,15 +1964,15 @@ dd {
   .print-cards {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 6px;
-    margin-bottom: 16px;
+    gap: 5px;
+    margin-bottom: 14px;
   }
 
   .print-card {
     background: #fafafa;
     border: 1px solid #e0e0e0;
     border-radius: 3px;
-    padding: 6px 8px;
+    padding: 5px 6px;
     text-align: center;
   }
 
@@ -1783,16 +1983,16 @@ dd {
 
   .print-card-label {
     display: block;
-    font-size: 6.5pt;
+    font-size: 6pt;
     font-weight: 600;
     color: #666;
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
   }
 
   .print-card-value {
     display: block;
-    font-size: 9pt;
+    font-size: 8.5pt;
     font-weight: 700;
     color: #1a1a2e;
     margin-top: 2px;
@@ -1800,47 +2000,48 @@ dd {
 
   /* --- Section Titles --- */
   .print-section-title {
-    font-size: 11pt;
+    font-size: 10.5pt;
     font-weight: 700;
     color: #1a1a2e;
-    margin: 0 0 8px 0;
-    padding-bottom: 4px;
+    margin: 0 0 6px 0;
+    padding-bottom: 3px;
     border-bottom: 1px solid #d0d0d0;
   }
 
   /* --- Fee Breakdown --- */
   .print-fees {
-    margin-bottom: 16px;
+    margin-bottom: 14px;
+    page-break-inside: avoid;
   }
 
   .print-fee-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 8pt;
+    font-size: 7.5pt;
   }
 
   .print-fee-table td {
-    padding: 3px 8px;
+    padding: 3px 6px;
     border: 1px solid #ddd;
   }
 
   .print-fee-table td:first-child {
     font-weight: 600;
     background: #f5f5f5;
-    width: 30%;
+    width: 25%;
   }
 
   /* --- Transaction Table --- */
   .print-table-wrap {
-    margin-bottom: 20px;
-    page-break-inside: avoid;
+    margin-bottom: 18px;
+    page-break-inside: auto;
   }
 
   .print-tx-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 7pt;
-    page-break-inside: auto;
+    font-size: 6.5pt;
+    table-layout: fixed;
   }
 
   .print-tx-table thead {
@@ -1852,67 +2053,69 @@ dd {
     color: #ffffff !important;
     font-weight: 600;
     text-align: left;
-    padding: 5px 4px;
+    padding: 4px 3px;
     border: 1px solid #1a1a2e;
-    font-size: 6.5pt;
+    font-size: 6pt;
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
   .print-tx-table td {
-    padding: 3px 4px;
+    padding: 2px 3px;
     border: 1px solid #ddd;
     vertical-align: top;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .print-tx-table tbody tr:nth-child(even) {
     background: #f9f9fb;
   }
 
-  .print-tx-table tbody tr:hover {
-    background: #eef2ff;
+  .print-tx-table tbody tr {
+    page-break-inside: avoid;
   }
 
-  .print-tx-idx { text-align: center; width: 20px; color: #888; font-size: 6.5pt; }
-  .print-tx-date { white-space: nowrap; font-size: 6.5pt; }
-  .print-tx-dir { font-weight: 600; font-size: 6.5pt; }
-  .print-tx-cat { font-size: 6.5pt; }
-  .print-tx-title { font-size: 6.5pt; max-width: 120px; }
-  .print-tx-counterparty { font-size: 6.5pt; max-width: 100px; }
-  .print-tx-value { white-space: nowrap; font-weight: 600; font-size: 6.5pt; text-align: right; }
-  .print-tx-gas { white-space: nowrap; font-size: 6.5pt; text-align: right; color: #7b4ba8; }
-  .print-tx-status { font-size: 6.5pt; text-align: center; }
-  .print-tx-hash { font-family: "Cascadia Code", "Fira Code", "Consolas", monospace; font-size: 6pt; color: #555; max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+  .print-tx-idx { text-align: center; color: #888; font-size: 6pt; }
+  .print-tx-date { white-space: nowrap; font-size: 6pt; }
+  .print-tx-dir { font-weight: 600; font-size: 6pt; }
+  .print-tx-cat { font-size: 6pt; }
+  .print-tx-title { font-size: 6pt; }
+  .print-tx-counterparty { font-size: 6pt; }
+  .print-tx-value { white-space: nowrap; font-weight: 600; font-size: 6pt; text-align: right; }
+  .print-tx-gas { white-space: nowrap; font-size: 6pt; text-align: right; color: #7b4ba8; }
+  .print-tx-status { font-size: 6pt; text-align: center; }
+  .print-tx-hash { font-family: "Cascadia Code", "Fira Code", "Consolas", monospace; font-size: 5.5pt; color: #555; }
 
-  /* --- Footer --- */
+  /* --- Footer — always stays at bottom, no orphan --- */
   .print-footer {
     border-top: 1px solid #cccccc;
-    padding-top: 10px;
-    margin-top: 10px;
+    padding-top: 8px;
+    margin-top: 12px;
     page-break-inside: avoid;
   }
 
   .print-disclaimer {
-    font-size: 6.5pt;
+    font-size: 6pt;
     color: #666;
-    margin: 0 0 4px 0;
-    line-height: 1.4;
+    margin: 0 0 3px 0;
+    line-height: 1.3;
   }
 
   .print-disclaimer strong {
     color: #333;
   }
 
-  /* Page breaks */
-  .print-report {
-    orphans: 3;
-    widows: 3;
+  /* Tokens row hidden in print (shown in summary already) */
+  .print-wallet-row .print-tokens {
+    display: none;
   }
 
-  .print-tx-table tbody tr {
-    page-break-inside: avoid;
+  .print-report-empty .print-empty-state {
+    padding: 80px 20px;
+    font-size: 11pt;
   }
 }
 
