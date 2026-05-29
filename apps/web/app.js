@@ -2397,6 +2397,9 @@ function printMonthlyReport() {
     const container = document.getElementById("printContainer");
     if (!container) return;
 
+    // Container'ı görünür yap (CSS'de display:none gizliyor)
+    container.style.display = "block";
+
     const report = buildMonthlyReport();
     const now = new Date();
     const dateStr = formatUtcDateTime(now);
@@ -2623,6 +2626,7 @@ function printMonthlyReport() {
         window.print();
       } else if (action === "close") {
         container.innerHTML = "";
+        container.style.display = "none";
       }
     });
 
@@ -2631,6 +2635,7 @@ function printMonthlyReport() {
       const overlay = container.querySelector('.print-preview-overlay');
       if (overlay && overlay.querySelector('.printing')) {
         container.innerHTML = "";
+        container.style.display = "none";
       } else if (overlay) {
         document.querySelectorAll('.printing').forEach(el => el.classList.remove('printing'));
       }
