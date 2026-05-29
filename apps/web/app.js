@@ -2410,19 +2410,26 @@ async function printMonthlyReport() {
       return parts.join(".");
     };
 
-    // Geçici container — viewport'ta, arkada (html2canvas, left:-9999px ile render etmez)
+    // html2canvas fixed/absolute export nodes burada 0-height canvas uretebiliyor.
+    // Bu nedenle icerigi gorunmez ama render edilebilir bir static sandbox icine koyuyoruz.
+    const pdfSandbox = document.createElement("div");
+    pdfSandbox.style.position = "fixed";
+    pdfSandbox.style.left = "0";
+    pdfSandbox.style.top = "0";
+    pdfSandbox.style.width = "0";
+    pdfSandbox.style.height = "0";
+    pdfSandbox.style.overflow = "hidden";
+    pdfSandbox.style.pointerEvents = "none";
+
     const tmp = document.createElement("div");
-    tmp.style.position = "fixed";
-    tmp.style.left = "0";
-    tmp.style.top = "0";
+    tmp.style.position = "static";
     tmp.style.width = "800px";
-    tmp.style.zIndex = "-9999";
-    tmp.style.pointerEvents = "none";
     tmp.style.background = "#fff";
     tmp.style.color = "#000";
     tmp.style.fontFamily = "Arial, sans-serif";
     tmp.style.padding = "20px";
-    document.body.appendChild(tmp);
+    pdfSandbox.appendChild(tmp);
+    document.body.appendChild(pdfSandbox);
 
     if (!report.totalRecords) {
       tmp.innerHTML = `
@@ -2446,7 +2453,7 @@ async function printMonthlyReport() {
       `;
       const opt = { margin: [0.5, 0.5, 0.5, 0.5], filename: `txreceipts-empty-${network}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" } };
       await html2pdf().set(opt).from(tmp).save();
-      document.body.removeChild(tmp);
+      document.body.removeChild(pdfSandbox);
       return;
     }
 
@@ -2600,7 +2607,7 @@ async function printMonthlyReport() {
 
     const opt = { margin: [0.5, 0.5, 0.5, 0.5], filename: `txreceipts-monthly-${network}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" } };
     await html2pdf().set(opt).from(tmp).save();
-    document.body.removeChild(tmp);
+    document.body.removeChild(pdfSandbox);
   } catch (error) {
     console.error("PrintMonthlyReport error:", error);
   }
