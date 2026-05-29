@@ -12,6 +12,10 @@ AI_MODEL = "gpt-4.1"
 # Set AI_API_KEY as a Cloudflare secret, not in this file:
 # wrangler secret put AI_API_KEY
 
+routes = [
+  { pattern = "api.txreceipts.com.tr", custom_domain = true }
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "txreceipts"

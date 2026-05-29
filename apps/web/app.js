@@ -2392,7 +2392,7 @@ async function downloadMonthlyCsv() {
   URL.revokeObjectURL(url);
 }
 
-function printMonthlyReport() {
+async function printMonthlyReport() {
   try {
     const container = document.getElementById("printContainer");
     if (!container) return;
@@ -2447,9 +2447,14 @@ function printMonthlyReport() {
           </div>
         </div>
       `;
-      window.print();
-      const afterEmpty = () => { container.innerHTML = ""; container.style.display = "none"; window.removeEventListener("afterprint", afterEmpty); };
-      window.addEventListener("afterprint", afterEmpty);
+      // Boş kayıt için de PDF oluştur
+      try {
+        const opt = { margin: [0.5, 0.5, 0.5, 0.5], filename: `txreceipts-empty-${network}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" } };
+        const reportEl = container.querySelector(".print-report");
+        if (reportEl) await html2pdf().set(opt).from(reportEl).save();
+      } catch (pdfErr) { console.error("html2pdf empty error:", pdfErr); }
+      container.innerHTML = "";
+      container.style.display = "none";
       return;
     }
 
@@ -2636,29 +2641,22 @@ function printMonthlyReport() {
       if (!btn) return;
       const action = btn.dataset.printAction;
       if (action === "print") {
-        const report = container.querySelector(".print-report");
-        if (report) report.classList.add("printing");
-        window.print();
+        // html2pdf ile PDF oluştur ve indir
+        const reportEl = container.querySelector(".print-report");
+        if (reportEl) {
+          const opt = { margin: [0.5, 0.5, 0.5, 0.5], filename: `txreceipts-monthly-${network}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" } };
+          html2pdf().set(opt).from(reportEl).save().then(() => {
+            container.innerHTML = "";
+            container.style.display = "none";
+          }).catch(err => {
+            console.error("html2pdf error:", err);
+          });
+        }
       } else if (action === "close") {
         container.innerHTML = "";
         container.style.display = "none";
       }
     });
-
-    // Preview modunda window.print temizleme dinleyicisi
-    const afterPrint = () => {
-      const overlay = container.querySelector('.print-preview-overlay');
-      if (overlay && overlay.querySelector('.printing')) {
-        container.innerHTML = "";
-        container.style.display = "none";
-      } else if (overlay) {
-        document.querySelectorAll('.printing').forEach(el => el.classList.remove('printing'));
-      }
-      window.removeEventListener("afterprint", afterPrint);
-      window.removeEventListener("focus", afterPrint);
-    };
-    window.addEventListener("afterprint", afterPrint);
-    window.addEventListener("focus", afterPrint);
   } catch (error) {
     console.error("PrintMonthlyReport error:", error);
     const container = document.getElementById("printContainer");

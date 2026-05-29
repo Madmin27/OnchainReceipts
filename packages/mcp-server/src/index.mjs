@@ -300,6 +300,464 @@ server.tool(
   },
 );
 
+server.tool(
+  "get_supported_networks",
+  "List all supported EVM networks with their capabilities, gas token, stablecoin, MCP readiness, and pre-accounting features.",
+  {},
+  async () => {
+    const networks = {};
+    for (const [id, config] of Object.entries(NETWORKS)) {
+      const capabilities = networkCapabilitiesForReceipt({ network: id, chainId: config.chainId });
+      networks[id] = {
+        name: config.name,
+        chainId: config.chainId,
+        nativeSymbol: config.nativeSymbol,
+        stablecoin: id === "base" ? { symbol: "USDC", address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 } : null,
+        features: {
+          mcp: true,
+          x402: id === "base",
+          paymaster: id === "base",
+          baseAccount: id === "base",
+          builderCodes: id === "base",
+        },
+        networkCapabilities: mcpNetworkCapabilities(capabilities),
+        explorerUrl: config.explorerUrl,
+        blockscoutUrl: config.blockscoutUrl,
+      };
+    }
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          defaultNetwork: "base",
+          preferredStablecoin: "USDC",
+          nativeGasToken: "ETH",
+          readOnly: true,
+          baseChainId: 8453,
+          networks,
+        }, null, 2),
+      }],
+    };
+  },
+);
+
+server.tool(
+  "get_credit_balance",
+  "Check the USDC credit balance and API usage quota for the authenticated project. Requires TX_RECEIPTS_API_KEY to be configured. Uses connectedAddress semantics for billing wallet credit.",
+  {},
+  async () => {
+    if (!TX_RECEIPTS_API_KEY) {
+      throw new Error("TX_RECEIPTS_API_KEY is required for get_credit_balance.");
+    }
+    const response = await fetch(`${TX_RECEIPTS_API_URL}/v1/projects/me/usage`, {
+      headers: { Authorization: `Bearer ${TX_RECEIPTS_API_KEY}` },
+    });
+    if (!response.ok) {
+      throw new Error(`Credit balance API error ${response.status}.`);
+    }
+    const payload = await response.json();
+    return { content: [{ type: "text", text: JSON.stringify({
+      ...payload,
+      semantics: "connectedAddress — credit balance tied to the project billing wallet",
+    }, null, 2) }] };
+  },
+);
+
+server.tool(
+  "get_wallet_ledger",
+  "Load wallet transaction history with running balance across native and USDC token movement. Uses useAddress semantics for comprehensive pre-accounting analysis.",
+  {
+    wallet: z.string().describe("0x wallet address to analyze"),
+    network: z.enum(["base", "ethereum", "optimism", "arbitrum", "polygon"]).default("base"),
+    limit: z.number().int().min(1).max(100).default(30),
+  },
+  async ({ wallet, network, limit }) => {
+    const normalizedWallet = normalizeAddress(wallet);
+    const config = networkConfig(network);
+    const capabilities = networkCapabilitiesForReceipt({ network: config.id, chainId: config.chainId });
+    const [transactions, tokenTransfers] = await Promise.all([
+      fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/transactions`, { items_count: limit }),
+      fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/token-transfers`, { items_count: limit }),
+    ]);
+    const txItems = Array.isArray(transactions.items) ? transactions.items : [];
+    const transferItems = Array.isArray(tokenTransfers.items) ? tokenTransfers.items : [];
+
+    const ledger = [];
+    let runningNativeBalance = 0n;
+    for (const item of txItems.slice(0, limit)) {
+      const from = String(item.from?.hash || "").toLowerCase();
+      const to = String(item.to?.hash || "").toLowerCase();
+      const direction = to === normalizedWallet && from !== normalizedWallet ? "incoming" : from === normalizedWallet ? "outgoing" : "other";
+      const valueWei = item.value ? safeBigInt(item.value) : 0n;
+      if (direction === "incoming") runningNativeBalance += valueWei;
+      if (direction === "outgoing") runningNativeBalance -= valueWei;
+      const feeWei = item.fee?.wei ? safeBigInt(item.fee.wei) : 0n;
+      if (direction === "outgoing") runningNativeBalance -= feeWei;
+      ledger.push({
+        txHash: item.hash,
+        timestamp: item.timestamp || null,
+        direction,
+        method: item.method || item.decoded_input?.method_call || "transaction",
+        nativeValue: item.value && item.value !== "0" ? formatNativeValue(item.value, config.nativeSymbol) : null,
+        feeWei: feeWei.toString(),
+        from: item.from?.hash || null,
+        to: item.to?.hash || null,
+        status: item.status || item.result || "ok",
+        runningNativeBalance: formatNativeValue(runningNativeBalance, config.nativeSymbol),
+      });
+    }
+
+    const tokenLedger = transferItems.slice(0, limit).map(item => {
+      const from = String(item.from?.hash || "").toLowerCase();
+      const to = String(item.to?.hash || "").toLowerCase();
+      const direction = to === normalizedWallet && from !== normalizedWallet ? "incoming" : from === normalizedWallet ? "outgoing" : "other";
+      return {
+        txHash: item.transaction_hash,
+        timestamp: item.timestamp || null,
+        direction,
+        token: item.token?.symbol || item.token?.name || item.token_type || "TOKEN",
+        amount: item.total?.value || null,
+        decimals: item.total?.decimals || item.token?.decimals || null,
+        from: item.from?.hash || null,
+        to: item.to?.hash || null,
+      };
+    });
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          wallet: normalizedWallet,
+          network: config.name,
+          chainId: config.chainId,
+          semantics: "useAddress — wallet ledger for pre-accounting analysis",
+          summary: {
+            totalTransactions: ledger.length,
+            incomingTransactions: ledger.filter(l => l.direction === "incoming").length,
+            outgoingTransactions: ledger.filter(l => l.direction === "outgoing").length,
+            totalTokenTransfers: tokenLedger.length,
+          },
+          networkCapabilities: mcpNetworkCapabilities(capabilities),
+          ledger,
+          tokenTransfers: tokenLedger,
+          runningNativeBalance: ledger.length > 0 ? ledger[ledger.length - 1].runningNativeBalance : null,
+        }, null, 2),
+      }],
+    };
+  },
+);
+
+server.tool(
+  "get_monthly_summary",
+  "Aggregate wallet activity into a monthly pre-accounting summary with total incoming/outgoing value, gas costs, top transactions, and category grouping. Uses useAddress semantics.",
+  {
+    wallet: z.string().describe("0x wallet address"),
+    network: z.enum(["base", "ethereum", "optimism", "arbitrum", "polygon"]).default("base"),
+    year: z.number().int().describe("4-digit year"),
+    month: z.number().int().min(1).max(12).describe("1-12 month number"),
+  },
+  async ({ wallet, network, year, month }) => {
+    const normalizedWallet = normalizeAddress(wallet);
+    const config = networkConfig(network);
+    const capabilities = networkCapabilitiesForReceipt({ network: config.id, chainId: config.chainId });
+    const limit = 200;
+    const [transactions, tokenTransfers] = await Promise.all([
+      fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/transactions`, { items_count: limit }),
+      fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/token-transfers`, { items_count: limit }),
+    ]);
+    const txItems = Array.isArray(transactions.items) ? transactions.items : [];
+    const transferItems = Array.isArray(tokenTransfers.items) ? tokenTransfers.items : [];
+
+    const monthTx = txItems.filter(item => {
+      if (!item.timestamp) return false;
+      const d = new Date(item.timestamp);
+      return d.getFullYear() === year && (d.getMonth() + 1) === month;
+    });
+    const monthTransfer = transferItems.filter(item => {
+      if (!item.timestamp) return false;
+      const d = new Date(item.timestamp);
+      return d.getFullYear() === year && (d.getMonth() + 1) === month;
+    });
+
+    const monthStr = `${year}-${String(month).padStart(2, "0")}`;
+    const rows = monthTx.slice(0, 100).map(item => summarizeTransactionRow(item, normalizedWallet, config));
+    const tokens = monthTransfer.slice(0, 100).map(item => summarizeTokenTransferRow(item, normalizedWallet));
+    const incoming = rows.filter(r => r.direction === "incoming");
+    const outgoing = rows.filter(r => r.direction === "outgoing");
+    const totalIncomingNative = incoming.reduce((sum, r) => sum + parseFloat((r.value || "0").split(" ")[0] || "0"), 0);
+    const totalOutgoingNative = outgoing.reduce((sum, r) => sum + parseFloat((r.value || "0").split(" ")[0] || "0"), 0);
+    const categories = {};
+    for (const r of rows) {
+      const cat = r.method || "unknown";
+      categories[cat] = (categories[cat] || 0) + 1;
+    }
+    const topTransactions = [...rows].sort((a, b) => {
+      const aVal = parseFloat((a.value || "0").split(" ")[0] || "0");
+      const bVal = parseFloat((b.value || "0").split(" ")[0] || "0");
+      return bVal - aVal;
+    }).slice(0, 5);
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          wallet: normalizedWallet,
+          network: config.name,
+          month: monthStr,
+          semantics: "useAddress — monthly aggregation for accounting",
+          summary: {
+            totalTransactions: rows.length,
+            incomingTransactions: incoming.length,
+            outgoingTransactions: outgoing.length,
+            totalTokenTransfers: tokens.length,
+            totalIncomingNative: `${totalIncomingNative.toFixed(6)} ${config.nativeSymbol}`,
+            totalOutgoingNative: `${totalOutgoingNative.toFixed(6)} ${config.nativeSymbol}`,
+            netNativeFlow: `${(totalIncomingNative - totalOutgoingNative).toFixed(6)} ${config.nativeSymbol}`,
+          },
+          networkCapabilities: mcpNetworkCapabilities(capabilities),
+          categoryBreakdown: categories,
+          topTransactions,
+          tokenTransfers: tokens,
+        }, null, 2),
+      }],
+    };
+  },
+);
+
+server.tool(
+  "find_review_required_transactions",
+  "Flag wallet transactions that may need manual review: large values, failed status, unclassified categories, or unusual method calls. Uses useAddress semantics for compliance review.",
+  {
+    wallet: z.string().describe("0x wallet address"),
+    network: z.enum(["base", "ethereum", "optimism", "arbitrum", "polygon"]).default("base"),
+    limit: z.number().int().min(1).max(100).default(50),
+    minValueUsd: z.number().optional().describe("Minimum USD value threshold to flag"),
+  },
+  async ({ wallet, network, limit, minValueUsd }) => {
+    const normalizedWallet = normalizeAddress(wallet);
+    const config = networkConfig(network);
+    const capabilities = networkCapabilitiesForReceipt({ network: config.id, chainId: config.chainId });
+    const [transactions, tokenTransfers] = await Promise.all([
+      fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/transactions`, { items_count: limit }),
+      fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/token-transfers`, { items_count: limit }),
+    ]);
+    const txItems = Array.isArray(transactions.items) ? transactions.items : [];
+    const transferItems = Array.isArray(tokenTransfers.items) ? tokenTransfers.items : [];
+
+    const flagged = [];
+    for (const item of txItems.slice(0, limit)) {
+      const reasons = [];
+      const from = String(item.from?.hash || "").toLowerCase();
+      const to = String(item.to?.hash || "").toLowerCase();
+      const direction = to === normalizedWallet && from !== normalizedWallet ? "incoming" : from === normalizedWallet ? "outgoing" : "other";
+      const valueWei = item.value ? safeBigInt(item.value) : 0n;
+      const valueEth = Number(valueWei) / 1e18;
+
+      if (valueEth > 1) reasons.push({ flag: "large_value", detail: `${valueEth.toFixed(4)} ${config.nativeSymbol}` });
+      if (minValueUsd !== undefined && valueEth * 3000 > minValueUsd) reasons.push({ flag: "above_threshold", detail: `${valueEth.toFixed(4)} ${config.nativeSymbol}` });
+      if (item.status === "failed" || item.result === "fail") reasons.push({ flag: "failed_transaction", detail: item.error || "tx failed" });
+      if (item.method === "approve" || item.method === "approval") reasons.push({ flag: "token_approval", detail: "ERC-20 approval" });
+      if (direction === "incoming" && from === "0x0000000000000000000000000000000000000000") reasons.push({ flag: "mint_or_wrap", detail: "zero-address sender (mint/wrap)" });
+      if (item.method && /multi|batch|swap|bridge/i.test(item.method)) reasons.push({ flag: "complex_interaction", detail: item.method });
+
+      if (reasons.length > 0) {
+        flagged.push({
+          txHash: item.hash,
+          timestamp: item.timestamp || null,
+          direction,
+          method: item.method || "transaction",
+          value: item.value && item.value !== "0" ? formatNativeValue(item.value, config.nativeSymbol) : "0",
+          flags: reasons,
+          from: item.from?.hash || null,
+          to: item.to?.hash || null,
+        });
+      }
+    }
+
+    for (const item of transferItems) {
+      const from = String(item.from?.hash || "").toLowerCase();
+      const to = String(item.to?.hash || "").toLowerCase();
+      const amount = item.total?.value || "0";
+      const tokenSymbol = item.token?.symbol || "TOKEN";
+      if (tokenSymbol === "USDC" && BigInt(amount || "0") > BigInt(1000e6)) {
+        const hash = item.transaction_hash;
+        if (!flagged.some(f => f.txHash === hash)) {
+          flagged.push({
+            txHash: hash,
+            timestamp: item.timestamp || null,
+            direction: to === normalizedWallet ? "incoming" : "outgoing",
+            method: "token_transfer",
+            value: `${(Number(amount) / 1e6).toFixed(2)} ${tokenSymbol}`,
+            flags: [{ flag: "large_token_transfer", detail: `${(Number(amount) / 1e6).toFixed(2)} ${tokenSymbol}` }],
+            from: item.from?.hash || null,
+            to: item.to?.hash || null,
+          });
+        }
+      }
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          wallet: normalizedWallet,
+          network: config.name,
+          semantics: "useAddress — compliance review flagging",
+          reviewRequiredCount: flagged.length,
+          totalTransactionsReviewed: txItems.length,
+          totalTokenTransfersReviewed: transferItems.length,
+          networkCapabilities: mcpNetworkCapabilities(capabilities),
+          flaggedTransactions: flagged,
+          note: "Transactions flagged for manual review. Verify each against onchain explorer before accounting entry.",
+        }, null, 2),
+      }],
+    };
+  },
+);
+
+server.tool(
+  "export_accounting_csv",
+  "Export wallet transaction history as a CSV string suitable for accounting software import. Uses useAddress semantics. Returns CSV content with headers: txHash,timestamp,direction,method,value,gasFee,token,amount,from,to,status.",
+  {
+    wallet: z.string().describe("0x wallet address"),
+    network: z.enum(["base", "ethereum", "optimism", "arbitrum", "polygon"]).default("base"),
+    limit: z.number().int().min(1).max(200).default(100),
+  },
+  async ({ wallet, network, limit }) => {
+    const normalizedWallet = normalizeAddress(wallet);
+    const config = networkConfig(network);
+    const capabilities = networkCapabilitiesForReceipt({ network: config.id, chainId: config.chainId });
+    const [transactions, tokenTransfers] = await Promise.all([
+      fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/transactions`, { items_count: limit }),
+      fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/token-transfers`, { items_count: limit }),
+    ]);
+    const txItems = Array.isArray(transactions.items) ? transactions.items : [];
+    const transferItems = Array.isArray(tokenTransfers.items) ? tokenTransfers.items : [];
+
+    const csvRows = [];
+    csvRows.push("txHash,timestamp,direction,method,value,gasFee,token,amount,from,to,status");
+    for (const item of txItems.slice(0, limit)) {
+      const from = String(item.from?.hash || "").toLowerCase();
+      const to = String(item.to?.hash || "").toLowerCase();
+      const direction = to === normalizedWallet && from !== normalizedWallet ? "incoming" : from === normalizedWallet ? "outgoing" : "other";
+      const value = item.value && item.value !== "0" ? formatNativeValue(item.value, config.nativeSymbol) : "0";
+      const fee = item.fee?.value || "";
+      csvRows.push([
+        item.hash,
+        item.timestamp || "",
+        direction,
+        `"${(item.method || "transaction").replace(/"/g, '""')}"`,
+        `"${value}"`,
+        `"${fee}"`,
+        "",
+        "",
+        item.from?.hash || "",
+        item.to?.hash || "",
+        item.status || "ok",
+      ].join(","));
+    }
+    for (const item of transferItems) {
+      const hash = item.transaction_hash;
+      if (csvRows.some(r => r.startsWith(hash))) continue;
+      const from = String(item.from?.hash || "").toLowerCase();
+      const to = String(item.to?.hash || "").toLowerCase();
+      const direction = to === normalizedWallet && from !== normalizedWallet ? "incoming" : from === normalizedWallet ? "outgoing" : "other";
+      const tokenSymbol = item.token?.symbol || item.token?.name || "TOKEN";
+      const amount = item.total?.value || "0";
+      csvRows.push([
+        hash,
+        item.timestamp || "",
+        direction,
+        "token_transfer",
+        "",
+        "",
+        tokenSymbol,
+        amount,
+        item.from?.hash || "",
+        item.to?.hash || "",
+        "ok",
+      ].join(","));
+    }
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          wallet: normalizedWallet,
+          network: config.name,
+          chainId: config.chainId,
+          semantics: "useAddress — accounting CSV export",
+          preAccountingDisclaimer: "This output is a pre-accounting record prepared with TxReceipts and is not an official invoice, tax filing, or e-ledger submission.",
+          rowCount: csvRows.length - 1,
+          csv: csvRows.join("\n"),
+          networkCapabilities: mcpNetworkCapabilities(capabilities),
+          mimeType: "text/csv",
+          filename: `txreceipts_${normalizedWallet.slice(2, 10)}_${config.id}_${new Date().toISOString().slice(0, 10)}.csv`,
+        }, null, 2),
+      }],
+    };
+  },
+);
+
+server.tool(
+  "explain_receipt",
+  "Generate a human-readable explanation of a TxReceipts receipt with onchain verification status, network capabilities context, and pre-accounting disclaimer.",
+  {
+    receiptId: z.string().describe("TXR-NETWORK-HASH24 receipt id"),
+  },
+  async ({ receiptId }) => {
+    const normalizedReceiptId = String(receiptId || "").trim().toUpperCase();
+    if (!RECEIPT_ID_PATTERN.test(normalizedReceiptId)) {
+      throw new Error("receiptId must match TXR-NETWORK-HASH24.");
+    }
+    const response = await fetch(`${TX_RECEIPTS_API_URL}/r/${normalizedReceiptId}`);
+    if (!response.ok) {
+      throw new Error(`TxReceipts public receipt error ${response.status}.`);
+    }
+    const receipt = await response.json();
+    const networkName = NETWORKS[String(receipt.network || "").toLowerCase()]?.name || receipt.network || "unknown";
+    const shortHash = receipt.txHash ? `${receipt.txHash.slice(0, 10)}...${receipt.txHash.slice(-6)}` : "N/A";
+    const shortWallet = receipt.ownerWallet ? `${receipt.ownerWallet.slice(0, 6)}...${receipt.ownerWallet.slice(-4)}` : "N/A";
+
+    let capabilities = null;
+    try {
+      const cap = networkCapabilitiesForReceipt({ network: String(receipt.network || "").toLowerCase(), chainId: Number(receipt.chainId || 0) });
+      capabilities = mcpNetworkCapabilities(cap);
+    } catch { /* ignore */ }
+
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          receiptId: receipt.receiptId,
+          network: networkName,
+          chainId: receipt.chainId,
+          semantics: "explain_receipt — human-readable verification",
+          summary: `Receipt ${receipt.receiptId} on ${networkName} (chain ${receipt.chainId}) for transaction ${shortHash} from wallet ${shortWallet}. Status: ${receipt.verificationStatus || receipt.status}.`,
+          details: {
+            txHash: receipt.txHash,
+            ownerWallet: receipt.ownerWallet,
+            direction: receipt.direction,
+            category: receipt.category || "uncategorized",
+            memo: receipt.memo || null,
+            accountingNote: receipt.accountingNote || null,
+            businessExpense: receipt.businessExpense || false,
+            verificationStatus: receipt.verificationStatus || receipt.status,
+          },
+          networkCapabilities: capabilities,
+          verification: {
+            verified: (receipt.verificationStatus || receipt.status) === "verified",
+            method: "Onchain transaction hash + block timestamp verification",
+            note: "Receipt is anchored to the onchain transaction. Verify independently on the explorer.",
+          },
+          receiptUrl: receipt.receiptUrl || null,
+          preAccountingDisclaimer: "This output is a pre-accounting record prepared with TxReceipts and is not an official invoice, tax filing, or e-ledger submission.",
+        }, null, 2),
+      }],
+    };
+  },
+);
+
 function networkConfig(network) {
   const config = NETWORKS[String(network || "base")];
   if (!config) throw new Error(`Unsupported network: ${network}`);
