@@ -95,18 +95,24 @@ const networks = window.TX_RECEIPTS_NETWORKS || [];
 
 const knownTokens = {
   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { symbol: "USDC", decimals: 6n },
+    ["chain_id", report.chainId],
   "0x4200000000000000000000000000000000000006": { symbol: "WETH", decimals: 18n },
+    ["period_start", report.periodStart],
+    ["period_end", report.periodEnd],
   "0x4200000000000000000000000000000000000042": { symbol: "OP", decimals: 18n },
+    ["ready_for_accounting", report.readyForAccountingCount],
   "0x532f27101965dd16442e59d40670faf5ebb142e4": { symbol: "BRETT", decimals: 18n },
 };
 
+    ["missing_valuation_rows", report.missingValuationCount],
+    ["unknown_counterparty_rows", report.unknownCounterpartyCount],
 let connectedWallet = null;
 let walletProvider = null;
 let targetAddress = null;
 let activeHistoryTab = "all";
-let visibleHistoryLimit = PAGE_SIZE;
+    ["gas_fees_native", `${report.totalGasFeeNative} ${currentNetwork().nativeCurrency?.symbol || "ETH"}`],
 let historyState = {
-  transactions: [],
+    ["Date", "Network", "Receipt ID", "Tx Hash", "Direction", "Category", "Accounting Status", "Review Reason", "Counterparty", "Asset Movement", "Gas Fee ETH", "Gas Fee USD", "Memo", "Verification Status"],
   transfers: [],
   txNext: null,
   transferNext: null,
@@ -114,12 +120,14 @@ let historyState = {
 
 function safeDisplay(value, maxLength = 120) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
+      item.accounting.status,
+      item.accounting.reviewReason,
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
-}
-
-async function apiFetch(path, options = {}) {
+      assetMovementText(item),
+      formatGasFeeEthText(item),
+      formatGasFeeUsdText(item),
   let lastError = null;
-  for (const baseUrl of API_BASE_URLS) {
+      item.accounting.verificationStatus,
     try {
       return await fetch(`${baseUrl}${path}`, options);
     } catch (error) {
@@ -634,8 +642,11 @@ function accountingCategoryForItem(item) {
   if (/creator|support|mint/.test(text)) return "creator_payment";
   if (/refund/.test(text)) return "refund";
   if (/fee|gas/.test(text)) return "gas_fee";
-  if (item.direction === "incoming") return "sales";
-  if (item.direction === "outgoing") return "purchase";
+  if (/approve|approval|allowance/.test(text)) return "authorization";
+  if (/deploy|contract creation|create contract/.test(text)) return "contract_deployment";
+  if (/claim|register|contract call|multicall/.test(text)) return "contract_call";
+  if (item.direction === "incoming") return "uncategorized";
+  if (item.direction === "outgoing") return "uncategorized";
   if (item.direction === "other") return "uncategorized";
   return "internal_transfer";
 }
@@ -651,16 +662,54 @@ function accountingDirectionForItem(item) {
   return "unknown";
 }
 
+function hasUnknownCounterparty(item) {
+  return /unknown/i.test(String(item.subtitle || ""));
+}
+
+function hasSuspiciousTokenSignals(item) {
+  const text = `${item.title} ${item.subtitle} ${item.value}`.toLowerCase();
+  if (item.kind !== "token") return false;
+  return /scam|telegram|t\.me|claim|airdrop|bonus|reward|free token|visit|http|www\./.test(text);
+}
+
+function hasMissingValuation(item) {
+  return item.kind === "token" && !(Number(item.usdValue) > 0);
+}
+
+function accountingReviewReasonForItem(item, category) {
+  const override = getAccountingOverride(item.hash);
+  if (override?.category || override?.direction) return "";
+  const text = `${item.title} ${item.subtitle} ${item.value}`.toLowerCase();
+  if (/failed|error/.test(text)) return "Onchain execution failed";
+  if (hasSuspiciousTokenSignals(item)) return "Suspicious or promotional token requires manual review";
+  if (/approve|approval|allowance/.test(text)) return "Approval only; classify manually";
+  if (/deploy|contract creation|create contract/.test(text)) return "Contract deployment requires classification";
+  if (/claim|register|contract call|multicall/.test(text)) return "Contract call requires classification";
+  if (hasUnknownCounterparty(item)) return "Unknown counterparty";
+  if (item.kind === "token" && item.direction === "incoming") return "Incoming token requires classification";
+  if (item.kind === "token" && item.direction === "outgoing") return "Outgoing token requires classification";
+  if (String(item.value || "").trim().toLowerCase() === "ok") return "No asset movement detected";
+  if (hasMissingValuation(item)) return "Token valuation unavailable";
+  if (category === "uncategorized" || item.direction === "other") return "Transaction requires manual classification";
+  return "";
+}
+
 function accountingMetaForItem(item) {
   const override = getAccountingOverride(item.hash);
   const category = accountingCategoryForItem(item);
   const direction = accountingDirectionForItem(item);
-  const status = /failed|error/i.test(`${item.title} ${item.value}`) ? "failed" : "verified";
+  const verificationStatus = /failed|error/i.test(`${item.title} ${item.value}`) ? "failed" : "verified";
+  const reviewReason = accountingReviewReasonForItem(item, category);
+  const status = verificationStatus === "failed" ? "failed" : (reviewReason ? "review" : "ready");
   return {
     direction,
     category,
     status,
-    memo: override?.memo || `${category.replaceAll("_", " ")} candidate from loaded ${currentNetwork().name} row`,
+    verificationStatus,
+    reviewReason,
+    missingValuation: hasMissingValuation(item),
+    hasUnknownCounterparty: hasUnknownCounterparty(item),
+    memo: override?.memo || (reviewReason || `${category.replaceAll("_", " ")} ready from loaded ${currentNetwork().name} row`),
   };
 }
 
@@ -683,6 +732,27 @@ function formatGasText(item) {
   if (currentNetwork().family === "solana") return "Not available";
   const gasUsed = item.gas_used || item.gasUsed || item.gas;
   return gasUsed ? `${gasUsed}` : "Not available";
+}
+
+function assetMovementText(item) {
+  const rawValue = String(item.value || "").trim();
+  if (rawValue && rawValue.toLowerCase() !== "ok") return rawValue;
+  const text = `${item.title} ${item.subtitle}`.toLowerCase();
+  if (/approve|approval|allowance/.test(text)) return "Approval only";
+  if (/deploy|contract creation|create contract/.test(text)) return "Contract deployment";
+  if (/claim|register|contract call|multicall/.test(text)) return "Contract call";
+  return "No asset movement detected";
+}
+
+function formatGasFeeEthText(item, maxDigits = 9) {
+  if (currentNetwork().family === "solana") return "Unavailable";
+  const feeWei = blockscoutFeeWei(item);
+  if (feeWei <= 0n) return "Unavailable";
+  return `${formatUnits(feeWei, ETH_DECIMALS, maxDigits)} ${currentNetwork().nativeCurrency?.symbol || "ETH"}`;
+}
+
+function formatGasFeeUsdText(item) {
+  return Number(item.usdFee || 0) > 0 ? usdText({ usdValue: Number(item.usdFee || 0) }).replace(/^~/, "") : "USD unavailable";
 }
 
 function exportLedgerRow(item) {
@@ -1351,9 +1421,14 @@ function buildMonthlyReport() {
   const appFees = ledgerItems.filter(item => item.accounting.category === "app_fee");
   const protocolFees = ledgerItems.filter(item => item.accounting.category === "protocol_fee");
   const uncategorized = ledgerItems.filter(item => item.accounting.category === "uncategorized");
-  const verified = ledgerItems.filter(item => item.accounting.status === "verified");
-  const needsReview = ledgerItems.filter(item => item.accounting.direction === "unknown" || item.accounting.category === "uncategorized" || item.accounting.status === "failed");
+  const verified = ledgerItems.filter(item => item.accounting.verificationStatus === "verified");
+  const needsReview = ledgerItems.filter(item => item.accounting.status === "review" || item.accounting.status === "failed");
+  const readyForAccounting = ledgerItems.filter(item => item.accounting.status === "ready");
+  const missingValuation = ledgerItems.filter(item => item.accounting.missingValuation);
+  const unknownCounterparties = ledgerItems.filter(item => item.accounting.hasUnknownCounterparty);
   const weeklyFees = buildWeeklyFeeSummary();
+  const totalGasFeeWei = ledgerItems.reduce((sum, item) => sum + blockscoutFeeWei(item), 0n);
+  const timestamps = ledgerItems.map(itemTimestampMs).filter(timestamp => Number.isFinite(timestamp) && timestamp > 0);
   const byTitle = new Map();
   for (const item of ledgerItems) {
     const key = item.title || "Unknown activity";
@@ -1362,12 +1437,18 @@ function buildMonthlyReport() {
   const top = [...byTitle.entries()].sort((a, b) => b[1] - a[1])[0];
   return {
     network: currentNetwork().name,
+    chainId: currentNetwork().decimalChainId || currentNetwork().chainId || currentNetwork().id,
     wallet: currentTargetAddress() || "Not selected",
+    periodStart: timestamps.length ? new Date(Math.min(...timestamps)).toISOString() : "",
+    periodEnd: timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : "",
     totalRecords: items.length,
     outgoingCount: outgoing.length,
     incomingCount: incoming.length,
     tokenRecords: items.filter(item => item.kind === "token").length,
     needsReviewCount: needsReview.length,
+    readyForAccountingCount: readyForAccounting.length,
+    missingValuationCount: missingValuation.length,
+    unknownCounterpartyCount: unknownCounterparties.length,
     swapCount: swaps.length,
     subscriptionCount: subscriptions.length,
     appFeeCount: appFees.length,
@@ -1377,6 +1458,7 @@ function buildMonthlyReport() {
     weeklyFeeRecords: weeklyFees.records,
     weeklyFeeTotal: weeklyFees.total,
     weeklyFeeAsset: weeklyFees.asset,
+    totalGasFeeNative: formatUnits(totalGasFeeWei, ETH_DECIMALS, 9),
     uncategorizedCount: uncategorized.length,
     verifiedReceiptCount: verified.length,
     totalIncomeRows: incoming.length,
@@ -1441,16 +1523,21 @@ function transactionCategoryLabel(category) {
     subscription: "Subscription",
     app_fee: "App Fee",
     protocol_fee: "Protocol Fee",
+    authorization: "Authorization",
+    contract_deployment: "Contract Deployment",
+    contract_call: "Contract Call",
     purchase: "Purchase",
     sales: "Sales",
     internal_transfer: "Internal Transfer",
-    uncategorized: "Kategori Bekliyor",
+    uncategorized: "Needs Review",
   };
   return labels[String(category || "")] || titleCaseLabel(category || "İşlem");
 }
 
 function transactionStatusLabel(status) {
   const normalized = String(status || "").toLowerCase();
+  if (["ready"].includes(normalized)) return "Accounting Ready";
+  if (["review"].includes(normalized)) return "Needs Review";
   if (["verified", "success", "successful", "ok"].includes(normalized)) return "Başarılı";
   if (["failed", "error"].includes(normalized)) return "Başarısız";
   if (["pending", "queued"].includes(normalized)) return "Beklemede";
@@ -1944,7 +2031,7 @@ function templateAnswer(intent) {
       ["Direction", selectedLedgerItem.accounting.direction],
       ["Category", selectedLedgerItem.accounting.category],
       ["Memo", selectedLedgerItem.accounting.memo],
-      ["Verification status", selectedLedgerItem.accounting.status],
+      ["Verification status", selectedLedgerItem.accounting.verificationStatus],
     ], "selected ledger row direction, category, memo, verification status");
   }
   if (intent === "DAPP_USAGE") {
@@ -2350,18 +2437,24 @@ async function downloadMonthlyCsv() {
   }));
   const rows = [
     ["network", report.network],
+    ["chain_id", report.chainId],
     ["wallet", report.wallet],
+    ["period_start", report.periodStart],
+    ["period_end", report.periodEnd],
     ["total_records", report.totalRecords],
+    ["ready_for_accounting", report.readyForAccountingCount],
     ["outgoing_records", report.outgoingCount],
     ["incoming_records", report.incomingCount],
     ["rows_needing_review", report.needsReviewCount],
+    ["missing_valuation_rows", report.missingValuationCount],
+    ["unknown_counterparty_rows", report.unknownCounterpartyCount],
     ["income_rows", report.totalIncomeRows],
     ["expense_rows", report.totalExpenseRows],
     ["uncategorized_rows", report.uncategorizedCount],
     ["verified_records", report.verifiedReceiptCount],
-    ["gas_fees_native", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
+    ["gas_fees_native", `${report.totalGasFeeNative} ${currentNetwork().nativeCurrency?.symbol || "ETH"}`],
     [],
-    ["Date", "Network", "Receipt ID", "Tx Hash", "Direction", "Category", "Counterparty", "Value", "Gas Native", "App Fee USD", "Protocol Fee USD", "Memo", "Verification Status"],
+    ["Date", "Network", "Receipt ID", "Tx Hash", "Direction", "Category", "Accounting Status", "Review Reason", "Counterparty", "Asset Movement", "Gas Fee ETH", "Gas Fee USD", "Memo", "Verification Status"],
     ...report.items.map((item, index) => [
       item.timestamp || "",
       report.network,
@@ -2369,13 +2462,14 @@ async function downloadMonthlyCsv() {
       item.hash,
       item.accounting.direction,
       item.accounting.category,
-      item.subtitle,
-      item.value,
-      "",
-      "",
-      "",
-      item.accounting.memo,
       item.accounting.status,
+      item.accounting.reviewReason,
+      item.subtitle,
+      assetMovementText(item),
+      formatGasFeeEthText(item),
+      formatGasFeeUsdText(item),
+      item.accounting.memo,
+      item.accounting.verificationStatus,
     ]),
   ];
   const csv = rows
@@ -2405,7 +2499,16 @@ async function printMonthlyReport() {
     const dateStr = formatUtcDateTime(now);
     const network = report.network;
     const isBase = currentNetworkCapabilities().isBase;
-    const gasSymbol = report.weeklyFeeAsset || currentNetwork().nativeCurrency?.symbol || "ETH";
+    const gasSymbol = currentNetwork().nativeCurrency?.symbol || "ETH";
+    const documentPeriod = report.periodStart && report.periodEnd
+      ? `${report.periodStart.slice(0, 10)} - ${report.periodEnd.slice(0, 10)}`
+      : "Not available";
+    const receiptIds = await Promise.all(report.items.map(item => generateReceiptId({
+      chainId: report.chainId,
+      network: report.network,
+      txHash: item.hash,
+      ownerWallet: report.wallet,
+    })));
     const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -2463,9 +2566,13 @@ async function printMonthlyReport() {
       setStatus("PDF generated successfully.", "success");
     };
 
-    drawText("TxReceipts - Pre-Accounting Report", { size: 18, style: "bold", gap: 2 });
-    drawText(`${network} - ${dateStr}`, { size: 11, color: [90, 90, 90], gap: 10 });
+    drawText("TxReceipts - Base Pre-Accounting Report", { size: 18, style: "bold", gap: 2 });
+    drawText(`Generated: ${dateStr}`, { size: 11, color: [90, 90, 90], gap: 10 });
+    drawLabelValue("Network", network);
+    drawLabelValue("Chain ID", report.chainId);
     drawLabelValue("Wallet", report.wallet);
+    drawLabelValue("Period", documentPeriod);
+    drawLabelValue("Document date basis", "Blockchain transaction timestamp");
     if (isBase) {
       drawText("Base L2 - Anchored onchain", { size: 10, style: "bold", color: [0, 82, 255], gap: 10 });
     }
@@ -2483,15 +2590,15 @@ async function printMonthlyReport() {
     // --- Summary cards ---
     const summaryCards = [
       { label: "Total Records", value: String(report.totalRecords) },
-      { label: "Incoming", value: String(report.incomingCount) },
-      { label: "Outgoing", value: String(report.outgoingCount) },
-      { label: "Gas Fees", value: `${report.weeklyFeeTotal} ${gasSymbol}` },
-      { label: "Verified Receipts", value: String(report.verifiedReceiptCount) },
+      { label: "Verified Onchain Records", value: String(report.verifiedReceiptCount) },
+      { label: "Ready For Accounting", value: String(report.readyForAccountingCount) },
       { label: "Needs Review", value: String(report.needsReviewCount), warn: report.needsReviewCount > 0 },
-      { label: "Income Rows", value: String(report.totalIncomeRows) },
-      { label: "Expense Rows", value: String(report.totalExpenseRows) },
+      { label: "Missing Valuation", value: String(report.missingValuationCount), warn: report.missingValuationCount > 0 },
+      { label: "Unknown Counterparties", value: String(report.unknownCounterpartyCount), warn: report.unknownCounterpartyCount > 0 },
+      { label: "Incoming Rows", value: String(report.totalIncomeRows) },
+      { label: "Outgoing Rows", value: String(report.totalExpenseRows) },
       { label: "Swaps", value: String(report.swapCount) },
-      { label: "Uncategorized", value: String(report.uncategorizedCount), warn: report.uncategorizedCount > 0 },
+      { label: "Gas Fees", value: `${report.totalGasFeeNative} ${gasSymbol}` },
     ];
 
     const tokenSymbols = [...new Set(report.items
@@ -2504,17 +2611,39 @@ async function printMonthlyReport() {
       const dir = item.accounting.direction;
       const cat = item.accounting.category;
       const dirIcon = dir === "income" ? "↓" : dir === "expense" ? "↑" : dir === "swap" ? "⇄" : "—";
-      const valueParts = parseAssetValueParts(item.value);
-      const valStr = valueParts ? `${fmt(valueParts.amount)} ${valueParts.symbol}` : (item.value || "—");
-      const gasFee = item.fee?.value || item.transaction_fee || item.tx_fee || "";
-      const gasStr = gasFee ? `${gasFee}` : (item.gas_used ? `${item.gas_used} gas` : "—");
-      return { idx: idx + 1, item, dir, cat, dirIcon, valueParts, valStr, gasStr };
+      return {
+        idx: idx + 1,
+        item,
+        dir,
+        cat,
+        dirIcon,
+        receiptId: receiptIds[idx],
+        valStr: assetMovementText(item),
+        gasStr: formatGasFeeEthText(item),
+        gasUsdStr: formatGasFeeUsdText(item),
+      };
     });
 
     const txRowsHtml = tableRows.map(r => {
       const ts = r.item.timestamp ? formatUtcDateTime(r.item.timestamp) : "—";
-      const shortHash = r.item.hash ? safeDisplay(r.item.hash, 14) : "—";
-      return { idx: r.idx, ts, shortHash, title: r.item.title || "-", subtitle: r.item.subtitle || "-", status: r.item.accounting.status, category: r.cat.replace(/_/g, " "), dirIcon: r.dirIcon, valStr: r.valStr, gasStr: r.gasStr };
+      const shortHash = r.item.hash ? safeDisplay(r.item.hash, 18) : "—";
+      return {
+        idx: r.idx,
+        ts,
+        receiptId: r.receiptId,
+        shortHash,
+        title: r.item.title || "-",
+        subtitle: r.item.subtitle || "-",
+        accountingStatus: transactionStatusLabel(r.item.accounting.status),
+        verificationStatus: r.item.accounting.verificationStatus === "verified" ? "Verified" : "Failed",
+        reviewReason: r.item.accounting.reviewReason || "-",
+        memo: r.item.accounting.memo || "-",
+        category: transactionCategoryLabel(r.cat),
+        dirIcon: r.dirIcon,
+        valStr: r.valStr,
+        gasStr: r.gasStr,
+        gasUsdStr: r.gasUsdStr,
+      };
     });
 
     drawSection("Summary");
@@ -2528,10 +2657,11 @@ async function printMonthlyReport() {
       drawText(tokenSymbols.join(", "));
     }
 
-    drawSection("Estimated Totals");
-    drawLabelValue("Estimated Incoming", `${fmt(report.estimatedIncomeValue)} ${gasSymbol}`);
-    drawLabelValue("Estimated Outgoing", `${fmt(report.estimatedOutgoingValue)} ${gasSymbol}`);
-    drawLabelValue("Gas Fees (7d)", `${report.weeklyFeeTotal} ${gasSymbol}`);
+    drawSection("Pre-Accounting Summary");
+    drawLabelValue("Incoming token movements", `${report.items.filter(item => item.kind === "token" && item.accounting.direction === "income").length} rows`);
+    drawLabelValue("Outgoing token movements", `${report.items.filter(item => item.kind === "token" && item.accounting.direction === "expense").length} rows`);
+    drawLabelValue("Valuation missing", `${report.missingValuationCount} rows`);
+    drawLabelValue("Estimated USD total", "Unavailable without trusted pricing");
     drawLabelValue("Top Activity", report.topActivity);
 
     if (report.appFeeCount || report.protocolFeeCount) {
@@ -2543,15 +2673,21 @@ async function printMonthlyReport() {
 
     drawSection("Transaction Ledger");
     txRowsHtml.forEach(row => {
-      drawText(`#${row.idx}  ${row.ts}  ${row.dirIcon}  ${row.category}  [${row.status}]`, { size: 10, style: "bold", gap: 2 });
+      drawText(`#${row.idx}  ${row.ts}  ${row.dirIcon}  ${row.category}`, { size: 10, style: "bold", gap: 2 });
+      drawText(`Receipt ID: ${row.receiptId}`, { size: 10, indent: 10, gap: 2 });
+      drawText(`Accounting Status: ${row.accountingStatus} | Verification Status: ${row.verificationStatus}`, { size: 10, indent: 10, gap: 2 });
+      drawText(`Review Reason: ${row.reviewReason}`, { size: 10, indent: 10, gap: 2, color: row.reviewReason === "-" ? [85, 85, 85] : [153, 76, 0] });
       drawText(`Title: ${row.title}`, { size: 10, indent: 10, gap: 2 });
       drawText(`Counterparty: ${row.subtitle}`, { size: 10, indent: 10, gap: 2 });
-      drawText(`Value: ${row.valStr} | Gas / Fee: ${row.gasStr}`, { size: 10, indent: 10, gap: 2 });
+      drawText(`Asset Movement: ${row.valStr}`, { size: 10, indent: 10, gap: 2 });
+      drawText(`Gas Fee ETH: ${row.gasStr} | Gas Fee USD: ${row.gasUsdStr}`, { size: 10, indent: 10, gap: 2 });
+      drawText(`Memo / Accounting Note: ${row.memo}`, { size: 10, indent: 10, gap: 2 });
       drawText(`Tx Hash: ${row.shortHash}`, { size: 10, indent: 10, gap: 6, color: [85, 85, 85] });
     });
 
     drawSection("Notes");
     drawText("This is a pre-accounting record prepared with TxReceipts. It is not an official invoice, tax filing, or e-ledger submission.", { size: 10, color: [110, 110, 110], gap: 4 });
+    drawText("Classification such as income, expense, sales, purchase, or business expense is a pre-accounting suggestion unless confirmed by the user or supported by trusted dapp metadata.", { size: 10, color: [110, 110, 110], gap: 4 });
     drawText(`Generated: ${dateStr} | Network: ${network} | Wallet: ${safeDisplay(report.wallet, 24)}`, { size: 10, color: [110, 110, 110], gap: 4 });
     if (isBase) {
       drawText("Base network: receipts anchored to L2 with deterministic onchain verification.", { size: 10, color: [110, 110, 110] });
