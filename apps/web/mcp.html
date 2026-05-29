@@ -36,47 +36,63 @@
     <main id="top" class="api-shell">
       <section class="api-hero">
         <p class="eyebrow">Model Context Protocol</p>
-        <h1>AI asistanlar için Base cüzdan muhasebesi.</h1>
+        <h1>AI-Powered Wallet Accounting for Base.</h1>
         <p class="lede">
-          TxReceipts MCP, AI asistanların (Claude, Cursor, VS Code Copilot, ve diğer MCP
-          istemcileri) Base cüzdan aktivitenizi okumasını, işlem özetlerini almasını ve
-          ön-muhasebe raporları hazırlamasını sağlar. Tüm araçlar salt okunurdur —
-          asistanınız cüzdanınıza dokunamaz, onay isteyemez veya transfer yapamaz.
+          TxReceipts MCP lets AI assistants (Claude, Cursor, VS Code Copilot, and any
+          MCP client) read your Base wallet activity, fetch transaction summaries, and
+          prepare pre-accounting reports. All tools are read-only — your assistant
+          cannot sign, approve, or transfer funds.
         </p>
       </section>
 
+      <!-- Connection bar: server URL displayed prominently -->
+      <section class="api-wallet-panel" aria-label="MCP server connection">
+        <div>
+          <p class="eyebrow">Connect</p>
+          <h3>MCP server address</h3>
+          <p>Add this URL to your MCP client. No API key or sign-up required.</p>
+        </div>
+        <div class="mcp-connect-bar">
+          <pre class="mcp-code-block mcp-connect-url">https://txreceipts-api.evpc77.workers.dev/mcp</pre>
+          <p class="mcp-connect-note">
+            Works with VS Code, Claude Desktop, Cursor, and any MCP-compatible client.
+            Just paste the URL and start asking questions about your Base wallet.
+          </p>
+        </div>
+      </section>
+
       <section class="section pricing-detail api-layout">
-        <!-- Nasıl çalışır -->
+        <!-- How it works -->
         <section class="api-wallet-panel" aria-label="How MCP works">
           <div>
-            <p class="eyebrow">Nasıl çalışır</p>
-            <h3>MCP = AI asistanınıza bir veri kanalı</h3>
+            <p class="eyebrow">How it works</p>
+            <h3>MCP = a data channel for your AI assistant</h3>
             <p>
-              MCP (Model Context Protocol), AI asistanlarının harici araçları ve veri
-              kaynaklarını kullanması için standart bir protokoldür. TxReceipts MCP ile
-              asistanınız doğrudan Base blokzincirinden cüzdan aktivitenizi okuyabilir.
+              MCP (Model Context Protocol) is an open standard that lets AI assistants
+              use external tools and data sources. With TxReceipts MCP, your assistant
+              reads wallet data directly from the Base blockchain.
             </p>
           </div>
           <div class="mcp-flow-checklist">
             <div class="mcp-flow-step">
               <span>1</span>
               <div>
-                <strong>MCP istemcinize sunucuyu ekleyin</strong>
-                <p>VS Code, Claude Desktop, Cursor veya herhangi bir MCP istemcisine TxReceipts MCP sunucu adresini yapılandırın.</p>
+                <strong>Add the server to your MCP client</strong>
+                <p>Configure the TxReceipts MCP server URL in VS Code, Claude Desktop, Cursor, or any MCP client.</p>
               </div>
             </div>
             <div class="mcp-flow-step">
               <span>2</span>
               <div>
-                <strong>Asistanınıza sorun</strong>
-                <p>"Base cüzdanımın son 10 işlemini göster" ya da "Bu ay ne kadar USDC harcadım?" gibi sorular sorun.</p>
+                <strong>Ask your assistant</strong>
+                <p>Try "Show my last 10 Base wallet transactions" or "How much USDC did I spend this month?"</p>
               </div>
             </div>
             <div class="mcp-flow-step">
               <span>3</span>
               <div>
-                <strong>Ön-muhasebe raporu alın</strong>
-                <p>Asistan, TxReceipts MCP araçlarını kullanarak cüzdan aktivitenizi analiz eder ve muhasebeye hazır bir özet sunar.</p>
+                <strong>Get a pre-accounting report</strong>
+                <p>The assistant uses TxReceipts MCP tools to analyze your wallet activity and produces an accounting-ready summary.</p>
               </div>
             </div>
           </div>
@@ -85,54 +101,54 @@
         <!-- MCP Tools -->
         <section class="credit-panel api-credit-panel" aria-label="MCP tools">
           <div class="api-access-copy">
-            <p class="eyebrow">MCP Araçları</p>
-            <h3>Salt okunur muhasebe araçları</h3>
+            <p class="eyebrow">MCP Tools</p>
+            <h3>Read-only accounting tools</h3>
             <p>
-              TxReceipts MCP sunucusu 6 araç sunar. Tümü salt okunurdur — imzalama, transfer,
-              onay veya yazma işlemi yapmaz.
+              The TxReceipts MCP server exposes 6 tools. All are read-only — no signing,
+              no transfers, no approvals, no writes.
             </p>
           </div>
 
           <div class="mcp-tool-grid">
             <article class="mcp-tool-card">
-              <span class="mini-label">Araç 1</span>
+              <span class="mini-label">Tool 1</span>
               <h4>list_networks</h4>
-              <p>Desteklenen ağları listeler (Base, Ethereum, Optimism, Arbitrum, Polygon). Her ağın RPC URL, gezgin adresi ve yeteneklerini döndürür.</p>
+              <p>Lists supported networks (Base, Ethereum, Optimism, Arbitrum, Polygon). Returns each network's RPC URL, explorer address, and capabilities.</p>
             </article>
             <article class="mcp-tool-card">
-              <span class="mini-label">Araç 2</span>
+              <span class="mini-label">Tool 2</span>
               <h4>get_wallet_activity</h4>
-              <p>Bir cüzdanın işlem geçmişini ve token transferlerini getirir. Ağ, cüzdan adresi ve limit parametrelerini alır.</p>
+              <p>Fetches a wallet's transaction history and token transfers. Accepts network, wallet address, and limit parameters.</p>
             </article>
             <article class="mcp-tool-card">
-              <span class="mini-label">Araç 3</span>
+              <span class="mini-label">Tool 3</span>
               <h4>get_transaction_summary</h4>
-              <p>Tek bir işlemin detaylı özetini döndürür: gönderilen değer, gas ücreti, token hareketleri, blok zamanı ve durum.</p>
+              <p>Returns a detailed summary of a single transaction: value sent, gas fees, token movements, block time, and status.</p>
             </article>
             <article class="mcp-tool-card">
-              <span class="mini-label">Araç 4</span>
+              <span class="mini-label">Tool 4</span>
               <h4>get_public_receipt</h4>
-              <p>Geçerli bir TXR-XXXX-XXXX makbuz ID'sine göre herkese açık makbuzu getirir.</p>
+              <p>Fetches a public receipt by a valid TXR-XXXX-XXXX receipt ID.</p>
             </article>
             <article class="mcp-tool-card">
-              <span class="mini-label">Araç 5</span>
+              <span class="mini-label">Tool 5</span>
               <h4>create_receipt</h4>
-              <p>API anahtarı ile muhasebe makbuzu oluşturur. Kimlik doğrulama gerektirir, sadece yetkili projeler kullanabilir.</p>
+              <p>Creates an accounting receipt using an API key. Requires authentication — only authorized projects can use this tool.</p>
             </article>
             <article class="mcp-tool-card">
-              <span class="mini-label">Araç 6</span>
+              <span class="mini-label">Tool 6</span>
               <h4>get_pre_accounting_report</h4>
-              <p>Bir cüzdan için kapsamlı ön-muhasebe raporu hazırlar. Token akışlarını, gaz harcamalarını, gelen/giden özetini ve ağ yeteneklerini içerir. Base ağında full yetenek desteği ile çalışır.</p>
+              <p>Generates a comprehensive pre-accounting report for a wallet: token flows, gas spend, incoming/outgoing summary, and network capabilities. Runs with full capability support on Base.</p>
             </article>
           </div>
         </section>
 
-        <!-- Kurulum -->
+        <!-- Setup -->
         <section class="history-panel api-topup-status-panel" aria-label="MCP Setup">
           <div class="history-head api-topup-head">
             <div>
-              <p class="eyebrow">Kurulum</p>
-              <h3>MCP istemcinize ekleyin</h3>
+              <p class="eyebrow">Setup</p>
+              <h3>Add to your MCP client</h3>
             </div>
           </div>
 
@@ -149,7 +165,7 @@
     }
   }
 }</pre>
-              <p>VS Code ayarlarınıza ekleyin, Copilot Chat otomatik olarak TxReceipts MCP araçlarını kullanabilir.</p>
+              <p>Add this to your VS Code settings. Copilot Chat will automatically discover and use TxReceipts MCP tools.</p>
             </div>
 
             <div class="mcp-setup-card">
@@ -162,64 +178,64 @@
     }
   }
 }</pre>
-              <p>Yapılandırmayı ekleyip Claude'u yeniden başlatın. Doğrudan Base cüzdan soruları sorabilirsiniz.</p>
+              <p>Add the config and restart Claude. You can start asking Base wallet questions immediately.</p>
             </div>
 
             <div class="mcp-setup-card">
-              <span class="mini-label">MCP Keşif Uç Noktası</span>
+              <span class="mini-label">Discovery Endpoint</span>
               <pre class="mcp-code-block">URL: https://txreceipts-api.evpc77.workers.dev/.well-known/mcp.json</pre>
-              <p>Bu uç nokta, MCP keşif araçları tarafından taranabilir ve TxReceipts'in Base ekosisteminde bulunabilirliğini sağlar.</p>
+              <p>This endpoint is crawlable by MCP discovery tools, making TxReceipts findable across the Base ecosystem.</p>
             </div>
           </div>
         </section>
 
-        <!-- Güvenlik -->
+        <!-- Security -->
         <section class="history-panel api-topup-history-panel" aria-label="MCP Security">
           <div class="history-head api-topup-head">
             <div>
-              <p class="eyebrow">Güvenlik</p>
-              <h3>Salt okunur. Onay yok. Transfer yok.</h3>
+              <p class="eyebrow">Security</p>
+              <h3>Read-only. No approvals. No transfers.</h3>
             </div>
           </div>
 
           <div class="mcp-security-checklist">
             <ul class="checklist">
-              <li>TxReceipts MCP <strong>salt okunur</strong>dur — imzalama, onay, transfer veya swap işlemi yapmaz</li>
-              <li>Hiçbir özel anahtar, seed phrase veya API anahtarı MCP bağlamına gönderilmez</li>
-              <li>Cüzdan bakiyeleri ve işlemler yalnızca genel blokzincir verilerinden okunur</li>
-              <li>create_receipt aracı ek bir API anahtarı gerektirir ve isteğe bağlıdır</li>
-              <li>Her MCP isteği için hız sınırı uygulanır</li>
-              <li>AI asistanı, sizin izniniz olmadan MCP aracını çağıramaz</li>
+              <li>TxReceipts MCP is <strong>read-only</strong> — it cannot sign, approve, transfer, or swap</li>
+              <li>No private keys, seed phrases, or API tokens are sent through the MCP context</li>
+              <li>Wallet balances and transactions are fetched from public blockchain data only</li>
+              <li>The <code>create_receipt</code> tool requires an additional API key and is optional</li>
+              <li>Rate limits are enforced per MCP request</li>
+              <li>The AI assistant cannot call MCP tools without your permission</li>
             </ul>
           </div>
         </section>
 
-        <!-- Sık sorulanlar -->
+        <!-- FAQ -->
         <section class="api-wallet-panel" aria-label="MCP FAQ">
           <div>
-            <p class="eyebrow">SSS</p>
-            <h3>Sık sorulan sorular</h3>
+            <p class="eyebrow">FAQ</p>
+            <h3>Frequently asked questions</h3>
           </div>
           <div class="mcp-faq-list">
             <div class="mcp-faq-item">
-              <strong>MCP hangi AI asistanları ile çalışır?</strong>
-              <p>Claude Desktop, VS Code Copilot Chat, Cursor, GitHub Copilot ve MCP protokolünü destekleyen tüm istemciler.</p>
+              <strong>Which AI assistants work with MCP?</strong>
+              <p>Claude Desktop, VS Code Copilot Chat, Cursor, GitHub Copilot, and any client that supports the MCP protocol.</p>
             </div>
             <div class="mcp-faq-item">
-              <strong>MCP'yi kullanmak için ücret ödemem gerekir mi?</strong>
-              <p>Hayır. MCP erişimi tamamen ücretsizdir ve bir API anahtarı gerektirmez. Sadece MCP sunucu URL'sini istemcinize eklemeniz yeterlidir.</p>
+              <strong>Is there a fee to use MCP?</strong>
+              <p>No. MCP access is completely free and does not require an API key. Just add the server URL to your MCP client.</p>
             </div>
             <div class="mcp-faq-item">
-              <strong>Asistanım cüzdanımdan token transferi yapabilir mi?</strong>
-              <p>Hayır. Tüm MCP araçları salt okunurdur. Asistanınız blokzincir verilerini okuyabilir ancak imzalama, onay veya transfer işlemi yapamaz.</p>
+              <strong>Can my assistant transfer tokens from my wallet?</strong>
+              <p>No. All MCP tools are read-only. Your assistant can read blockchain data but cannot sign, approve, or transfer anything.</p>
             </div>
             <div class="mcp-faq-item">
-              <strong>Hangi ağlar destekleniyor?</strong>
-              <p>Base (varsayılan), Ethereum, Optimism, Arbitrum ve Polygon. Base ağı full yetenek desteği ile çalışır (MCP, X402, Paymaster, Base Account, Builder Codes).</p>
+              <strong>Which networks are supported?</strong>
+              <p>Base (default), Ethereum, Optimism, Arbitrum, and Polygon. Base runs with full capability support (MCP, X402, Paymaster, Base Account, Builder Codes).</p>
             </div>
             <div class="mcp-faq-item">
-              <strong>Ön-muhasebe raporu resmi bir muhasebe kaydı mıdır?</strong>
-              <p>Hayır. Rapor bir <em>ön-muhasebe</em> kaydıdır ve resmi bir fatura, vergi beyannamesi veya e-defter kaydı değildir. Resmi muhasebe için lisanslı bir muhasebeciye danışın.</p>
+              <strong>Is the pre-accounting report an official accounting record?</strong>
+              <p>No. The report is a <em>pre-accounting</em> record and is not an official invoice, tax filing, or e-ledger entry. Consult a licensed accountant for official bookkeeping.</p>
             </div>
           </div>
         </section>

@@ -1424,6 +1424,186 @@ dd {
   font-weight: 720;
 }
 
+/* ─── MCP Page ─── */
+
+.mcp-connect-bar {
+  background: var(--paper);
+  border: 1px solid var(--blue);
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  padding: 24px;
+}
+
+.mcp-connect-url {
+  background: #0d0d0d;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--blue);
+  font: 700 15px/1.6 "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+  overflow-x: auto;
+  padding: 16px 20px;
+  text-align: center;
+  user-select: all;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.mcp-connect-note {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* Tool grid — 3 columns like feature-grid */
+.mcp-tool-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.mcp-tool-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 24px;
+}
+
+.mcp-tool-card h4 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+  word-break: break-all;
+}
+
+.mcp-tool-card p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Flow steps — numbered circles like api-flow-step */
+.mcp-flow-checklist {
+  display: grid;
+  gap: 20px;
+}
+
+.mcp-flow-step {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.mcp-flow-step span {
+  align-items: center;
+  background: rgba(89, 235, 246, 0.12);
+  border: 1px solid rgba(89, 235, 246, 0.24);
+  border-radius: 999px;
+  color: var(--blue);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 760;
+  height: 24px;
+  justify-content: center;
+  margin-top: 2px;
+  width: 24px;
+}
+
+.mcp-flow-step strong {
+  display: block;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.mcp-flow-step p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Setup cards — vertical stack */
+.mcp-setup-steps {
+  display: grid;
+  gap: 24px;
+}
+
+.mcp-setup-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 24px;
+}
+
+.mcp-setup-card p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Code blocks */
+.mcp-code-block {
+  background: #0d0d0d;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 14px/1.6 "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+  margin: 0;
+  overflow-x: auto;
+  padding: 20px;
+  white-space: pre;
+}
+
+.mcp-code-block code {
+  font-family: inherit;
+}
+
+/* FAQ */
+.mcp-faq-list {
+  display: grid;
+}
+
+.mcp-faq-item {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+  padding: 24px 0;
+}
+
+.mcp-faq-item:first-child {
+  padding-top: 0;
+}
+
+.mcp-faq-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.mcp-faq-item strong {
+  font-size: 16px;
+}
+
+.mcp-faq-item p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Security checklist — inherits .checklist styles, extra spacing */
+.mcp-security-checklist {
+  display: grid;
+}
+
 @media print {
   .topbar,
   .hero,
@@ -1494,7 +1674,9 @@ dd {
   .ledger-metrics,
   .wallet-panel,
   .wallet-panel-top,
-  .history-item {
+  .history-item,
+  .mcp-tool-grid,
+  .mcp-setup-steps {
     grid-template-columns: 1fr;
   }
 
