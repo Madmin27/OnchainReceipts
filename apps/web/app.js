@@ -2410,12 +2410,14 @@ async function printMonthlyReport() {
       return parts.join(".");
     };
 
-    // Geçici bir container oluştur (görünmez)
+    // Geçici container — viewport içinde ama görünmez (html2canvas offscreen render edemez)
     const tmp = document.createElement("div");
-    tmp.style.position = "absolute";
-    tmp.style.left = "-9999px";
+    tmp.style.position = "fixed";
+    tmp.style.left = "0";
     tmp.style.top = "0";
     tmp.style.width = "800px";
+    tmp.style.opacity = "0.001";   // ~görünmez ama html2canvas yakalar
+    tmp.style.pointerEvents = "none";
     tmp.style.background = "#fff";
     tmp.style.color = "#000";
     tmp.style.fontFamily = "Arial, sans-serif";
