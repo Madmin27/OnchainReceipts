@@ -107,6 +107,12 @@ https://madmin27.github.io/OnchainReceipts/
 
 The first live demo connects to wallet activity, separates incoming and outgoing rows, highlights records needing review, and prepares CSV or print-to-PDF accounting output. A selected transaction can also produce a short printable receipt note with token movement, status, and gas paid.
 
+### Video
+
+[![TxReceipts overview](https://img.youtube.com/vi/-gd716Yo8O4/0.jpg)](https://www.youtube.com/watch?v=-gd716Yo8O4)
+
+Watch the TxReceipts overview on YouTube.
+
 ## Why not just a block explorer?
 
 Block explorers are essential, but they are optimized for technical inspection. Most users still have to interpret raw logs, token movements, router contracts, internal calls, gas fields, and contract labels by themselves.
