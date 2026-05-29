@@ -2394,13 +2394,8 @@ async function downloadMonthlyCsv() {
 
 async function printMonthlyReport() {
   try {
-    const container = document.getElementById("printContainer");
-    if (!container) return;
-
-    // Container'ı görünür yap (CSS'de display:none gizliyor)
-    container.style.display = "block";
-
     const report = buildMonthlyReport();
+    if (!report) return;
     const now = new Date();
     const dateStr = formatUtcDateTime(now);
     const network = report.network;
@@ -2415,46 +2410,41 @@ async function printMonthlyReport() {
       return parts.join(".");
     };
 
-    // Boş kayıt durumu
+    // Geçici bir container oluştur (görünmez)
+    const tmp = document.createElement("div");
+    tmp.style.position = "absolute";
+    tmp.style.left = "-9999px";
+    tmp.style.top = "0";
+    tmp.style.width = "800px";
+    tmp.style.background = "#fff";
+    tmp.style.color = "#000";
+    tmp.style.fontFamily = "Arial, sans-serif";
+    tmp.style.padding = "20px";
+    document.body.appendChild(tmp);
+
     if (!report.totalRecords) {
-      container.innerHTML = `
-        <div class="print-preview-overlay">
-          <div class="print-preview-modal">
-            <div class="print-preview-toolbar">
-              <span class="print-preview-title">Print Preview — ${network}</span>
-              <span class="print-preview-count">0 records</span>
-              <button class="print-preview-btn secondary" data-print-action="close">✕ Close</button>
-            </div>
-            <div class="print-preview-scroll">
-              <div class="print-report print-report-empty">
-                <div class="print-header">
-                  <h1 class="print-title">TxReceipts — Pre‑Accounting Report</h1>
-                  <p class="print-subtitle">${network} · ${dateStr}</p>
-                </div>
-                <div class="print-wallet">
-                  <span class="print-label">Wallet</span>
-                  <code class="print-code">${report.wallet}</code>
-                </div>
-                <div class="print-empty-state">
-                  <p>No transaction records loaded for this wallet on ${network}.</p>
-                  <p>Connect a wallet or enter an address, wait for history to load, then print again.</p>
-                </div>
-                <div class="print-footer">
-                  <p class="print-disclaimer">Report generated automatically. No data to display.</p>
-                </div>
-              </div>
-            </div>
+      tmp.innerHTML = `
+        <div style="max-width:760px;margin:0 auto;">
+          <div style="text-align:center;border-bottom:2px solid #333;padding-bottom:16px;margin-bottom:16px;">
+            <h1 style="font-size:20px;margin:0;">TxReceipts — Pre‑Accounting Report</h1>
+            <p style="font-size:13px;color:#555;margin:4px 0 0;">${network} · ${dateStr}</p>
+          </div>
+          <div style="margin:16px 0;">
+            <p style="font-size:12px;color:#888;">Wallet</p>
+            <code style="font-size:13px;word-break:break-all;">${report.wallet}</code>
+          </div>
+          <div style="text-align:center;padding:40px 0;">
+            <p style="font-size:14px;">No transaction records loaded for this wallet on ${network}.</p>
+            <p style="font-size:13px;color:#888;">Connect a wallet or enter an address, wait for history to load, then try again.</p>
+          </div>
+          <div style="text-align:center;font-size:11px;color:#aaa;border-top:1px solid #ddd;padding-top:12px;margin-top:16px;">
+            Report generated automatically. No data to display.
           </div>
         </div>
       `;
-      // Boş kayıt için de PDF oluştur
-      try {
-        const opt = { margin: [0.5, 0.5, 0.5, 0.5], filename: `txreceipts-empty-${network}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" } };
-        const reportEl = container.querySelector(".print-report");
-        if (reportEl) await html2pdf().set(opt).from(reportEl).save();
-      } catch (pdfErr) { console.error("html2pdf empty error:", pdfErr); }
-      container.innerHTML = "";
-      container.style.display = "none";
+      const opt = { margin: [0.5, 0.5, 0.5, 0.5], filename: `txreceipts-empty-${network}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" } };
+      await html2pdf().set(opt).from(tmp).save();
+      document.body.removeChild(tmp);
       return;
     }
 
@@ -2472,14 +2462,12 @@ async function printMonthlyReport() {
       { label: "Uncategorized", value: String(report.uncategorizedCount), warn: report.uncategorizedCount > 0 },
     ];
 
-    // Token çeşitlilik hesaplama
     const tokenSymbols = [...new Set(report.items
       .filter(i => i.kind === "token")
       .map(i => { const p = parseAssetValueParts(i.value); return p?.symbol; })
       .filter(Boolean)
     )];
 
-    // --- Transaction table rows ---
     const tableRows = report.items.map((item, idx) => {
       const dir = item.accounting.direction;
       const cat = item.accounting.category;
@@ -2491,191 +2479,128 @@ async function printMonthlyReport() {
       return { idx: idx + 1, item, dir, cat, dirIcon, valueParts, valStr, gasStr };
     });
 
-    // --- Build HTML ---
     const cardsHtml = summaryCards.map(c =>
-      `<div class="print-card${c.warn ? ' warn' : ''}">
-        <span class="print-card-label">${c.label}</span>
-        <span class="print-card-value">${c.value}</span>
+      `<div style="background:#f5f5f5;border-radius:6px;padding:10px 14px;text-align:center;${c.warn ? 'border:2px solid #e74c3c;' : 'border:1px solid #ddd;'}">
+        <div style="font-size:11px;color:#666;margin-bottom:4px;">${c.label}</div>
+        <div style="font-size:16px;font-weight:bold;">${c.value}</div>
       </div>`
     ).join("");
 
     const tokenHtml = tokenSymbols.length
-      ? `<div class="print-tokens">
-          <span class="print-label">Tokens</span>
-          <span class="print-token-list">${tokenSymbols.join(", ")}</span>
-        </div>`
+      ? `<div style="margin:12px 0;"><span style="font-size:12px;color:#888;">Tokens: </span><span style="font-size:13px;">${tokenSymbols.join(", ")}</span></div>`
       : "";
 
     const txRowsHtml = tableRows.map(r => {
       const ts = r.item.timestamp ? formatUtcDateTime(r.item.timestamp) : "—";
       const shortHash = r.item.hash ? safeDisplay(r.item.hash, 14) : "—";
-      return `<tr>
-        <td class="print-tx-idx">${r.idx}</td>
-        <td class="print-tx-date">${ts}</td>
-        <td class="print-tx-dir">${r.dirIcon} ${r.dir}</td>
-        <td class="print-tx-cat">${r.cat.replace(/_/g, " ")}</td>
-        <td class="print-tx-title">${r.item.title || "—"}</td>
-        <td class="print-tx-counterparty">${r.item.subtitle || "—"}</td>
-        <td class="print-tx-value">${r.valStr}</td>
-        <td class="print-tx-gas">${r.gasStr}</td>
-        <td class="print-tx-status">${r.item.accounting.status}</td>
-        <td class="print-tx-hash">${shortHash}</td>
+      return `<tr style="font-size:10px;">
+        <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:center;">${r.idx}</td>
+        <td style="padding:4px 6px;border-bottom:1px solid #eee;white-space:nowrap;">${ts}</td>
+        <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:center;">${r.dirIcon}</td>
+        <td style="padding:4px 6px;border-bottom:1px solid #eee;">${r.cat.replace(/_/g, " ")}</td>
+        <td style="padding:4px 6px;border-bottom:1px solid #eee;">${r.item.title || "—"}</td>
+        <td style="padding:4px 6px;border-bottom:1px solid #eee;">${r.item.subtitle || "—"}</td>
+        <td style="padding:4px 6px;border-bottom:1px solid #eee;white-space:nowrap;">${r.valStr}</td>
+        <td style="padding:4px 6px;border-bottom:1px solid #eee;white-space:nowrap;">${r.gasStr}</td>
+        <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:center;">${r.item.accounting.status}</td>
+        <td style="padding:4px 6px;border-bottom:1px solid #eee;font-family:monospace;font-size:9px;">${shortHash}</td>
       </tr>`;
     }).join("");
 
     const baseBadge = isBase
-      ? `<div class="print-base-badge">⚡ Base L2 — Anchored onchain</div>`
+      ? `<span style="background:#0052FF;color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;">Base L2 — Anchored onchain</span>`
       : "";
 
-    // Print Preview Overlay
-    container.innerHTML = `
-      <div class="print-preview-overlay">
-        <div class="print-preview-modal">
-          <div class="print-preview-toolbar">
-            <span class="print-preview-title">Print Preview — ${network}</span>
-            <span class="print-preview-count">${report.totalRecords} records</span>
-            <button class="print-preview-btn" data-print-action="print">🖨️ Print</button>
-            <button class="print-preview-btn secondary" data-print-action="close">✕ Close</button>
+    tmp.innerHTML = `
+      <div style="max-width:760px;margin:0 auto;">
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:16px;">
+          <div>
+            <h1 style="font-size:20px;margin:0;">TxReceipts — Pre‑Accounting Report</h1>
+            <p style="font-size:13px;color:#555;margin:4px 0 0;">${network} · ${dateStr}</p>
           </div>
-          <div class="print-preview-scroll">
-            <div class="print-report">
-          <!-- Header -->
-          <div class="print-header">
-            <div class="print-header-left">
-              <h1 class="print-title">TxReceipts — Pre‑Accounting Report</h1>
-              <p class="print-subtitle">${network} · ${dateStr}</p>
-            </div>
-            <div class="print-header-right">
-              ${baseBadge}
-            </div>
+          <div>${baseBadge}</div>
+        </div>
+
+        <!-- Wallet + Tokens -->
+        <div style="margin:12px 0;">
+          <div style="font-size:12px;color:#888;">Wallet</div>
+          <code style="font-size:13px;word-break:break-all;">${report.wallet}</code>
+        </div>
+        ${tokenHtml}
+
+        <!-- Estimated Totals -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0;">
+          <div style="background:#f0faf0;border:1px solid #b8e6b8;border-radius:6px;padding:8px 12px;text-align:center;">
+            <div style="font-size:10px;color:#2e7d32;">Estimated Incoming</div>
+            <div style="font-size:14px;font-weight:bold;color:#2e7d32;">${fmt(report.estimatedIncomeValue)} ${gasSymbol}</div>
           </div>
-
-          <!-- Wallet + Tokens -->
-          <div class="print-wallet-row">
-            <div class="print-wallet">
-              <span class="print-label">Wallet</span>
-              <code class="print-code">${report.wallet}</code>
-            </div>
-            ${tokenHtml}
+          <div style="background:#fef0f0;border:1px solid #f5b8b8;border-radius:6px;padding:8px 12px;text-align:center;">
+            <div style="font-size:10px;color:#c62828;">Estimated Outgoing</div>
+            <div style="font-size:14px;font-weight:bold;color:#c62828;">${fmt(report.estimatedOutgoingValue)} ${gasSymbol}</div>
           </div>
-
-          <!-- Estimated Totals -->
-          <div class="print-totals">
-            <div class="print-total-item">
-              <span class="print-total-label">Estimated Incoming</span>
-              <span class="print-total-value incoming">${fmt(report.estimatedIncomeValue)} ${gasSymbol}</span>
-            </div>
-            <div class="print-total-item">
-              <span class="print-total-label">Estimated Outgoing</span>
-              <span class="print-total-value outgoing">${fmt(report.estimatedOutgoingValue)} ${gasSymbol}</span>
-            </div>
-            <div class="print-total-item">
-              <span class="print-total-label">Gas Fees (7d)</span>
-              <span class="print-total-value gas">${report.weeklyFeeTotal} ${gasSymbol}</span>
-            </div>
-            <div class="print-total-item">
-              <span class="print-total-label">Top Activity</span>
-              <span class="print-total-value">${report.topActivity}</span>
-            </div>
+          <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:8px 12px;text-align:center;">
+            <div style="font-size:10px;color:#f57f17;">Gas Fees (7d)</div>
+            <div style="font-size:14px;font-weight:bold;color:#f57f17;">${report.weeklyFeeTotal} ${gasSymbol}</div>
           </div>
-
-          <!-- Summary Cards -->
-          <div class="print-cards">
-            ${cardsHtml}
-          </div>
-
-          <!-- Fee Breakdown -->
-          ${report.appFeeCount || report.protocolFeeCount ? `
-          <div class="print-fees">
-            <h3 class="print-section-title">Fee Breakdown</h3>
-            <table class="print-fee-table">
-              <tr><td>App Fees</td><td>${report.appFeeCount} rows · ${fmt(report.appFeeTotal)} ${gasSymbol}</td></tr>
-              <tr><td>Protocol Fees</td><td>${report.protocolFeeCount} rows · ${fmt(report.protocolFeeTotal)} ${gasSymbol}</td></tr>
-              <tr><td>Gas Fees (7d)</td><td>${report.weeklyFeeRecords} tx · ${report.weeklyFeeTotal} ${gasSymbol}</td></tr>
-            </table>
-          </div>` : ""}
-
-          <!-- Transaction Table -->
-          <div class="print-table-wrap">
-            <h3 class="print-section-title">Transaction Ledger</h3>
-            <table class="print-tx-table">
-              <thead>
-                <tr>
-                  <th class="col-idx">#</th>
-                  <th class="col-date">Date (UTC)</th>
-                  <th class="col-dir">Dir</th>
-                  <th class="col-cat">Category</th>
-                  <th class="col-title">Title</th>
-                  <th class="col-party">Counterparty</th>
-                  <th class="col-value">Value</th>
-                  <th class="col-gas">Gas / Fee</th>
-                  <th class="col-status">Status</th>
-                  <th class="col-hash">Tx Hash</th>
-                </tr>
-              </thead>
-              <tbody>${txRowsHtml}</tbody>
-            </table>
-          </div>
-
-          <!-- Footer -->
-          <div class="print-footer">
-            <p class="print-disclaimer">
-              <strong>Disclaimer:</strong> This is a pre‑accounting record prepared with TxReceipts.
-              It is not an official invoice, tax filing, or e‑ledger submission.
-              All values are estimates based on onchain data and user‑applied categorisation.
-              Consult a licensed accountant for formal reporting.
-            </p>
-            <p class="print-disclaimer">
-              Generated: ${dateStr} · Network: ${network} · Wallet: ${safeDisplay(report.wallet, 24)}
-            </p>
-            ${isBase ? '<p class="print-disclaimer">Base network: Receipts anchored to L2 with deterministic onchain verification.</p>' : ""}
+          <div style="background:#e8eaf6;border:1px solid #c5cae9;border-radius:6px;padding:8px 12px;text-align:center;">
+            <div style="font-size:10px;color:#283593;">Top Activity</div>
+            <div style="font-size:14px;font-weight:bold;color:#283593;">${report.topActivity}</div>
           </div>
         </div>
+
+        <!-- Summary Cards -->
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:16px 0;">
+          ${cardsHtml}
+        </div>
+
+        <!-- Fee Breakdown -->
+        ${report.appFeeCount || report.protocolFeeCount ? `
+        <div style="margin:16px 0;">
+          <h3 style="font-size:13px;margin:0 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px;">Fee Breakdown</h3>
+          <table style="width:100%;font-size:12px;border-collapse:collapse;">
+            <tr><td style="padding:4px 8px;">App Fees</td><td style="padding:4px 8px;text-align:right;">${report.appFeeCount} rows · ${fmt(report.appFeeTotal)} ${gasSymbol}</td></tr>
+            <tr><td style="padding:4px 8px;">Protocol Fees</td><td style="padding:4px 8px;text-align:right;">${report.protocolFeeCount} rows · ${fmt(report.protocolFeeTotal)} ${gasSymbol}</td></tr>
+            <tr><td style="padding:4px 8px;">Gas Fees (7d)</td><td style="padding:4px 8px;text-align:right;">${report.weeklyFeeRecords} tx · ${report.weeklyFeeTotal} ${gasSymbol}</td></tr>
+          </table>
+        </div>` : ""}
+
+        <!-- Transaction Table -->
+        <div style="margin:16px 0;">
+          <h3 style="font-size:13px;margin:0 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px;">Transaction Ledger</h3>
+          <table style="width:100%;border-collapse:collapse;font-size:10px;">
+            <thead>
+              <tr style="background:#f5f5f5;">
+                <th style="padding:6px;text-align:center;border-bottom:2px solid #ddd;">#</th>
+                <th style="padding:6px;text-align:left;border-bottom:2px solid #ddd;">Date (UTC)</th>
+                <th style="padding:6px;text-align:center;border-bottom:2px solid #ddd;">Dir</th>
+                <th style="padding:6px;text-align:left;border-bottom:2px solid #ddd;">Category</th>
+                <th style="padding:6px;text-align:left;border-bottom:2px solid #ddd;">Title</th>
+                <th style="padding:6px;text-align:left;border-bottom:2px solid #ddd;">Counterparty</th>
+                <th style="padding:6px;text-align:right;border-bottom:2px solid #ddd;">Value</th>
+                <th style="padding:6px;text-align:right;border-bottom:2px solid #ddd;">Gas / Fee</th>
+                <th style="padding:6px;text-align:center;border-bottom:2px solid #ddd;">Status</th>
+                <th style="padding:6px;text-align:left;border-bottom:2px solid #ddd;">Tx Hash</th>
+              </tr>
+            </thead>
+            <tbody>${txRowsHtml}</tbody>
+          </table>
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;margin-top:16px;">
+          <p style="margin:4px 0;"><strong>Disclaimer:</strong> This is a pre‑accounting record prepared with TxReceipts. It is not an official invoice, tax filing, or e‑ledger submission. All values are estimates based on onchain data and user‑applied categorisation. Consult a licensed accountant for formal reporting.</p>
+          <p style="margin:4px 0;">Generated: ${dateStr} · Network: ${network} · Wallet: ${safeDisplay(report.wallet, 24)}</p>
+          ${isBase ? '<p style="margin:4px 0;">Base network: Receipts anchored to L2 with deterministic onchain verification.</p>' : ""}
+        </div>
       </div>
-    </div>
     `;
 
-    // Toolbar butonları için event delegation (CSP inline-script hatası önlemi)
-    container.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-print-action]");
-      if (!btn) return;
-      const action = btn.dataset.printAction;
-      if (action === "print") {
-        // html2pdf ile PDF oluştur ve indir
-        const reportEl = container.querySelector(".print-report");
-        if (reportEl) {
-          const opt = { margin: [0.5, 0.5, 0.5, 0.5], filename: `txreceipts-monthly-${network}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" } };
-          html2pdf().set(opt).from(reportEl).save().then(() => {
-            container.innerHTML = "";
-            container.style.display = "none";
-          }).catch(err => {
-            console.error("html2pdf error:", err);
-          });
-        }
-      } else if (action === "close") {
-        container.innerHTML = "";
-        container.style.display = "none";
-      }
-    });
+    const opt = { margin: [0.5, 0.5, 0.5, 0.5], filename: `txreceipts-monthly-${network}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" } };
+    await html2pdf().set(opt).from(tmp).save();
+    document.body.removeChild(tmp);
   } catch (error) {
     console.error("PrintMonthlyReport error:", error);
-    const container = document.getElementById("printContainer");
-    if (container) {
-      container.innerHTML = `
-        <div class="print-preview-overlay">
-          <div class="print-preview-modal">
-            <div class="print-preview-toolbar">
-              <span class="print-preview-title">Print Error</span>
-              <button class="print-preview-btn secondary" data-print-action="close">✕ Close</button>
-            </div>
-            <div class="print-preview-scroll">
-              <div class="print-report">
-                <p class="print-error">Print error: ${safeDisplay(error.message, 200)}</p>
-              </div>
-            </div>
-          </div>
-        </div>`;
-    }
   }
 }
 
