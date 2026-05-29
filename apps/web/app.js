@@ -2384,8 +2384,173 @@ async function downloadMonthlyCsv() {
 
 function printMonthlyReport() {
   const report = buildMonthlyReport();
-  setQaAnswer(`${currentNetworkScopeText()}\nWallet: ${report.wallet}\nLoaded records: ${report.totalRecords}\nIncome rows: ${report.totalIncomeRows}\nExpense rows: ${report.totalExpenseRows}\nGas fees: ${report.weeklyFeeTotal} ${report.weeklyFeeAsset}\nUncategorized: ${report.uncategorizedCount}\nVerified records: ${report.verifiedReceiptCount}\nTop activity: ${report.topActivity}`, "template");
+  const container = document.getElementById("printContainer");
+  if (!container) return;
+
+  const now = new Date();
+  const dateStr = formatUtcDateTime(now);
+  const network = report.network;
+  const isBase = currentNetworkCapabilities().isBase;
+
+  // --- Summary cards ---
+  const summaryCards = [
+    { label: "Total Records", value: report.totalRecords },
+    { label: "Incoming", value: report.incomingCount },
+    { label: "Outgoing", value: report.outgoingCount },
+    { label: "Gas Fees", value: `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}` },
+    { label: "Verified Receipts", value: report.verifiedReceiptCount },
+    { label: "Needs Review", value: report.needsReviewCount, warn: report.needsReviewCount > 0 },
+    { label: "Income Rows", value: report.totalIncomeRows },
+    { label: "Expense Rows", value: report.totalExpenseRows },
+    { label: "Swaps", value: report.swapCount },
+    { label: "Uncategorized", value: report.uncategorizedCount, warn: report.uncategorizedCount > 0 },
+  ];
+
+  // --- Transaction table rows ---
+  const tableRows = report.items.map((item, idx) => {
+    const dir = item.accounting.direction;
+    const cat = item.accounting.category;
+    const dirIcon = dir === "income" ? "↓" : dir === "expense" ? "↑" : dir === "swap" ? "⇄" : "—";
+    const valueParts = parseAssetValueParts(item.value);
+    const gasFee = item.fee?.value || item.transaction_fee || item.tx_fee || "";
+    return { idx: idx + 1, item, dir, cat, dirIcon, valueParts, gasFee };
+  });
+
+  // --- Build HTML ---
+  const cardsHtml = summaryCards.map(c =>
+    `<div class="print-card${c.warn ? ' warn' : ''}">
+      <span class="print-card-label">${c.label}</span>
+      <span class="print-card-value">${c.value}</span>
+    </div>`
+  ).join("");
+
+  const txRowsHtml = tableRows.map(r => {
+    const ts = r.item.timestamp ? formatUtcDateTime(r.item.timestamp) : "—";
+    const shortHash = r.item.hash ? safeDisplay(r.item.hash, 18) : "—";
+    const valStr = r.valueParts ? `${r.valueParts.amount} ${r.valueParts.symbol}` : (r.item.value || "—");
+    const gasStr = r.gasFee ? `${r.gasFee}` : (r.item.gas_used ? `${r.item.gas_used}` : "—");
+    return `<tr>
+      <td class="print-tx-idx">${r.idx}</td>
+      <td class="print-tx-date">${ts}</td>
+      <td class="print-tx-dir">${r.dirIcon} ${r.dir}</td>
+      <td class="print-tx-cat">${r.cat.replace(/_/g, " ")}</td>
+      <td class="print-tx-title">${r.item.title || "—"}</td>
+      <td class="print-tx-counterparty">${r.item.subtitle || "—"}</td>
+      <td class="print-tx-value">${valStr}</td>
+      <td class="print-tx-gas">${gasStr}</td>
+      <td class="print-tx-status">${r.item.accounting.status}</td>
+      <td class="print-tx-hash">${shortHash}</td>
+    </tr>`;
+  }).join("");
+
+  const baseBadge = isBase
+    ? `<div class="print-base-badge">⚡ Base L2 — Anchored onchain</div>`
+    : "";
+
+  container.innerHTML = `
+    <div class="print-report">
+      <!-- Header -->
+      <div class="print-header">
+        <div class="print-header-left">
+          <h1 class="print-title">TxReceipts — Pre‑Accounting Report</h1>
+          <p class="print-subtitle">${network} · ${dateStr}</p>
+        </div>
+        <div class="print-header-right">
+          ${baseBadge}
+        </div>
+      </div>
+
+      <!-- Wallet -->
+      <div class="print-wallet">
+        <span class="print-label">Wallet</span>
+        <code class="print-code">${report.wallet}</code>
+      </div>
+
+      <!-- Estimated Totals -->
+      <div class="print-totals">
+        <div class="print-total-item">
+          <span class="print-total-label">Estimated Incoming</span>
+          <span class="print-total-value incoming">${report.estimatedIncomeValue.toFixed(4)} ${report.weeklyFeeAsset}</span>
+        </div>
+        <div class="print-total-item">
+          <span class="print-total-label">Estimated Outgoing</span>
+          <span class="print-total-value outgoing">${report.estimatedOutgoingValue.toFixed(4)} ${report.weeklyFeeAsset}</span>
+        </div>
+        <div class="print-total-item">
+          <span class="print-total-label">Gas Fees (7d)</span>
+          <span class="print-total-value gas">${report.weeklyFeeTotal} ${report.weeklyFeeAsset}</span>
+        </div>
+        <div class="print-total-item">
+          <span class="print-total-label">Top Activity</span>
+          <span class="print-total-value">${report.topActivity}</span>
+        </div>
+      </div>
+
+      <!-- Summary Cards -->
+      <div class="print-cards">
+        ${cardsHtml}
+      </div>
+
+      <!-- Fee Breakdown -->
+      ${report.appFeeCount || report.protocolFeeCount ? `
+      <div class="print-fees">
+        <h3 class="print-section-title">Fee Breakdown</h3>
+        <table class="print-fee-table">
+          <tr><td>App Fees</td><td>${report.appFeeCount} rows · ${report.appFeeTotal.toFixed(4)} ${report.weeklyFeeAsset}</td></tr>
+          <tr><td>Protocol Fees</td><td>${report.protocolFeeCount} rows · ${report.protocolFeeTotal.toFixed(4)} ${report.weeklyFeeAsset}</td></tr>
+          <tr><td>Gas Fees (7d)</td><td>${report.weeklyFeeRecords} tx · ${report.weeklyFeeTotal} ${report.weeklyFeeAsset}</td></tr>
+        </table>
+      </div>` : ""}
+
+      <!-- Transaction Table -->
+      <div class="print-table-wrap">
+        <h3 class="print-section-title">Transaction Ledger</h3>
+        <table class="print-tx-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date (UTC)</th>
+              <th>Direction</th>
+              <th>Category</th>
+              <th>Title</th>
+              <th>Counterparty</th>
+              <th>Value</th>
+              <th>Gas / Fee</th>
+              <th>Status</th>
+              <th>Tx Hash</th>
+            </tr>
+          </thead>
+          <tbody>${txRowsHtml}</tbody>
+        </table>
+      </div>
+
+      <!-- Footer -->
+      <div class="print-footer">
+        <p class="print-disclaimer">
+          <strong>Disclaimer:</strong> This is a pre‑accounting record prepared with TxReceipts.
+          It is not an official invoice, tax filing, or e‑ledger submission.
+          All values are estimates based on onchain data and user‑applied categorisation.
+          Consult a licensed accountant for formal reporting.
+        </p>
+        <p class="print-disclaimer">
+          Generated: ${dateStr} · Network: ${network} · Wallet: ${safeDisplay(report.wallet, 24)}
+        </p>
+        ${isBase ? '<p class="print-disclaimer">Base network: Receipts anchored to L2 with deterministic onchain verification.</p>' : ""}
+      </div>
+    </div>
+  `;
+
+  // Trigger browser print
   window.print();
+
+  // Clean up after print dialog closes
+  const afterPrint = () => {
+    container.innerHTML = "";
+    window.removeEventListener("afterprint", afterPrint);
+    window.removeEventListener("focus", afterPrint);
+  };
+  window.addEventListener("afterprint", afterPrint);
+  window.addEventListener("focus", afterPrint);
 }
 
 function populateNetworks() {
