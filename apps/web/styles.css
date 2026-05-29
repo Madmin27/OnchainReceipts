@@ -812,36 +812,53 @@ dd {
 
 .api-credit-panel {
   align-items: start;
-  grid-template-columns: minmax(260px, 1.05fr) minmax(280px, 0.9fr) minmax(260px, 0.8fr) minmax(210px, 0.55fr);
+  gap: 14px;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(250px, 0.95fr) minmax(220px, 0.85fr) minmax(180px, 0.5fr);
 }
 
 .api-credit-panel .credit-fields {
-  gap: 14px;
+  gap: 10px;
 }
 
 .api-credit-panel .credit-balance {
   height: 100%;
 }
 
+.api-credit-panel h3 {
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.api-credit-panel > div {
+  min-width: 0;
+}
+
 .api-plan-card {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  padding: 14px;
 }
 
 .api-access-copy {
   display: grid;
-  gap: 14px;
+  align-content: start;
+  gap: 10px;
+}
+
+.api-access-copy > p:not(.eyebrow):not(.form-status):not(.topup-instructions) {
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .api-flow-list {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .api-flow-step {
   align-items: start;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns: auto minmax(0, 1fr);
 }
 
@@ -852,34 +869,37 @@ dd {
   border-radius: 999px;
   color: var(--blue);
   display: inline-flex;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 760;
-  height: 24px;
+  height: 20px;
   justify-content: center;
-  margin-top: 2px;
-  width: 24px;
+  margin-top: 1px;
+  width: 20px;
 }
 
 .api-flow-step p {
   color: var(--muted);
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.35;
 }
 
 .api-credentials-card {
   display: grid;
-  gap: 14px;
+  gap: 10px;
+  padding: 14px;
 }
 
 .api-credentials-fields {
-  gap: 14px;
+  gap: 10px;
 }
 
 .api-balance-group {
-  gap: 10px;
+  gap: 8px;
 }
 
 .api-available-card {
   min-height: 0;
+  padding: 14px;
 }
 
 .api-plan-stack {
@@ -888,15 +908,22 @@ dd {
 
 .api-plan-card p {
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.4;
   margin: 0;
+}
+
+.api-plan-card strong,
+.api-actions-card strong,
+.api-available-card strong {
+  font-size: 20px;
 }
 
 .api-actions-card {
   align-content: start;
   display: grid;
-  gap: 14px;
+  gap: 10px;
+  padding: 14px;
 }
 
 .api-actions-card .qa-actions {
@@ -909,6 +936,16 @@ dd {
 
 .api-actions-card .button {
   width: 100%;
+}
+
+.api-actions-card .qa-actions {
+  gap: 10px;
+}
+
+.api-credentials-card input,
+.api-credit-panel .credit-fields input {
+  min-height: 40px;
+  padding: 8px 10px;
 }
 
 .api-topup-status-panel,
@@ -1225,6 +1262,33 @@ dd {
   border-color: var(--blue);
 }
 
+.history-item--incoming-token {
+  background: linear-gradient(180deg, rgba(18, 54, 39, 0.96), rgba(21, 19, 18, 0.98));
+  border-color: rgba(89, 197, 137, 0.34);
+}
+
+.history-item--incoming-token:hover {
+  border-color: rgba(118, 223, 164, 0.62);
+}
+
+.history-item--outgoing-token {
+  background: linear-gradient(180deg, rgba(62, 23, 30, 0.96), rgba(21, 19, 18, 0.98));
+  border-color: rgba(176, 76, 94, 0.34);
+}
+
+.history-item--outgoing-token:hover {
+  border-color: rgba(214, 99, 122, 0.58);
+}
+
+.history-item--swap {
+  background: linear-gradient(180deg, rgba(20, 33, 64, 0.96), rgba(21, 19, 18, 0.98));
+  border-color: rgba(87, 126, 219, 0.34);
+}
+
+.history-item--swap:hover {
+  border-color: rgba(110, 154, 255, 0.62);
+}
+
 .history-item strong,
 .history-item span {
   display: block;
@@ -1252,6 +1316,18 @@ dd {
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   padding: 10px;
+}
+
+.history-item--incoming-token .history-column {
+  background: rgba(24, 45, 34, 0.88);
+}
+
+.history-item--outgoing-token .history-column {
+  background: rgba(52, 22, 28, 0.88);
+}
+
+.history-item--swap .history-column {
+  background: rgba(24, 36, 66, 0.88);
 }
 
 .history-column-label {

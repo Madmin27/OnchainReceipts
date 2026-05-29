@@ -3,10 +3,10 @@ main = "src/worker.mjs"
 compatibility_date = "2026-05-18"
 
 [vars]
-TREASURY_ADDRESS = "0x0000000000000000000000000000000000000000"
+TREASURY_ADDRESS = "0xa4a6005A25e47B345Bab63925BA8945927b2C597"
 ALLOWED_ORIGIN = "https://txreceipts.com.tr"
 AI_BASE_URL = "https://api.openai.com/v1"
-AI_MODEL = "gpt-4.1-mini"
+AI_MODEL = "gpt-4.1"
 # Set ADMIN_TOKEN as a Cloudflare secret, not in this file:
 # wrangler secret put ADMIN_TOKEN
 # Set AI_API_KEY as a Cloudflare secret, not in this file:

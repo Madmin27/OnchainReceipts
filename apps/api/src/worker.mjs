@@ -434,8 +434,42 @@ async function answerAccountingQuestion(request, env) {
   if (!question) throw httpError(400, "Missing question.");
   const context = compactAiContext(body.context || {});
   const route = detectQuestionRoute(question, context);
+  if (isAmbiguousQuestion(question, context)) {
+    return misunderstandingAnswer(
+      "Clarify the target transaction or load wallet activity before asking again.",
+      "The current question is ambiguous or the loaded wallet data is too small to support a precise answer.",
+      project ? {
+        counted: false,
+        amount: 0,
+        reason: "guarded ambiguous question",
+        remaining: usage?.remaining,
+      } : {
+        counted: false,
+        amount: 0,
+        reason: "guarded public ambiguous question",
+      },
+      route,
+    );
+  }
+  if (isCurrentBalanceQuestion(question) && !hasExplicitBalanceSnapshot(context)) {
+    return misunderstandingAnswer(
+      "Load a direct wallet token balance snapshot for the selected network and token.",
+      "The provided context contains transaction rows, but no explicit live balance snapshot for this wallet or token.",
+      project ? {
+        counted: false,
+        amount: 0,
+        reason: "guarded current-balance question without balance snapshot",
+        remaining: usage?.remaining,
+      } : {
+        counted: false,
+        amount: 0,
+        reason: "guarded public current-balance question without balance snapshot",
+      },
+      route,
+    );
+  }
   const baseUrl = (env.AI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "");
-  const model = env.AI_MODEL || "gpt-4.1-mini";
+  const model = env.AI_MODEL || "gpt-4.1";
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -444,7 +478,7 @@ async function answerAccountingQuestion(request, env) {
     },
     body: JSON.stringify({
       model,
-      temperature: 0.1,
+      temperature: 0,
       max_tokens: 220,
       messages: [
         {
@@ -452,16 +486,22 @@ async function answerAccountingQuestion(request, env) {
           content: [
             "You are TxReceipts Accounting AI.",
             "Answer only from the provided compact accounting JSON.",
+            "Treat context.balances as the authoritative live balance snapshot for the connected wallet on the selected network.",
             "Only answer questions about the provided network's wallet activity, transactions, fees, token movements, categories, exports, receipts, and reconciliation.",
             "If the question is outside that scope, say it is out of scope.",
+            "If the question is ambiguous or you cannot map it to specific wallet transactions, balances, or selected records, say you did not understand the question from the loaded wallet data.",
             "When context.selectedTx, context.selectedReceipt, or context.selectedLedgerRow is present, treat the question as transaction-scoped unless the user explicitly asks wallet-wide or time-window totals.",
             "Use selectedReceipt and selectedLedgerRow first for transaction-specific answers, then use rows and analysis for broader wallet questions.",
+            "Use context.balances first for current token holdings, then use rows and analysis for historical activity.",
             "Prefer context.analysis when ranking, sorting, or summarizing top transactions in time windows.",
             "Do not fall back to a generic wallet summary unless it directly answers the question.",
+            "Never infer a current wallet or token balance by netting historical transfers, rows, or partial activity.",
+            "Only answer a current balance question when the context includes an explicit balance snapshot field; otherwise say the current balance is unavailable from the loaded data.",
             "Do not invent balances, tax treatment, dates, or missing fees.",
             "Keep the answer under 120 words.",
             "Use a concise accounting report style.",
             "Format the answer as 3 short parts when possible: Answer, Evidence, Missing.",
+            "When balance data exists, cite the exact token symbol, amount, network, and snapshot time in Evidence.",
             "Evidence must cite concrete context fields such as tx hash, status, method, sent, received, gas, direction, category, feeValue, gasUsed, gasPrice, or timestamps.",
             "If the data is incomplete, say Confidence: low in the Missing part.",
             "If data is missing, say exactly what is missing and what the user should load.",
@@ -508,12 +548,68 @@ function compactAiContext(context) {
     scope: String(context.scope || "").slice(0, 160),
     wallet: String(context.wallet || "").slice(0, 80),
     selectedTx: String(context.selectedTx || "").slice(0, 100),
+    balances: context.balances || null,
     report: context.report || {},
     analysis: context.analysis || {},
     selectedReceipt: context.selectedReceipt || null,
     selectedLedgerRow: context.selectedLedgerRow || null,
     rows: Array.isArray(context.rows) ? context.rows.slice(0, 40) : [],
   };
+}
+
+function isCurrentBalanceQuestion(question) {
+  return /(wallet|cüzdan).*(balance|bakiye)|\b(balance|bakiye)\b|kaç\s+usdc|how much usdc do i have|current\s+(usdc\s+)?balance/i.test(String(question || ""));
+}
+
+function isAmbiguousQuestion(question, context) {
+  const text = String(question || "").trim();
+  if (!text) return true;
+  if (text.length < 6) return true;
+  const hasSelection = Boolean(context?.selectedTx || context?.selectedReceipt || context?.selectedLedgerRow);
+  if (!hasSelection && /^(this|that|it|bu|şu|o|onu|bunu|nedir|ne dersin)\b/i.test(text)) return true;
+  if (!hasUsableAccountingContext(context)) return true;
+  return false;
+}
+
+function hasUsableAccountingContext(context) {
+  if (!context) return false;
+  if (context.selectedTx || context.selectedReceipt || context.selectedLedgerRow) return true;
+  if (Array.isArray(context.rows) && context.rows.length > 0) return true;
+  if (context.balances?.native || (Array.isArray(context.balances?.tokens) && context.balances.tokens.length > 0)) return true;
+  return Number(context.report?.totalRecords || 0) > 0;
+}
+
+function misunderstandingAnswer(reason, evidence, usage, route) {
+  return {
+    answer: [
+      "Answer: I could not determine a reliable answer from the loaded wallet transactions and balance snapshot.",
+      `Evidence: ${evidence}`,
+      `Missing: ${reason} Confidence: low.`,
+    ].join("\n\n"),
+    source: "ai-guard",
+    model: "question-guard",
+    route,
+    usage,
+  };
+}
+
+function hasExplicitBalanceSnapshot(context) {
+  const report = context?.report || {};
+  const analysis = context?.analysis || {};
+  const selectedReceipt = context?.selectedReceipt || {};
+  const selectedLedgerRow = context?.selectedLedgerRow || {};
+  const candidateKeys = [
+    "balance",
+    "balances",
+    "currentBalance",
+    "currentBalances",
+    "tokenBalance",
+    "tokenBalances",
+    "portfolio",
+    "holdings",
+  ];
+  const sources = [context, report, analysis, selectedReceipt, selectedLedgerRow];
+  return sources.some(source => source && candidateKeys.some(key => source[key] !== undefined && source[key] !== null));
 }
 
 async function createProject(request, env) {

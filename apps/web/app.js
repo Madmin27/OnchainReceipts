@@ -410,6 +410,85 @@ function formatUnits(value, decimals, maxDigits = 6) {
   return `${integer}.${fractionText.replace(/0+$/, "")}`;
 }
 
+function encodeErc20BalanceOf(address) {
+  const normalized = String(address || "").replace(/^0x/i, "").toLowerCase();
+  return `0x70a08231000000000000000000000000${normalized}`;
+}
+
+async function evmTokenBalanceSnapshot(wallet) {
+  const nativeHex = await rpc("eth_getBalance", [wallet, "latest"]);
+  const nativeRaw = hexToBigInt(nativeHex || "0x0");
+  const tokenEntries = await Promise.all(Object.entries(knownTokens).map(async ([address, metadata]) => {
+    try {
+      const raw = await rpc("eth_call", [{ to: address, data: encodeErc20BalanceOf(wallet) }, "latest"]);
+      const value = hexToBigInt(raw || "0x0");
+      return {
+        address,
+        symbol: metadata.symbol,
+        decimals: Number(metadata.decimals || 18n),
+        amount: formatUnits(value, BigInt(metadata.decimals || 18n), 8),
+        raw: value.toString(),
+      };
+    } catch {
+      return null;
+    }
+  }));
+  return {
+    network: currentNetwork().name,
+    wallet,
+    native: {
+      symbol: currentNetwork().nativeCurrency?.symbol || "ETH",
+      decimals: Number(ETH_DECIMALS),
+      amount: formatUnits(nativeRaw, ETH_DECIMALS, 8),
+      raw: nativeRaw.toString(),
+    },
+    tokens: tokenEntries.filter(Boolean),
+    asOf: new Date().toISOString(),
+    source: "rpc",
+  };
+}
+
+async function solanaTokenBalanceSnapshot(wallet) {
+  const [nativeBalance, tokenAccounts] = await Promise.all([
+    solanaRpc("getBalance", [wallet]),
+    solanaRpc("getTokenAccountsByOwner", [
+      wallet,
+      { programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" },
+      { encoding: "jsonParsed" },
+    ]).catch(() => ({ value: [] })),
+  ]);
+  return {
+    network: currentNetwork().name,
+    wallet,
+    native: {
+      symbol: "SOL",
+      decimals: 9,
+      amount: lamportsToSol(BigInt(nativeBalance?.value || 0)),
+      raw: String(nativeBalance?.value || 0),
+    },
+    tokens: Array.isArray(tokenAccounts?.value) ? tokenAccounts.value.map(item => {
+      const parsed = item?.account?.data?.parsed?.info;
+      const tokenAmount = parsed?.tokenAmount || {};
+      return {
+        mint: parsed?.mint || null,
+        symbol: parsed?.mint || "SPL",
+        decimals: Number(tokenAmount.decimals || 0),
+        amount: String(tokenAmount.uiAmountString || tokenAmount.amount || "0"),
+        raw: String(tokenAmount.amount || "0"),
+      };
+    }).filter(item => item.mint) : [],
+    asOf: new Date().toISOString(),
+    source: "rpc",
+  };
+}
+
+async function walletBalanceSnapshot() {
+  const wallet = currentTargetAddress();
+  if (!wallet || !validAddressForCurrentNetwork(wallet)) return null;
+  if (currentNetwork().family === "solana") return solanaTokenBalanceSnapshot(wallet);
+  return evmTokenBalanceSnapshot(wallet);
+}
+
 function shortHash(value) {
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
@@ -508,6 +587,9 @@ function normalizeTransfer(item) {
     timestamp: item.timestamp,
     value: amount,
     direction: isIncoming ? "incoming" : isOutgoing ? "outgoing" : "other",
+    usdValue: Number(item.token?.exchange_rate || 0) > 0 && !isNft
+      ? Number(formatDecimalUnits(item.total?.value || "0", decimals, 8) || 0) * Number(item.token?.exchange_rate || 0)
+      : 0,
   };
 }
 
@@ -675,6 +757,7 @@ function renderHistory() {
     const receiptAction = document.createElement("button");
     const accounting = accountingMetaForItem(item);
     row.className = "history-item";
+    row.classList.add(`history-item--${historyTone(item, accounting)}`);
     summary.className = "history-summary";
     title.textContent = safeDisplay(item.title);
     meta.className = "history-meta";
@@ -716,6 +799,13 @@ function renderHistory() {
   }
 
   loadMoreHistoryButton.hidden = visibleHistoryLimit >= allItems.length && !historyState.txNext && !historyState.transferNext;
+}
+
+function historyTone(item, accounting) {
+  if (accounting?.category === "swap") return "swap";
+  if (item.kind === "token" && item.direction === "incoming") return "incoming-token";
+  if (item.kind === "token" && item.direction === "outgoing") return "outgoing-token";
+  return "neutral";
 }
 
 async function selectTransaction(txHash) {
@@ -1313,6 +1403,127 @@ function itemTimestampMs(item) {
   return 0;
 }
 
+function formatUtcDateTime(value) {
+  const timestamp = new Date(value || Date.now());
+  if (!Number.isFinite(timestamp.getTime())) return "Zaman bilgisi yok";
+  const year = timestamp.getUTCFullYear();
+  const month = String(timestamp.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(timestamp.getUTCDate()).padStart(2, "0");
+  const hours = String(timestamp.getUTCHours()).padStart(2, "0");
+  const minutes = String(timestamp.getUTCMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes} UTC`;
+}
+
+function formatMonthYearTr(value) {
+  const timestamp = new Date(value || Date.now());
+  if (!Number.isFinite(timestamp.getTime())) return "Bu ay";
+  return new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" }).format(timestamp);
+}
+
+function titleCaseLabel(value) {
+  return String(value || "")
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function transactionTypeLabel(direction) {
+  if (direction === "income") return "Gelir";
+  if (direction === "expense") return "Gider";
+  if (direction === "transfer") return "Transfer";
+  return "İnceleme Gerekli";
+}
+
+function transactionCategoryLabel(category) {
+  const labels = {
+    gas_fee: "Gas Fee",
+    swap: "Swap",
+    subscription: "Subscription",
+    app_fee: "App Fee",
+    protocol_fee: "Protocol Fee",
+    purchase: "Purchase",
+    sales: "Sales",
+    internal_transfer: "Internal Transfer",
+    uncategorized: "Kategori Bekliyor",
+  };
+  return labels[String(category || "")] || titleCaseLabel(category || "İşlem");
+}
+
+function transactionStatusLabel(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (["verified", "success", "successful", "ok"].includes(normalized)) return "Başarılı";
+  if (["failed", "error"].includes(normalized)) return "Başarısız";
+  if (["pending", "queued"].includes(normalized)) return "Beklemede";
+  return titleCaseLabel(normalized || "bilinmiyor");
+}
+
+function parseAssetValueParts(value) {
+  const match = String(value || "").trim().match(/(-?\d+(?:[\.,]\d+)?)\s*([A-Za-z0-9._-]{2,16})$/);
+  if (!match) return null;
+  return {
+    amount: Number(match[1].replace(",", ".")),
+    symbol: match[2].toUpperCase(),
+  };
+}
+
+function dominantTokenSymbol(report) {
+  const totals = new Map();
+  for (const item of report.items.filter(entry => entry.kind === "token")) {
+    const parts = parseAssetValueParts(item.value);
+    if (!parts) continue;
+    totals.set(parts.symbol, (totals.get(parts.symbol) || 0) + Math.abs(parts.amount));
+  }
+  return [...totals.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || null;
+}
+
+function tokenFlowTotal(report, direction, symbol) {
+  return report.items
+    .filter(item => item.kind === "token" && item.accounting.direction === direction)
+    .reduce((sum, item) => {
+      const parts = parseAssetValueParts(item.value);
+      if (!parts || parts.symbol !== symbol) return sum;
+      return sum + parts.amount;
+    }, 0);
+}
+
+function transactionUserAnswer(data, selectedLedgerItem) {
+  const lines = [
+    `Bu işlem ${currentNetwork().name} ağında ${formatUtcDateTime(data?.date)} tarihinde gerçekleşti.`,
+    "",
+    `İşlem türü: ${transactionTypeLabel(selectedLedgerItem?.accounting.direction)}`,
+    `Kategori: ${transactionCategoryLabel(selectedLedgerItem?.accounting.category)}`,
+  ];
+  if (data?.gas && data.gas !== "Not available") lines.push(`Ödenen gas: ${data.gas}`);
+  if (selectedLedgerItem?.usdValue) lines.push(`Tahmini USD karşılığı: ${usdText({ usdValue: selectedLedgerItem.usdValue }).replace(/^~/, "")}`);
+  lines.push(`Durum: ${transactionStatusLabel(data?.status)}`);
+  if (data?.id) lines.push(`Makbuz ID: ${data.id}`);
+  return lines.join("\n");
+}
+
+function monthlyUserAnswer(report) {
+  const latestTimestamp = report.items[0]?.timestamp || Date.now();
+  const symbol = dominantTokenSymbol(report);
+  const incomingTotal = symbol ? tokenFlowTotal(report, "income", symbol) : 0;
+  const outgoingTotal = symbol ? tokenFlowTotal(report, "expense", symbol) : 0;
+  const gasLine = report.weeklyFeeRecords
+    ? `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`
+    : "Yüklenmiş fee verisi yok";
+  return [
+    `${formatMonthYearTr(latestTimestamp)} ${report.network} cüzdan özeti:`,
+    "",
+    `Toplam gelen: ${symbol ? `${incomingTotal.toFixed(2)} ${symbol}` : "Yeterli token verisi yok"}`,
+    `Toplam çıkan: ${symbol ? `${outgoingTotal.toFixed(2)} ${symbol}` : "Yeterli token verisi yok"}`,
+    `Gas ücretleri: ${gasLine}`,
+    `Swap işlemleri: ${report.swapCount}`,
+    `İş gideri olarak işaretlenen kayıt: ${report.items.filter(item => item.accounting.direction === "expense" && item.accounting.category !== "internal_transfer").length}`,
+    `Kategori bekleyen kayıt: ${report.uncategorizedCount}`,
+    `Doğrulanmış makbuz: ${report.verifiedReceiptCount}`,
+    "",
+    "Muhasebeciye göndermek için CSV ve PDF özet hazırla",
+  ].join("\n");
+}
+
 function sortableItemValue(item) {
   return Math.abs(parseAmount(item.value));
 }
@@ -1544,17 +1755,7 @@ function templateAnswer(intent) {
     ], "loaded rows, accounting direction, accounting category, verification status, network scope");
   }
   if (intent === "MONTHLY_SPENDING") {
-    return deterministicBlock("monthly wallet summary", [
-      ["Scope", currentNetworkScopeText()],
-      ["Wallet", report.wallet],
-      ["Loaded records", report.totalRecords],
-      ["Outgoing records", report.outgoingCount],
-      ["Incoming records", report.incomingCount],
-      ["Rows needing review", report.needsReviewCount],
-      ["Last 7 days fee rows", report.weeklyFeeRecords],
-      ["Last 7 days network fees", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
-      ["Estimated outgoing numeric total", report.estimatedOutgoingValue.toFixed(6)],
-    ], "loaded rows, expense direction counts, estimated outgoing numeric values, current network scope");
+    return monthlyUserAnswer(report);
   }
   if (intent === "BUSINESS_EXPENSE") {
     if (!selectedLedgerItem) {
@@ -1740,20 +1941,7 @@ function templateAnswer(intent) {
     ], "loaded records, income/expense counts, fee summaries, uncategorized count, verification count, export actions");
   }
   if (intent === "ACCOUNTANT_SUMMARY") {
-    return deterministicBlock("accountant summary", [
-      ["Scope", currentNetworkScopeText()],
-      ["Wallet", report.wallet],
-      ["Loaded records", report.totalRecords],
-      ["Income rows", report.totalIncomeRows],
-      ["Expense rows", report.totalExpenseRows],
-      ["Gas fees", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
-      ["App/protocol fees", report.appProtocolFeeStatus],
-      ["Swaps", report.swapCount],
-      ["Subscriptions", report.subscriptionCount],
-      ["Uncategorized rows", report.uncategorizedCount],
-      ["Verified records", report.verifiedReceiptCount],
-      ["Next step", "Review uncategorized rows, then export CSV or print PDF"],
-    ], "loaded records, income and expense counts, weekly fee summary, uncategorized count, verification count");
+    return monthlyUserAnswer(report);
   }
   if (intent === "DOWNLOAD_RECEIPT") {
     return deterministicBlock("available exports", [
@@ -1808,14 +1996,7 @@ function templateAnswer(intent) {
         ["Data availability", "Receipt data is not available yet"],
       ], "selected transaction context");
     }
-    return deterministicBlock("transaction summary", [
-      ["Title", data.title],
-      ["Purpose", data.purpose],
-      ["Sent", data.sent],
-      ["Received", data.received],
-      ["Status", data.status],
-      ["Date", data.date],
-    ], "selected receipt title, purpose, sent and received values, status, date");
+    return transactionUserAnswer(data, selectedLedgerItem);
   }
   return null;
 }
@@ -2002,15 +2183,17 @@ exportRowButton?.addEventListener("click", () => {
   setTxActionStatus(`Exported accounting row for ${shortHash(item.hash)}.`, "success");
 });
 
-function compactAccountingContext() {
+async function compactAccountingContext() {
   const report = buildMonthlyReport();
   const selectedTx = txInput?.value.trim() || null;
   const selectedLedgerRow = report.items.find(item => item.hash === selectedTx) || null;
+  const balances = await walletBalanceSnapshot().catch(() => null);
   return {
     network: currentNetwork().name,
     scope: currentNetworkScopeText(),
     wallet: currentTargetAddress() || null,
     selectedTx,
+    balances,
     report: {
       totalRecords: report.totalRecords,
       outgoingCount: report.outgoingCount,
@@ -2077,10 +2260,11 @@ async function answerQuestion(question, options = {}) {
     return { answer, source: "template" };
   }
   try {
+    const context = await compactAccountingContext();
     const response = await apiFetch(`/v1/ai/accounting-answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: normalizedQuestion, context: compactAccountingContext() }),
+      body: JSON.stringify({ question: normalizedQuestion, context }),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `AI API returned HTTP ${response.status}`);
