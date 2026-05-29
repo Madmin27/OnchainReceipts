@@ -2418,26 +2418,37 @@ function printMonthlyReport() {
     // Boş kayıt durumu
     if (!report.totalRecords) {
       container.innerHTML = `
-        <div class="print-report print-report-empty">
-          <div class="print-header">
-            <h1 class="print-title">TxReceipts — Pre‑Accounting Report</h1>
-            <p class="print-subtitle">${network} · ${dateStr}</p>
-          </div>
-          <div class="print-wallet">
-            <span class="print-label">Wallet</span>
-            <code class="print-code">${report.wallet}</code>
-          </div>
-          <div class="print-empty-state">
-            <p>No transaction records loaded for this wallet on ${network}.</p>
-            <p>Connect a wallet or enter an address, wait for history to load, then print again.</p>
-          </div>
-          <div class="print-footer">
-            <p class="print-disclaimer">Report generated automatically. No data to display.</p>
+        <div class="print-preview-overlay">
+          <div class="print-preview-modal">
+            <div class="print-preview-toolbar">
+              <span class="print-preview-title">Print Preview — ${network}</span>
+              <span class="print-preview-count">0 records</span>
+              <button class="print-preview-btn secondary" data-print-action="close">✕ Close</button>
+            </div>
+            <div class="print-preview-scroll">
+              <div class="print-report print-report-empty">
+                <div class="print-header">
+                  <h1 class="print-title">TxReceipts — Pre‑Accounting Report</h1>
+                  <p class="print-subtitle">${network} · ${dateStr}</p>
+                </div>
+                <div class="print-wallet">
+                  <span class="print-label">Wallet</span>
+                  <code class="print-code">${report.wallet}</code>
+                </div>
+                <div class="print-empty-state">
+                  <p>No transaction records loaded for this wallet on ${network}.</p>
+                  <p>Connect a wallet or enter an address, wait for history to load, then print again.</p>
+                </div>
+                <div class="print-footer">
+                  <p class="print-disclaimer">Report generated automatically. No data to display.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       `;
       window.print();
-      const afterEmpty = () => { container.innerHTML = ""; window.removeEventListener("afterprint", afterEmpty); };
+      const afterEmpty = () => { container.innerHTML = ""; container.style.display = "none"; window.removeEventListener("afterprint", afterEmpty); };
       window.addEventListener("afterprint", afterEmpty);
       return;
     }
@@ -2514,13 +2525,15 @@ function printMonthlyReport() {
     // Print Preview Overlay
     container.innerHTML = `
       <div class="print-preview-overlay">
-        <div class="print-preview-toolbar">
-          <span class="print-preview-title">Print Preview — ${network}</span>
-          <span class="print-preview-count">${report.totalRecords} records</span>
-          <button class="print-preview-btn" data-print-action="print">🖨️ Print</button>
-          <button class="print-preview-btn secondary" data-print-action="close">✕ Close</button>
-        </div>
-        <div class="print-report">
+        <div class="print-preview-modal">
+          <div class="print-preview-toolbar">
+            <span class="print-preview-title">Print Preview — ${network}</span>
+            <span class="print-preview-count">${report.totalRecords} records</span>
+            <button class="print-preview-btn" data-print-action="print">🖨️ Print</button>
+            <button class="print-preview-btn secondary" data-print-action="close">✕ Close</button>
+          </div>
+          <div class="print-preview-scroll">
+            <div class="print-report">
           <!-- Header -->
           <div class="print-header">
             <div class="print-header-left">
@@ -2614,6 +2627,7 @@ function printMonthlyReport() {
           </div>
         </div>
       </div>
+    </div>
     `;
 
     // Toolbar butonları için event delegation (CSP inline-script hatası önlemi)
@@ -2622,7 +2636,8 @@ function printMonthlyReport() {
       if (!btn) return;
       const action = btn.dataset.printAction;
       if (action === "print") {
-        container.querySelector(".print-report").classList.add("printing");
+        const report = container.querySelector(".print-report");
+        if (report) report.classList.add("printing");
         window.print();
       } else if (action === "close") {
         container.innerHTML = "";
@@ -2648,7 +2663,20 @@ function printMonthlyReport() {
     console.error("PrintMonthlyReport error:", error);
     const container = document.getElementById("printContainer");
     if (container) {
-      container.innerHTML = `<div class="print-report"><p class="print-error">Print error: ${safeDisplay(error.message, 200)}</p></div>`;
+      container.innerHTML = `
+        <div class="print-preview-overlay">
+          <div class="print-preview-modal">
+            <div class="print-preview-toolbar">
+              <span class="print-preview-title">Print Error</span>
+              <button class="print-preview-btn secondary" data-print-action="close">✕ Close</button>
+            </div>
+            <div class="print-preview-scroll">
+              <div class="print-report">
+                <p class="print-error">Print error: ${safeDisplay(error.message, 200)}</p>
+              </div>
+            </div>
+          </div>
+        </div>`;
     }
   }
 }
