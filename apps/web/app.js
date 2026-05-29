@@ -49,6 +49,7 @@ const READY_QUESTION_METADATA = {
 const READY_QUESTION_SET = new Set([...quickQuestionButtons].map(button => String(button.dataset.question || button.textContent || "").trim()).filter(Boolean));
 const downloadMonthlyCsvButton = document.querySelector("#downloadMonthlyCsv");
 const printMonthlyReportButton = document.querySelector("#printMonthlyReport");
+const printFullLedgerButton = document.querySelector("#printFullLedger");
 const accountingScope = document.querySelector("#accountingScope");
 const accountingOutgoing = document.querySelector("#accountingOutgoing");
 const accountingIncoming = document.querySelector("#accountingIncoming");
@@ -634,6 +635,7 @@ function accountingCategoryForItem(item) {
   if (/fee|gas/.test(text)) return "gas_fee";
   if (/approve|approval|allowance/.test(text)) return "authorization";
   if (/deploy|contract creation|create contract/.test(text)) return "contract_deployment";
+  if (item.kind === "token" && hasSuspiciousTokenSignals(item)) return "uncategorized";
   if (/claim|register|contract call|multicall/.test(text)) return "contract_call";
   if (item.direction === "incoming") return "uncategorized";
   if (item.direction === "outgoing") return "uncategorized";
@@ -734,10 +736,14 @@ function assetMovementText(item) {
   return "No asset movement detected";
 }
 
-function formatGasFeeEthText(item, maxDigits = 9) {
+function formatGasFeeEthText(item, maxDigits = 9, direction) {
   if (currentNetwork().family === "solana") return "Unavailable";
   const feeWei = blockscoutFeeWei(item);
-  if (feeWei <= 0n) return "Unavailable";
+  if (feeWei <= 0n) {
+    if (direction === "income" || direction === "incoming") return "Gas paid by sender";
+    if (direction === "expense" || direction === "outgoing") return "No wallet gas cost";
+    return "Not applicable";
+  }
   return `${formatUnits(feeWei, ETH_DECIMALS, maxDigits)} ${currentNetwork().nativeCurrency?.symbol || "ETH"}`;
 }
 
@@ -818,7 +824,8 @@ function renderHistory() {
       ["Counterparty", safeDisplay(item.subtitle, 56)],
       ["Gas", formatGasText(item)],
       ["Fee", formatFeeText(item)],
-      ["Receipt", accounting.status],
+      ["Accounting", accounting.status],
+      ["Verification", accounting.verificationStatus],
       ["Memo", accounting.memo],
     ].forEach(([label, detailValue]) => {
       const cell = document.createElement("div");
@@ -1620,6 +1627,9 @@ function summarizedLedgerRow(item) {
     direction: item.accounting.direction,
     category: item.accounting.category,
     status: item.accounting.status,
+    accountingStatus: item.accounting.status,
+    verificationStatus: item.accounting.verificationStatus,
+    reviewReason: item.accounting.reviewReason,
     tx: item.hash,
   };
 }
@@ -2351,6 +2361,9 @@ async function compactAccountingContext() {
       direction: selectedLedgerRow.accounting.direction,
       category: selectedLedgerRow.accounting.category,
       status: selectedLedgerRow.accounting.status,
+      accountingStatus: selectedLedgerRow.accounting.status,
+      verificationStatus: selectedLedgerRow.accounting.verificationStatus,
+      reviewReason: selectedLedgerRow.accounting.reviewReason,
       memo: selectedLedgerRow.accounting.memo,
       value: selectedLedgerRow.value,
       tx: selectedLedgerRow.hash,
@@ -2365,6 +2378,9 @@ async function compactAccountingContext() {
       direction: item.accounting.direction,
       category: item.accounting.category,
       status: item.accounting.status,
+      accountingStatus: item.accounting.status,
+      verificationStatus: item.accounting.verificationStatus,
+      reviewReason: item.accounting.reviewReason,
       memo: item.accounting.memo,
       value: item.value,
       tx: item.hash,
@@ -2476,7 +2492,7 @@ async function downloadMonthlyCsv() {
   URL.revokeObjectURL(url);
 }
 
-async function printMonthlyReport() {
+async function printMonthlyReport(mode = "summary") {
   try {
     const report = buildMonthlyReport();
     if (!report) return;
@@ -2553,7 +2569,45 @@ async function printMonthlyReport() {
 
     const savePdf = (filename) => {
       doc.save(filename);
-      setStatus("PDF generated successfully.", "success");
+      setStatus(`PDF ${filename} generated successfully.`, "success");
+    };
+
+    // --- Get direction icon as text label ---
+    const dirLabel = (dir, cat) => {
+      if (dir === "income") return "IN";
+      if (dir === "expense") return "OUT";
+      if (dir === "swap" || cat === "swap") return "SWAP";
+      if (cat === "authorization") return "AUTH";
+      if (cat === "contract_call" || cat === "contract_deployment") return "CALL";
+      return "-";
+    };
+
+    // --- Get type label for item ---
+    const typeLabel = (item, cat) => {
+      if (item.kind === "token" && item.accounting.direction === "incoming") {
+        if (hasSuspiciousTokenSignals(item)) return "Incoming ERC-20";
+        return "Incoming ERC-20";
+      }
+      if (item.kind === "token" && item.accounting.direction === "expense") return "Outgoing ERC-20";
+      if (cat === "contract_call") return "Contract Call";
+      if (cat === "contract_deployment") return "Contract Deployment";
+      if (cat === "authorization") return "Authorization";
+      if (cat === "swap") return "Swap";
+      if (cat === "gas_fee") return "Gas Fee";
+      if (cat === "subscription") return "Subscription";
+      if (cat === "app_fee") return "App Fee";
+      if (cat === "protocol_fee") return "Protocol Fee";
+      if (item.kind === "nft") return "NFT";
+      return "Transaction";
+    };
+
+    // --- Gas fee with direction context ---
+    const gasFeeStr = (item) => {
+      const dir = item.accounting.direction;
+      const raw = formatGasFeeEthText(item, 9, dir);
+      if (raw.startsWith("Gas paid") || raw === "Not applicable") return raw;
+      if (raw.startsWith("No wallet")) return raw;
+      return raw;
     };
 
     drawText("TxReceipts - Base Pre-Accounting Report", { size: 18, style: "bold", gap: 2 });
@@ -2576,6 +2630,13 @@ async function printMonthlyReport() {
       savePdf(`txreceipts-empty-${network}.pdf`);
       return;
     }
+
+    // ===== RESULT BLOCK (item 7) =====
+    drawDivider();
+    drawText(
+      `This wallet has ${report.totalRecords} verified onchain records. ${report.readyForAccountingCount} rows are ready for accounting and ${report.needsReviewCount} rows require review before formal accounting use.`,
+      { size: 11, style: "normal", gap: 8, color: [30, 60, 110] }
+    );
 
     // --- Summary cards ---
     const summaryCards = [
@@ -2600,23 +2661,26 @@ async function printMonthlyReport() {
     const tableRows = report.items.map((item, idx) => {
       const dir = item.accounting.direction;
       const cat = item.accounting.category;
-      const dirIcon = dir === "income" ? "↓" : dir === "expense" ? "↑" : dir === "swap" ? "⇄" : "—";
       return {
         idx: idx + 1,
         item,
         dir,
         cat,
-        dirIcon,
+        dirIcon: dirLabel(dir, cat),
         receiptId: receiptIds[idx],
         valStr: assetMovementText(item),
-        gasStr: formatGasFeeEthText(item),
+        gasStr: gasFeeStr(item),
         gasUsdStr: formatGasFeeUsdText(item),
       };
     });
 
     const txRowsHtml = tableRows.map(r => {
-      const ts = r.item.timestamp ? formatUtcDateTime(r.item.timestamp) : "—";
-      const shortHash = r.item.hash ? safeDisplay(r.item.hash, 18) : "—";
+      const ts = r.item.timestamp ? formatUtcDateTime(r.item.timestamp) : "-";
+      const shortHash = r.item.hash ? safeDisplay(r.item.hash, 18) : "-";
+      const isSuspiciousToken = r.item.kind === "token" && hasSuspiciousTokenSignals(r.item);
+      const tLabel = typeLabel(r.item, r.cat);
+      const rStatus = isSuspiciousToken ? "Needs Review" : transactionStatusLabel(r.item.accounting.status);
+      const rReason = isSuspiciousToken ? "Suspicious or promotional token requires manual review" : (r.item.accounting.reviewReason || "-");
       return {
         idx: r.idx,
         ts,
@@ -2624,11 +2688,12 @@ async function printMonthlyReport() {
         shortHash,
         title: r.item.title || "-",
         subtitle: r.item.subtitle || "-",
-        accountingStatus: transactionStatusLabel(r.item.accounting.status),
+        accountingStatus: rStatus,
         verificationStatus: r.item.accounting.verificationStatus === "verified" ? "Verified" : "Failed",
-        reviewReason: r.item.accounting.reviewReason || "-",
+        reviewReason: rReason,
         memo: r.item.accounting.memo || "-",
         category: transactionCategoryLabel(r.cat),
+        typeLabel: tLabel,
         dirIcon: r.dirIcon,
         valStr: r.valStr,
         gasStr: r.gasStr,
@@ -2642,6 +2707,13 @@ async function printMonthlyReport() {
       drawLabelValue(card.label, `${card.value}${marker}`);
     });
 
+    // ===== READY FOR ACCOUNTING EXPLANATION (item 4) =====
+    drawText("", { gap: 2 });
+    drawText(
+      "Ready for accounting means the row has sufficient parsed data and does not require manual classification.",
+      { size: 9, style: "italic", color: [80, 80, 80], indent: 4, gap: 4 }
+    );
+
     if (tokenSymbols.length) {
       drawSection("Tokens");
       drawText(tokenSymbols.join(", "));
@@ -2651,7 +2723,10 @@ async function printMonthlyReport() {
     drawLabelValue("Incoming token movements", `${report.items.filter(item => item.kind === "token" && item.accounting.direction === "income").length} rows`);
     drawLabelValue("Outgoing token movements", `${report.items.filter(item => item.kind === "token" && item.accounting.direction === "expense").length} rows`);
     drawLabelValue("Valuation missing", `${report.missingValuationCount} rows`);
-    drawLabelValue("Estimated USD total", "Unavailable without trusted pricing");
+
+    // ===== STRENGTHENED USD NOTE (item 5) =====
+    drawText("Estimated USD total: USD totals are intentionally not calculated when trusted pricing is missing.", { size: 10, color: [153, 76, 0], indent: 4, gap: 2 });
+
     drawLabelValue("Top Activity", report.topActivity);
 
     if (report.appFeeCount || report.protocolFeeCount) {
@@ -2661,11 +2736,25 @@ async function printMonthlyReport() {
       drawLabelValue("Gas Fees (7d)", `${report.weeklyFeeRecords} tx - ${report.weeklyFeeTotal} ${gasSymbol}`);
     }
 
+    if (mode === "summary") {
+      // Summary mode: max 2-3 pages of summary only
+      drawSection("Notes");
+      drawText("This is a pre-accounting record prepared with TxReceipts. It is not an official invoice, tax filing, or e-ledger submission.", { size: 10, color: [110, 110, 110], gap: 4 });
+      drawText("Classification such as income, expense, sales, purchase, or business expense is a pre-accounting suggestion unless confirmed by the user or supported by trusted dapp metadata.", { size: 10, color: [110, 110, 110], gap: 4 });
+      drawText(`Generated: ${dateStr} | Network: ${network} | Wallet: ${safeDisplay(report.wallet, 24)}`, { size: 10, color: [110, 110, 110], gap: 4 });
+      if (isBase) {
+        drawText("Base network: receipts anchored to L2 with deterministic onchain verification.", { size: 10, color: [110, 110, 110] });
+      }
+      savePdf(`txreceipts-summary-${network}.pdf`);
+      return;
+    }
+
+    // --- Full ledger mode ---
     drawSection("Transaction Ledger");
     txRowsHtml.forEach(row => {
-      drawText(`#${row.idx}  ${row.ts}  ${row.dirIcon}  ${row.category}`, { size: 10, style: "bold", gap: 2 });
+      drawText(`#${row.idx}  ${row.ts}  [${row.dirIcon}]  ${row.typeLabel}`, { size: 10, style: "bold", gap: 2 });
       drawText(`Receipt ID: ${row.receiptId}`, { size: 10, indent: 10, gap: 2 });
-      drawText(`Accounting Status: ${row.accountingStatus} | Verification Status: ${row.verificationStatus}`, { size: 10, indent: 10, gap: 2 });
+      drawText(`Accounting Status: ${row.accountingStatus} | Verification: ${row.verificationStatus}`, { size: 10, indent: 10, gap: 2 });
       drawText(`Review Reason: ${row.reviewReason}`, { size: 10, indent: 10, gap: 2, color: row.reviewReason === "-" ? [85, 85, 85] : [153, 76, 0] });
       drawText(`Title: ${row.title}`, { size: 10, indent: 10, gap: 2 });
       drawText(`Counterparty: ${row.subtitle}`, { size: 10, indent: 10, gap: 2 });
@@ -2683,7 +2772,7 @@ async function printMonthlyReport() {
       drawText("Base network: receipts anchored to L2 with deterministic onchain verification.", { size: 10, color: [110, 110, 110] });
     }
 
-    savePdf(`txreceipts-monthly-${network}.pdf`);
+    savePdf(`txreceipts-full-ledger-${network}.pdf`);
   } catch (error) {
     console.error("PrintMonthlyReport error:", error);
     setStatus(error instanceof Error ? error.message : "Could not create PDF.", "error");
@@ -3016,7 +3105,8 @@ qaForm?.addEventListener("submit", event => {
 });
 
 downloadMonthlyCsvButton?.addEventListener("click", downloadMonthlyCsv);
-printMonthlyReportButton?.addEventListener("click", printMonthlyReport);
+printMonthlyReportButton?.addEventListener("click", () => printMonthlyReport("summary"));
+printFullLedgerButton?.addEventListener("click", () => printMonthlyReport("full"));
 
 window.addEventListener("txreceipts:walletsChanged", () => {
   populateWalletProviders();
