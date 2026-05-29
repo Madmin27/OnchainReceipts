@@ -2514,11 +2514,8 @@ function printMonthlyReport() {
         <div class="print-preview-toolbar">
           <span class="print-preview-title">Print Preview — ${network}</span>
           <span class="print-preview-count">${report.totalRecords} records</span>
-          <button class="print-preview-btn" onclick="(function(){
-            document.getElementById('printContainer').querySelector('.print-report').classList.add('printing');
-            window.print();
-          })()">🖨️ Print</button>
-          <button class="print-preview-btn secondary" onclick="document.getElementById('printContainer').innerHTML=''">✕ Close</button>
+          <button class="print-preview-btn" data-print-action="print">🖨️ Print</button>
+          <button class="print-preview-btn secondary" data-print-action="close">✕ Close</button>
         </div>
         <div class="print-report">
           <!-- Header -->
@@ -2615,6 +2612,19 @@ function printMonthlyReport() {
         </div>
       </div>
     `;
+
+    // Toolbar butonları için event delegation (CSP inline-script hatası önlemi)
+    container.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-print-action]");
+      if (!btn) return;
+      const action = btn.dataset.printAction;
+      if (action === "print") {
+        container.querySelector(".print-report").classList.add("printing");
+        window.print();
+      } else if (action === "close") {
+        container.innerHTML = "";
+      }
+    });
 
     // Preview modunda window.print temizleme dinleyicisi
     const afterPrint = () => {
