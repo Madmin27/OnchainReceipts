@@ -454,12 +454,18 @@ function summarizeWalletTx(item, wallet, network) {
   const from = String(item.from?.hash || "").toLowerCase();
   const to = String(item.to?.hash || "").toLowerCase();
   const direction = to === wallet && from !== wallet ? "incoming" : from === wallet ? "outgoing" : "other";
+  const gasUsed = item.gas_used || null;
+  const gasPriceWei = item.gas_price?.wei || null;
+  const feeWei = item.fee?.wei || null;
   return {
     txHash: item.hash,
     timestamp: item.timestamp || null,
     direction,
     method: item.method || item.decoded_input?.method_call || "transaction",
     value: item.value && item.value !== "0" ? formatNativeAmount(item.value, network.nativeSymbol) : null,
+    gasUsed,
+    gasPriceWei,
+    feeWei,
     from: item.from?.hash || null,
     to: item.to?.hash || null,
     status: item.status || item.result || "ok",
@@ -574,6 +580,7 @@ async function answerAccountingQuestion(request, env) {
             "Format the answer as 3 short parts when possible: Answer, Evidence, Missing.",
             "When balance data exists, cite the exact token symbol, amount, network, and snapshot time in Evidence.",
             "Evidence must cite concrete context fields such as tx hash, status, method, sent, received, gas, direction, category, feeValue, gasUsed, gasPrice, or timestamps.",
+            "For fee and gas cost questions, use the explicit feeWei, gasUsed, and gasPriceWei fields on each transaction row. Do not use the 'value' field (sent amount) for gas calculations. Convert feeWei from wei to ETH by dividing by 1e18.",
             "If the data is incomplete, say Confidence: low in the Missing part.",
             "If data is missing, say exactly what is missing and what the user should load.",
             capabilities?.network === "base" ? "For Base-specific gas answers, state that Base gas is paid in ETH." : "",
