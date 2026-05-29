@@ -240,6 +240,66 @@ server.tool(
   },
 );
 
+server.tool(
+  "get_pre_accounting_report",
+  "Generate a pre-accounting report for a wallet on Base network. Returns token flows, gas summary, and network capability context for accounting purposes. Best used with Base (default) for full feature support including paymaster and X402 readiness.",
+  {
+    wallet: z.string().describe("0x wallet address"),
+    network: z.enum(["base", "ethereum", "optimism", "arbitrum", "polygon"]).default("base"),
+    limit: z.number().int().min(1).max(100).default(30),
+  },
+  async ({ wallet, network, limit }) => {
+    const normalizedWallet = normalizeAddress(wallet);
+    const config = networkConfig(network);
+    const capabilities = networkCapabilitiesForReceipt({ network: config.id, chainId: config.chainId });
+    const [transactions, tokenTransfers] = await Promise.all([
+      fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/transactions`, { items_count: limit }),
+      fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/token-transfers`, { items_count: limit }),
+    ]);
+    const txItems = Array.isArray(transactions.items) ? transactions.items : [];
+    const transferItems = Array.isArray(tokenTransfers.items) ? tokenTransfers.items : [];
+    const activity = txItems.slice(0, limit).map(item => summarizeTransactionRow(item, normalizedWallet, config));
+    const tokenRows = transferItems.slice(0, limit).map(item => summarizeTokenTransferRow(item, normalizedWallet));
+    const incoming = activity.filter(t => t.direction === "incoming");
+    const outgoing = activity.filter(t => t.direction === "outgoing");
+    const totalIncomingValue = incoming.reduce((sum, t) => sum + parseFloat(t.value || "0"), 0);
+    const totalOutgoingValue = outgoing.reduce((sum, t) => sum + parseFloat(t.value || "0"), 0);
+    const isBase = network === "base";
+    const payload = {
+      preAccountingReport: true,
+      disclaimer: "This output is a pre-accounting record prepared with TxReceipts and is not an official invoice, tax filing, or e-ledger submission. Consult a licensed accountant for formal reporting.",
+      generatedAt: new Date().toISOString(),
+      wallet: normalizedWallet,
+      network: config.name,
+      chainId: config.chainId,
+      isBase,
+      baseFeatures: isBase ? {
+        supportsMcp: true,
+        supportsX402: true,
+        supportsBuilderCodes: true,
+        supportsPaymaster: true,
+        supportsBaseAccount: true,
+        preferredStablecoin: "USDC",
+        nativeGasToken: "ETH",
+        verificationNote: "Receipts on Base are anchored to L2 with fast finality (~2 seconds). Verification uses Base block timestamp, transaction hash, and onchain token movements.",
+      } : undefined,
+      summary: {
+        totalTransactions: activity.length,
+        incomingTransactions: incoming.length,
+        outgoingTransactions: outgoing.length,
+        totalTokenTransfers: tokenRows.length,
+        totalIncomingValue: `${totalIncomingValue.toFixed(6)} ${config.nativeSymbol}`,
+        totalOutgoingValue: `${totalOutgoingValue.toFixed(6)} ${config.nativeSymbol}`,
+        netFlow: `${(totalIncomingValue - totalOutgoingValue).toFixed(6)} ${config.nativeSymbol}`,
+      },
+      networkCapabilities: mcpNetworkCapabilities(capabilities),
+      transactions: activity,
+      tokenTransfers: tokenRows,
+    };
+    return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+  },
+);
+
 function networkConfig(network) {
   const config = NETWORKS[String(network || "base")];
   if (!config) throw new Error(`Unsupported network: ${network}`);

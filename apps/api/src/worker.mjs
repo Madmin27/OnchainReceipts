@@ -94,8 +94,53 @@ export async function handleRequest(request, env) {
   if (request.method === "GET" && url.pathname === "/health") {
     return json({ ok: true, service: "txreceipts-api" }, env, request);
   }
+  if (url.pathname === "/.well-known/mcp.json") {
+    return json({
+      name: "TxReceipts MCP",
+      description: "Read-only TxReceipts MCP server for pre-accounting, wallet activity, transaction summaries, and receipt management across EVM networks with first-class Base support.",
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      serverInfo: MCP_SERVER_INFO,
+      baseDiscovery: {
+        supportsBase: true,
+        baseChainId: 8453,
+        baseFeatures: ["mcp", "x402", "paymaster", "baseAccount", "builderCodes"],
+        preferredStablecoin: "USDC",
+        nativeGasToken: "ETH",
+        readOnly: true,
+        signsTransactions: false,
+        sendsTransfers: false,
+        requestsApprovals: false,
+      },
+      endpoints: {
+        mcp: {
+          url: `${url.origin}/mcp`,
+          transport: "post+json",
+          authentication: { scheme: "Bearer", type: "apiKey", optional: true },
+        },
+      },
+      tools: mcpTools().map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+    }, env, request);
+  }
   if (url.pathname === "/mcp" && request.method === "GET") {
-    return json({ ok: true, service: "txreceipts-mcp", protocolVersion: MCP_PROTOCOL_VERSION }, env, request);
+    return json({
+      ok: true,
+      service: "txreceipts-mcp",
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      serverInfo: MCP_SERVER_INFO,
+      baseDiscovery: {
+        supportsBase: true,
+        baseChainId: 8453,
+        baseFeatures: ["mcp", "x402", "paymaster", "baseAccount", "builderCodes"],
+        preferredStablecoin: "USDC",
+        nativeGasToken: "ETH",
+        preAccountingDisclaimer: "This output is a pre-accounting record prepared with TxReceipts and is not an official invoice, tax filing, or e-ledger submission.",
+        readOnly: true,
+        signsTransactions: false,
+        sendsTransfers: false,
+        requestsApprovals: false,
+      },
+      mcpTools: mcpTools().map(t => ({ name: t.name, description: t.description })),
+    }, env, request);
   }
 
   await ensureReceiptSchema(env);

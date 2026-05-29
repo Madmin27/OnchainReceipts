@@ -308,6 +308,19 @@ function setQaContext(message, tone = "neutral") {
   qaContext.dataset.tone = tone;
 }
 
+function currentNetworkCapabilities() {
+  const network = currentNetwork();
+  return {
+    supportsMcp: Boolean(network.supportsMcp),
+    supportsX402: Boolean(network.supportsX402),
+    supportsBuilderCodes: Boolean(network.supportsBuilderCodes),
+    supportsPaymaster: Boolean(network.supportsPaymaster),
+    supportsBaseAccount: Boolean(network.supportsBaseAccount),
+    accountingNotes: Array.isArray(network.accountingNotes) ? network.accountingNotes : [],
+    isBase: network.id === "base",
+  };
+}
+
 function currentNetworkScopeText() {
   return `This answer only uses ${currentNetwork().name} data currently loaded in TxReceipts.`;
 }
@@ -1474,6 +1487,10 @@ function transactionUserAnswer(data, selectedLedgerItem) {
   if (selectedLedgerItem?.usdValue) lines.push(`Estimated USD value: ${usdText({ usdValue: selectedLedgerItem.usdValue }).replace(/^~/, "")}`);
   lines.push(`Status: ${transactionStatusLabel(data?.status)}`);
   if (data?.id) lines.push(`Receipt ID: ${data.id}`);
+  lines.push("Disclaimer: This is a pre-accounting record, not an official invoice or tax filing.");
+  if (currentNetworkCapabilities().isBase) {
+    lines.push("Base: this receipt is anchored to Base L2 with deterministic onchain verification.");
+  }
   return lines.join("\n");
 }
 
@@ -1497,7 +1514,9 @@ function monthlyUserAnswer(report) {
     `Verified receipts: ${report.verifiedReceiptCount}`,
     "",
     "Prepare the CSV and PDF summary for the accountant.",
-  ].join("\n");
+    "Disclaimer: This output is a pre-accounting record prepared with TxReceipts and is not an official invoice, tax filing, or e-ledger submission. Consult a licensed accountant for formal reporting.",
+    currentNetworkCapabilities().isBase ? "Base network: receipts are anchored to L2 with fast finality and onchain token movements." : "",
+  ].filter(Boolean).join("\n");
 }
 
 function sortableItemValue(item) {
@@ -1622,12 +1641,17 @@ function receiptMatchesInput() {
 }
 
 function accountingBlock(title, rows) {
-  return [
+  const lines = [
     `Accounting report - ${title}`,
     `Network: ${currentNetwork().name}`,
     `Transaction: ${selectedTxText()}`,
     ...rows.map(([label, value]) => `${label}: ${value || "Not available"}`),
-  ].join("\n");
+  ];
+  const caps = currentNetworkCapabilities();
+  if (caps.isBase) {
+    lines.push(`Base features: MCP ${caps.supportsMcp ? "✓" : "✗"} · X402 ${caps.supportsX402 ? "✓" : "✗"} · BuilderCodes ${caps.supportsBuilderCodes ? "✓" : "✗"} · Paymaster ${caps.supportsPaymaster ? "✓" : "✗"} · BaseAccount ${caps.supportsBaseAccount ? "✓" : "✗"}`);
+  }
+  return lines.join("\n");
 }
 
 function deterministicBlock(title, rows, fieldsUsed) {
@@ -1914,10 +1938,16 @@ function templateAnswer(intent) {
     ], "selected ledger row direction, category, memo, verification status");
   }
   if (intent === "DAPP_USAGE") {
+    const caps = currentNetworkCapabilities();
+    const extraRows = [];
+    if (caps.isBase) {
+      extraRows.push(["Base ecosystem", "Base ecosystem dapps (Aerodrome, Uniswap, Seamless, etc.) are fully supported for pre-accounting."]);
+    }
     return deterministicBlock("top wallet activity", [
       ["Scope", currentNetworkScopeText()],
       ["Top visible activity", report.topActivity],
       ["Loaded records", report.totalRecords],
+      ...extraRows,
     ], "loaded row titles grouped by visible activity count");
   }
   if (intent === "UNCATEGORIZED") {
@@ -1958,10 +1988,16 @@ function templateAnswer(intent) {
         ["Data availability", "Receipt data is not available yet"],
       ], "selected transaction context");
     }
+    const caps = currentNetworkCapabilities();
+    const extraRows = [];
+    if (caps.isBase) {
+      extraRows.push(["Base gas note", "On Base, gas is paid in ETH with fast finality (~2 seconds). Paymaster support is available for gasless transactions."]);
+    }
     return deterministicBlock("network fee", [
       ["Status", data.status],
       ["Gas paid", data.gas],
       ["Accounting note", receipt.accountingNote],
+      ...extraRows,
     ], "selected receipt gas value, receipt status, accounting note");
   }
   if (intent === "TOKEN_TRANSFERS") {
@@ -1984,10 +2020,16 @@ function templateAnswer(intent) {
         ["Data availability", "Receipt data is not available yet"],
       ], "selected transaction context");
     }
+    const caps = currentNetworkCapabilities();
+    const extraRows = [];
+    if (caps.isBase) {
+      extraRows.push(["Base verification", "This receipt is anchored to Base (L2) with fast finality. Verification uses the Base block timestamp, transaction hash, and onchain token movements."]);
+    }
     return deterministicBlock("verification status", [
       ["Receipt status", data.status],
       ["Evidence", receipt.evidence],
       ["Method", data.method],
+      ...extraRows,
     ], "selected receipt status, evidence summary, method");
   }
   if (intent === "EXPLAIN_TRANSACTION") {
@@ -2191,6 +2233,7 @@ async function compactAccountingContext() {
   const balances = await walletBalanceSnapshot().catch(() => null);
   return {
     network: currentNetwork().name,
+    networkCapabilities: currentNetworkCapabilities(),
     scope: currentNetworkScopeText(),
     wallet: currentTargetAddress() || null,
     selectedTx,

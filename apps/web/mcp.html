@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://api.txreceipts.com.tr https://txreceipts-api.evpc77.workers.dev"
+    />
+    <title>MCP | TxReceipts</title>
+    <meta
+      name="description"
+      content="TxReceipts MCP — Agent-readable wallet activity, transaction summaries, and pre-accounting reports for AI assistants on Base."
+    />
+    <meta name="theme-color" content="#111111" />
+    <link rel="icon" href="./assets/txreceipts-brand.jpg" type="image/jpeg" />
+    <link rel="apple-touch-icon" href="./assets/txreceipts-brand.jpg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="api-page">
+    <header class="topbar">
+      <a class="brand" href="./index.html#top" aria-label="TxReceipts home">
+        <img class="brand-mark" src="./assets/txreceipts-brand.jpg" alt="" aria-hidden="true" />
+        <span>TxReceipts</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="./index.html#product">Product</a>
+        <a href="./index.html#assistant">AI</a>
+        <a href="./index.html#security">Security</a>
+        <a aria-current="page" href="./mcp.html">MCP</a>
+        <a href="./pricing.html">Teams</a>
+        <a href="./index.html#demo">Demo</a>
+      </nav>
+    </header>
+
+    <main id="top" class="api-shell">
+      <section class="api-hero">
+        <p class="eyebrow">Model Context Protocol</p>
+        <h1>AI asistanlar için Base cüzdan muhasebesi.</h1>
+        <p class="lede">
+          TxReceipts MCP, AI asistanların (Claude, Cursor, VS Code Copilot, ve diğer MCP
+          istemcileri) Base cüzdan aktivitenizi okumasını, işlem özetlerini almasını ve
+          ön-muhasebe raporları hazırlamasını sağlar. Tüm araçlar salt okunurdur —
+          asistanınız cüzdanınıza dokunamaz, onay isteyemez veya transfer yapamaz.
+        </p>
+      </section>
+
+      <section class="section pricing-detail api-layout">
+        <!-- Nasıl çalışır -->
+        <section class="api-wallet-panel" aria-label="How MCP works">
+          <div>
+            <p class="eyebrow">Nasıl çalışır</p>
+            <h3>MCP = AI asistanınıza bir veri kanalı</h3>
+            <p>
+              MCP (Model Context Protocol), AI asistanlarının harici araçları ve veri
+              kaynaklarını kullanması için standart bir protokoldür. TxReceipts MCP ile
+              asistanınız doğrudan Base blokzincirinden cüzdan aktivitenizi okuyabilir.
+            </p>
+          </div>
+          <div class="mcp-flow-checklist">
+            <div class="mcp-flow-step">
+              <span>1</span>
+              <div>
+                <strong>MCP istemcinize sunucuyu ekleyin</strong>
+                <p>VS Code, Claude Desktop, Cursor veya herhangi bir MCP istemcisine TxReceipts MCP sunucu adresini yapılandırın.</p>
+              </div>
+            </div>
+            <div class="mcp-flow-step">
+              <span>2</span>
+              <div>
+                <strong>Asistanınıza sorun</strong>
+                <p>"Base cüzdanımın son 10 işlemini göster" ya da "Bu ay ne kadar USDC harcadım?" gibi sorular sorun.</p>
+              </div>
+            </div>
+            <div class="mcp-flow-step">
+              <span>3</span>
+              <div>
+                <strong>Ön-muhasebe raporu alın</strong>
+                <p>Asistan, TxReceipts MCP araçlarını kullanarak cüzdan aktivitenizi analiz eder ve muhasebeye hazır bir özet sunar.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MCP Tools -->
+        <section class="credit-panel api-credit-panel" aria-label="MCP tools">
+          <div class="api-access-copy">
+            <p class="eyebrow">MCP Araçları</p>
+            <h3>Salt okunur muhasebe araçları</h3>
+            <p>
+              TxReceipts MCP sunucusu 6 araç sunar. Tümü salt okunurdur — imzalama, transfer,
+              onay veya yazma işlemi yapmaz.
+            </p>
+          </div>
+
+          <div class="mcp-tool-grid">
+            <article class="mcp-tool-card">
+              <span class="mini-label">Araç 1</span>
+              <h4>list_networks</h4>
+              <p>Desteklenen ağları listeler (Base, Ethereum, Optimism, Arbitrum, Polygon). Her ağın RPC URL, gezgin adresi ve yeteneklerini döndürür.</p>
+            </article>
+            <article class="mcp-tool-card">
+              <span class="mini-label">Araç 2</span>
+              <h4>get_wallet_activity</h4>
+              <p>Bir cüzdanın işlem geçmişini ve token transferlerini getirir. Ağ, cüzdan adresi ve limit parametrelerini alır.</p>
+            </article>
+            <article class="mcp-tool-card">
+              <span class="mini-label">Araç 3</span>
+              <h4>get_transaction_summary</h4>
+              <p>Tek bir işlemin detaylı özetini döndürür: gönderilen değer, gas ücreti, token hareketleri, blok zamanı ve durum.</p>
+            </article>
+            <article class="mcp-tool-card">
+              <span class="mini-label">Araç 4</span>
+              <h4>get_public_receipt</h4>
+              <p>Geçerli bir TXR-XXXX-XXXX makbuz ID'sine göre herkese açık makbuzu getirir.</p>
+            </article>
+            <article class="mcp-tool-card">
+              <span class="mini-label">Araç 5</span>
+              <h4>create_receipt</h4>
+              <p>API anahtarı ile muhasebe makbuzu oluşturur. Kimlik doğrulama gerektirir, sadece yetkili projeler kullanabilir.</p>
+            </article>
+            <article class="mcp-tool-card">
+              <span class="mini-label">Araç 6</span>
+              <h4>get_pre_accounting_report</h4>
+              <p>Bir cüzdan için kapsamlı ön-muhasebe raporu hazırlar. Token akışlarını, gaz harcamalarını, gelen/giden özetini ve ağ yeteneklerini içerir. Base ağında full yetenek desteği ile çalışır.</p>
+            </article>
+          </div>
+        </section>
+
+        <!-- Kurulum -->
+        <section class="history-panel api-topup-status-panel" aria-label="MCP Setup">
+          <div class="history-head api-topup-head">
+            <div>
+              <p class="eyebrow">Kurulum</p>
+              <h3>MCP istemcinize ekleyin</h3>
+            </div>
+          </div>
+
+          <div class="mcp-setup-steps">
+            <div class="mcp-setup-card">
+              <span class="mini-label">VS Code (settings.json)</span>
+              <pre class="mcp-code-block">{
+  "mcp": {
+    "servers": {
+      "txreceipts": {
+        "type": "url",
+        "url": "https://txreceipts-api.evpc77.workers.dev/mcp"
+      }
+    }
+  }
+}</pre>
+              <p>VS Code ayarlarınıza ekleyin, Copilot Chat otomatik olarak TxReceipts MCP araçlarını kullanabilir.</p>
+            </div>
+
+            <div class="mcp-setup-card">
+              <span class="mini-label">Claude Desktop (claude_desktop_config.json)</span>
+              <pre class="mcp-code-block">{
+  "mcpServers": {
+    "txreceipts": {
+      "type": "url",
+      "url": "https://txreceipts-api.evpc77.workers.dev/mcp"
+    }
+  }
+}</pre>
+              <p>Yapılandırmayı ekleyip Claude'u yeniden başlatın. Doğrudan Base cüzdan soruları sorabilirsiniz.</p>
+            </div>
+
+            <div class="mcp-setup-card">
+              <span class="mini-label">MCP Keşif Uç Noktası</span>
+              <pre class="mcp-code-block">URL: https://txreceipts-api.evpc77.workers.dev/.well-known/mcp.json</pre>
+              <p>Bu uç nokta, MCP keşif araçları tarafından taranabilir ve TxReceipts'in Base ekosisteminde bulunabilirliğini sağlar.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Güvenlik -->
+        <section class="history-panel api-topup-history-panel" aria-label="MCP Security">
+          <div class="history-head api-topup-head">
+            <div>
+              <p class="eyebrow">Güvenlik</p>
+              <h3>Salt okunur. Onay yok. Transfer yok.</h3>
+            </div>
+          </div>
+
+          <div class="mcp-security-checklist">
+            <ul class="checklist">
+              <li>TxReceipts MCP <strong>salt okunur</strong>dur — imzalama, onay, transfer veya swap işlemi yapmaz</li>
+              <li>Hiçbir özel anahtar, seed phrase veya API anahtarı MCP bağlamına gönderilmez</li>
+              <li>Cüzdan bakiyeleri ve işlemler yalnızca genel blokzincir verilerinden okunur</li>
+              <li>create_receipt aracı ek bir API anahtarı gerektirir ve isteğe bağlıdır</li>
+              <li>Her MCP isteği için hız sınırı uygulanır</li>
+              <li>AI asistanı, sizin izniniz olmadan MCP aracını çağıramaz</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- Sık sorulanlar -->
+        <section class="api-wallet-panel" aria-label="MCP FAQ">
+          <div>
+            <p class="eyebrow">SSS</p>
+            <h3>Sık sorulan sorular</h3>
+          </div>
+          <div class="mcp-faq-list">
+            <div class="mcp-faq-item">
+              <strong>MCP hangi AI asistanları ile çalışır?</strong>
+              <p>Claude Desktop, VS Code Copilot Chat, Cursor, GitHub Copilot ve MCP protokolünü destekleyen tüm istemciler.</p>
+            </div>
+            <div class="mcp-faq-item">
+              <strong>MCP'yi kullanmak için ücret ödemem gerekir mi?</strong>
+              <p>Hayır. MCP erişimi tamamen ücretsizdir ve bir API anahtarı gerektirmez. Sadece MCP sunucu URL'sini istemcinize eklemeniz yeterlidir.</p>
+            </div>
+            <div class="mcp-faq-item">
+              <strong>Asistanım cüzdanımdan token transferi yapabilir mi?</strong>
+              <p>Hayır. Tüm MCP araçları salt okunurdur. Asistanınız blokzincir verilerini okuyabilir ancak imzalama, onay veya transfer işlemi yapamaz.</p>
+            </div>
+            <div class="mcp-faq-item">
+              <strong>Hangi ağlar destekleniyor?</strong>
+              <p>Base (varsayılan), Ethereum, Optimism, Arbitrum ve Polygon. Base ağı full yetenek desteği ile çalışır (MCP, X402, Paymaster, Base Account, Builder Codes).</p>
+            </div>
+            <div class="mcp-faq-item">
+              <strong>Ön-muhasebe raporu resmi bir muhasebe kaydı mıdır?</strong>
+              <p>Hayır. Rapor bir <em>ön-muhasebe</em> kaydıdır ve resmi bir fatura, vergi beyannamesi veya e-defter kaydı değildir. Resmi muhasebe için lisanslı bir muhasebeciye danışın.</p>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>TxReceipts MCP — Agent-readable Base wallet pre-accounting for AI assistants.</span>
+      <a href="./index.html#top">Back to product</a>
+    </footer>
+
+    <script src="./wallets.js?v=20260528-2"></script>
+  </body>
+</html>
