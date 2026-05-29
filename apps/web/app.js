@@ -2492,6 +2492,615 @@ async function downloadMonthlyCsv() {
   URL.revokeObjectURL(url);
 }
 
+// =============================================================================
+// ACCOUNTING EXPORT PACKAGE — CSV, JSON, ZIP
+// =============================================================================
+
+// --- CRC-32 for ZIP ---
+const crc32Table = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    table[i] = c;
+  }
+  return table;
+})();
+
+function crc32(data) {
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(data);
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = crc32Table[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+// --- Minimal ZIP generator (store method, no compression) ---
+function buildZip(files) {
+  // files: [{ name: string, data: string }]
+  const encoder = new TextEncoder();
+  const localHeaders = [];
+  const centralEntries = [];
+  let offset = 0;
+  const encoded = files.map(f => ({ name: f.name, data: f.data, nameBytes: encoder.encode(f.name), dataBytes: encoder.encode(f.data) }));
+
+  for (const f of encoded) {
+    const crc = crc32(f.data);
+    const compSize = f.dataBytes.length;
+    const uncompSize = f.dataBytes.length;
+    const nameLen = f.nameBytes.length;
+
+    // Local file header
+    const local = new Uint8Array(30 + nameLen + compSize);
+    const view = new DataView(local.buffer);
+    view.setUint32(0, 0x04034b50, true);        // signature
+    view.setUint16(4, 20, true);                 // version needed
+    view.setUint16(6, 0, true);                  // flags
+    view.setUint16(8, 0, true);                  // compression: stored
+    view.setUint16(10, 0, true);                 // mod time
+    view.setUint16(12, 0, true);                 // mod date
+    view.setUint32(14, crc, true);               // crc-32
+    view.setUint32(18, compSize, true);          // compressed size
+    view.setUint32(22, uncompSize, true);        // uncompressed size
+    view.setUint16(26, nameLen, true);           // file name length
+    view.setUint16(28, 0, true);                 // extra field length
+    local.set(f.nameBytes, 30);
+    local.set(f.dataBytes, 30 + nameLen);
+
+    localHeaders.push({ bytes: local, crc, compSize, uncompSize, nameLen });
+    centralEntries.push({ nameBytes: f.nameBytes, crc, compSize, uncompSize, nameLen, localOffset: offset });
+    offset += local.length;
+  }
+
+  // Central directory
+  const centralEntriesBytes = [];
+  let centralOffset = offset;
+  for (const e of centralEntries) {
+    const entry = new Uint8Array(46 + e.nameLen);
+    const view = new DataView(entry.buffer);
+    view.setUint32(0, 0x02014b50, true);         // signature
+    view.setUint16(4, 20, true);                 // version made by
+    view.setUint16(6, 20, true);                 // version needed
+    view.setUint16(8, 0, true);                  // flags
+    view.setUint16(10, 0, true);                 // compression
+    view.setUint16(12, 0, true);                 // mod time
+    view.setUint16(14, 0, true);                 // mod date
+    view.setUint32(16, e.crc, true);             // crc-32
+    view.setUint32(20, e.compSize, true);        // compressed size
+    view.setUint32(24, e.uncompSize, true);      // uncompressed size
+    view.setUint16(28, e.nameLen, true);         // file name length
+    view.setUint16(30, 0, true);                 // extra field length
+    view.setUint16(32, 0, true);                 // file comment length
+    view.setUint16(34, 0, true);                 // disk number start
+    view.setUint16(36, 0, true);                 // internal file attributes
+    view.setUint32(38, 0, true);                 // external file attributes
+    view.setUint32(42, e.localOffset, true);     // relative offset
+    entry.set(e.nameBytes, 46);
+    centralEntriesBytes.push(entry);
+  }
+
+  const centralSize = centralEntriesBytes.reduce((s, e) => s + e.length, 0);
+  const centralEnd = new Uint8Array(22);
+  const ceView = new DataView(centralEnd.buffer);
+  ceView.setUint32(0, 0x06054b50, true);         // end signature
+  ceView.setUint16(4, 0, true);                  // disk number
+  ceView.setUint16(6, 0, true);                  // disk with central
+  ceView.setUint16(8, centralEntriesBytes.length, true);  // entries on disk
+  ceView.setUint16(10, centralEntriesBytes.length, true); // total entries
+  ceView.setUint32(12, centralSize, true);       // central directory size
+  ceView.setUint32(16, centralOffset, true);     // central directory offset
+  ceView.setUint16(20, 0, true);                 // comment length
+
+  // Concatenate all parts
+  const totalSize = offset + centralSize + 22;
+  const result = new Uint8Array(totalSize);
+  let pos = 0;
+  for (const h of localHeaders) { result.set(h.bytes, pos); pos += h.bytes.length; }
+  for (const e of centralEntriesBytes) { result.set(e, pos); pos += e.length; }
+  result.set(centralEnd, pos);
+
+  return new Blob([result], { type: "application/zip" });
+}
+
+// --- Helper: CSV cell escaping ---
+function csvCell(value) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function csvRow(cells) {
+  return cells.map(csvCell).join(",");
+}
+
+// --- Helper: full hash (never shortened) ---
+function fullHash(item) {
+  return String(item.hash || "");
+}
+
+// --- Helper: parse asset symbol and amount ---
+function parseAssetSymbol(value) {
+  const p = parseAssetValueParts(value);
+  return p?.symbol || "UNKNOWN";
+}
+
+function parseAssetAmount(value) {
+  const p = parseAssetValueParts(value);
+  return p?.amount || value || "0";
+}
+
+// --- Helper: format date for CSV ---
+function exportDate(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (!Number.isFinite(d.getTime())) return "";
+  return d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
+}
+
+// ============================================================
+// 1. Build normalized accounting rows from report items
+// ============================================================
+async function buildAccountingRows(report) {
+  const rows = await Promise.all(report.items.map(async (item, index) => {
+    const rawDir = item.accounting.direction;
+    const cat = item.accounting.category;
+    const isSuspicious = item.kind === "token" && hasSuspiciousTokenSignals(item);
+    const reviewReason = isSuspicious
+      ? "Suspicious or promotional token requires manual review"
+      : (item.accounting.reviewReason || "");
+
+    const receiptId = await generateReceiptId({
+      chainId: report.chainId,
+      network: report.network,
+      txHash: item.hash,
+      ownerWallet: report.wallet,
+    });
+
+    return {
+      idx: index + 1,
+      date: exportDate(item.timestamp),
+      network: report.network,
+      receiptId,
+      txHash: fullHash(item),
+      direction: rawDir || "",
+      category: cat || "",
+      accountingStatus: isSuspicious ? "review" : (item.accounting.status || ""),
+      reviewReason,
+      counterparty: item.subtitle || "",
+      title: item.title || "",
+      assetMovement: assetMovementText(item),
+      assetSymbol: parseAssetSymbol(item.value),
+      assetAmount: parseAssetAmount(item.value),
+      gasFeeEth: formatGasFeeEthText(item, 12, rawDir),
+      gasFeeUsd: formatGasFeeUsdText(item),
+      memo: item.accounting.memo || "",
+      verificationStatus: item.accounting.verificationStatus || "",
+      missingValuation: !!item.accounting.missingValuation,
+      hasUnknownCounterparty: !!item.accounting.hasUnknownCounterparty,
+      usdValue: item.usdValue || "",
+      rawItem: item,
+    };
+  }));
+  return rows;
+}
+
+// ============================================================
+// 2. Classify row for journal draft
+// ============================================================
+function classifyRow(row) {
+  const dir = row.direction;
+  const cat = row.category;
+  if (cat === "swap") return { account: "Swap Execution", type: "swap" };
+  if (cat === "gas_fee") return { account: "Gas Fees", type: "expense" };
+  if (cat === "app_fee") return { account: "App Fees", type: "expense" };
+  if (cat === "protocol_fee") return { account: "Protocol Fees", type: "expense" };
+  if (cat === "subscription") return { account: "Subscriptions", type: "expense" };
+  if (cat === "internal_transfer") return { account: "Internal Transfer", type: "transfer" };
+  if (cat === "authorization") return { account: "Authorization (no value)", type: "info" };
+  if (cat === "contract_deployment") return { account: "Contract Deployment", type: "info" };
+  if (cat === "contract_call") return { account: "Contract Call", type: "info" };
+  if (dir === "income") return { account: "Income (uncategorized)", type: "income" };
+  if (dir === "expense") return { account: "Expense (uncategorized)", type: "expense" };
+  return { account: "Uncategorized", type: "info" };
+}
+
+// ============================================================
+// 3. Build valuation info
+// ============================================================
+function buildValuation(row) {
+  if (row.missingValuation) return "MISSING";
+  if (row.usdValue && Number(row.usdValue) > 0) return `USD ${Number(row.usdValue).toFixed(2)}`;
+  return "Not available";
+}
+
+// ============================================================
+// CSV #1: Accountant Export (full detail)
+// ============================================================
+function buildAccountantExportCsv(rows) {
+  const header = [
+    "#", "Date (UTC)", "Network", "Receipt ID", "Tx Hash",
+    "Direction", "Category", "Accounting Status", "Review Reason",
+    "Counterparty", "Title", "Asset Movement", "Token Symbol", "Token Amount",
+    "Gas Fee (ETH)", "Gas Fee (USD)", "Memo", "Valuation Status",
+    "Verification Status", "Missing Valuation", "Unknown Counterparty",
+  ];
+  const lines = [csvRow(header)];
+  for (const r of rows) {
+    lines.push(csvRow([
+      r.idx, r.date, r.network, r.receiptId, r.txHash,
+      r.direction, r.category, r.accountingStatus, r.reviewReason,
+      r.counterparty, r.title, r.assetMovement, r.assetSymbol, r.assetAmount,
+      r.gasFeeEth, r.gasFeeUsd, r.memo, buildValuation(r),
+      r.verificationStatus, r.missingValuation ? "YES" : "NO",
+      r.hasUnknownCounterparty ? "YES" : "NO",
+    ]));
+  }
+  return lines.join("\n");
+}
+
+// ============================================================
+// CSV #2: Journal Draft
+// ============================================================
+function buildJournalDraftCsv(rows) {
+  const header = [
+    "Date (UTC)", "Receipt ID", "Account", "Type",
+    "Debit (ETH)", "Credit (ETH)", "Token Amount", "Token Symbol",
+    "Description", "Reference (Tx Hash)",
+  ];
+  const lines = [csvRow(header)];
+
+  for (const r of rows) {
+    if (r.accountingStatus === "review" || r.category === "authorization" || r.category === "contract_call" || r.category === "contract_deployment") {
+      // Skip review items or non-financial items from journal draft
+      continue;
+    }
+    const cls = classifyRow(r);
+    const gasNum = parseFloat(r.gasFeeEth.replace(/[^0-9.]/g, ""));
+    const gasCost = isNaN(gasNum) ? 0 : gasNum;
+    const hasMovement = r.assetMovement && r.assetMovement.toLowerCase() !== "no asset movement detected" && r.assetMovement !== "Approval only";
+
+    if (r.direction === "expense" && hasMovement) {
+      lines.push(csvRow([
+        r.date, r.receiptId, cls.account, "expense",
+        gasCost > 0 ? (parseFloat(r.assetAmount) + gasCost).toFixed(12) : r.assetAmount,
+        "0", r.assetAmount, r.assetSymbol,
+        `${r.title} - ${r.counterparty}`.slice(0, 200), r.txHash,
+      ]));
+    } else if (r.direction === "income" && hasMovement) {
+      lines.push(csvRow([
+        r.date, r.receiptId, cls.account, "income",
+        "0", r.assetAmount, r.assetAmount, r.assetSymbol,
+        `${r.title} - ${r.counterparty}`.slice(0, 200), r.txHash,
+      ]));
+    } else if (gasCost > 0 && r.direction === "expense") {
+      lines.push(csvRow([
+        r.date, r.receiptId, "Gas Fee", "expense",
+        gasCost.toFixed(12), "0", "", "",
+        `Gas fee for ${r.title}`.slice(0, 200), r.txHash,
+      ]));
+    }
+  }
+  return lines.join("\n");
+}
+
+// ============================================================
+// CSV #3: Review Required
+// ============================================================
+function buildReviewRequiredCsv(rows) {
+  const header = [
+    "#", "Date (UTC)", "Network", "Receipt ID", "Tx Hash",
+    "Direction", "Category", "Review Reason",
+    "Counterparty", "Title", "Asset Movement", "Token Symbol",
+    "Gas Fee (ETH)", "Memo",
+  ];
+  const reviewRows = rows.filter(r => r.accountingStatus === "review");
+  const lines = [csvRow(header)];
+  for (const r of reviewRows) {
+    lines.push(csvRow([
+      r.idx, r.date, r.network, r.receiptId, r.txHash,
+      r.direction, r.category, r.reviewReason,
+      r.counterparty, r.title, r.assetMovement, r.assetSymbol,
+      r.gasFeeEth, r.memo,
+    ]));
+  }
+  return lines.join("\n");
+}
+
+// ============================================================
+// JSON #1: Monthly Summary
+// ============================================================
+function buildMonthlySummaryJson(report, rows) {
+  const incomeRows = rows.filter(r => r.direction === "income");
+  const expenseRows = rows.filter(r => r.direction === "expense");
+  const reviewRows = rows.filter(r => r.accountingStatus === "review");
+  const readyRows = rows.filter(r => r.accountingStatus === "ready");
+  const verifiedRows = rows.filter(r => r.verificationStatus === "verified");
+  const missingValRows = rows.filter(r => r.missingValuation);
+
+  const summary = {
+    package: "TxReceipts Accounting Export Package",
+    version: "1.0.0",
+    generatedAt: new Date().toISOString(),
+    network: report.network,
+    chainId: report.chainId,
+    wallet: report.wallet,
+    periodStart: report.periodStart,
+    periodEnd: report.periodEnd,
+    totals: {
+      totalRecords: rows.length,
+      verifiedRecords: verifiedRows.length,
+      readyForAccounting: readyRows.length,
+      needsReview: reviewRows.length,
+      missingValuation: missingValRows.length,
+      unknownCounterparty: rows.filter(r => r.hasUnknownCounterparty).length,
+      incomeCount: incomeRows.length,
+      expenseCount: expenseRows.length,
+      swapCount: rows.filter(r => r.category === "swap").length,
+    },
+    gas: {
+      totalGasNative: report.totalGasFeeNative,
+      symbol: currentNetwork().nativeCurrency?.symbol || "ETH",
+    },
+    topActivity: report.topActivity,
+    disclaimer: "This is a pre-accounting report. Not an official invoice, tax filing, or e-ledger submission. All values are based on onchain data and may require professional accounting review.",
+  };
+  return JSON.stringify(summary, null, 2);
+}
+
+// ============================================================
+// JSON #2: Verified Receipts
+// ============================================================
+function buildVerifiedReceiptsJson(report, rows) {
+  const verified = rows.filter(r => r.verificationStatus === "verified");
+  const receipts = verified.map(r => ({
+    receiptId: r.receiptId,
+    date: r.date,
+    network: r.network,
+    txHash: r.txHash,
+    direction: r.direction,
+    category: r.category,
+    accountingStatus: r.accountingStatus,
+    counterparty: r.counterparty,
+    title: r.title,
+    assetMovement: r.assetMovement,
+    tokenSymbol: r.assetSymbol,
+    tokenAmount: r.assetAmount,
+    gasFeeEth: r.gasFeeEth,
+    memo: r.memo,
+  }));
+
+  const payload = {
+    package: "TxReceipts Verified Receipts",
+    version: "1.0.0",
+    generatedAt: new Date().toISOString(),
+    network: report.network,
+    wallet: report.wallet,
+    totalVerified: receipts.length,
+    receipts,
+    note: "Only records with onchain verification status 'verified' are included. All hashes are full-length and unshortened.",
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
+// ============================================================
+// README.txt
+// ============================================================
+function buildReadmeTxt(report, rows) {
+  const reviewCount = rows.filter(r => r.accountingStatus === "review").length;
+  const readyCount = rows.filter(r => r.accountingStatus === "ready").length;
+  const verifiedCount = rows.filter(r => r.verificationStatus === "verified").length;
+
+  return [
+    "========================================================================",
+    "  TxReceipts Accounting Export Package",
+    "  Generated: " + new Date().toISOString(),
+    "  Network: " + report.network + " | Wallet: " + report.wallet,
+    "========================================================================",
+    "",
+    "  CONTENTS:",
+    "",
+    "  1. accountant_export.csv",
+    "     Full transaction ledger with all accounting fields.",
+    "     One row per onchain record. Use this as your primary working file.",
+    "",
+    "  2. journal_draft.csv",
+    "     Journal entry draft with debit/credit columns.",
+    "     Non-financial and review-required rows are excluded.",
+    "",
+    "  3. review_required.csv",
+    "     Subset of rows flagged for manual review.",
+    "     Each row includes a review reason.",
+    "",
+    "  4. monthly_summary.json",
+    "     Machine-readable summary with counts, totals, and period.",
+    "",
+    "  5. verified_receipts.json",
+    "     Machine-readable list of verified onchain records.",
+    "     Includes full tx hashes and receipt IDs.",
+    "",
+    "========================================================================",
+    "  SUMMARY",
+    "",
+    `  Total records: ${rows.length}`,
+    `  Ready for accounting: ${readyCount}`,
+    `  Needs review: ${reviewCount}`,
+    `  Verified onchain: ${verifiedCount}`,
+    `  Gas fees (native): ${report.totalGasFeeNative} ${currentNetwork().nativeCurrency?.symbol || "ETH"}`,
+    "",
+    "========================================================================",
+    "  IMPORTANT NOTES",
+    "",
+    "  - All transaction hashes and addresses are full-length, never shortened.",
+    "  - USD values are only included when onchain pricing data is available.",
+    "  - No AI-predicted or estimated values are used in this package.",
+    "  - Classification (income/expense/swap/fee) is based on onchain",
+    "    heuristics and may need professional accounting adjustment.",
+    "  - This package is NOT a tax filing, invoice, or official e-ledger.",
+    "",
+    "========================================================================",
+    "  VALIDATION",
+    "",
+    `  - Accountant export rows: ${rows.length}`,
+    `  - Journal draft rows: filtered` ,
+    `  - Review required rows: ${reviewCount}`,
+    `  - Monthly summary records: ${rows.length}`,
+    `  - Verified receipts: ${verifiedCount}`,
+    "",
+    "  Gas total should match: " + report.totalGasFeeNative + " " + (currentNetwork().nativeCurrency?.symbol || "ETH"),
+    "",
+    "========================================================================",
+    "  TxReceipts — https://txreceipts.com.tr",
+    "  Open source pre-accounting workspace for onchain activity.",
+    "========================================================================",
+  ].join("\n");
+}
+
+// ============================================================
+// Validation
+// ============================================================
+function validateExportPackage(report, rows, accountantCsv, journalCsv, reviewCsv, summaryJson, verifiedJson) {
+  const errors = [];
+  const warnings = [];
+
+  // Row counts
+  const reviewRows = rows.filter(r => r.accountingStatus === "review");
+  const readyRows = rows.filter(r => r.accountingStatus === "ready");
+  const verifiedRows = rows.filter(r => r.verificationStatus === "verified");
+  const missingValRows = rows.filter(r => r.missingValuation);
+  const unknownCpRows = rows.filter(r => r.hasUnknownCounterparty);
+  const swapRows = rows.filter(r => r.category === "swap");
+
+  // Check total records
+  if (rows.length !== report.totalRecords) {
+    errors.push(`Total records mismatch: export ${rows.length} vs report ${report.totalRecords}`);
+  }
+
+  // Check review count
+  if (reviewRows.length !== report.needsReviewCount) {
+    errors.push(`Review count mismatch: export ${reviewRows.length} vs report ${report.needsReviewCount}`);
+  }
+
+  // Check ready count
+  if (readyRows.length !== report.readyForAccountingCount) {
+    errors.push(`Ready count mismatch: export ${readyRows.length} vs report ${report.readyForAccountingCount}`);
+  }
+
+  // Check missing valuation
+  if (missingValRows.length !== report.missingValuationCount) {
+    warnings.push(`Missing valuation count mismatch: export ${missingValRows.length} vs report ${report.missingValuationCount}`);
+  }
+
+  // Check unknown counterparty
+  if (unknownCpRows.length !== report.unknownCounterpartyCount) {
+    warnings.push(`Unknown counterparty count mismatch: export ${unknownCpRows.length} vs report ${report.unknownCounterpartyCount}`);
+  }
+
+  // Check swap count
+  if (swapRows.length !== report.swapCount) {
+    warnings.push(`Swap count mismatch: export ${swapRows.length} vs report ${report.swapCount}`);
+  }
+
+  // Check that review rows have review reasons
+  for (const r of reviewRows) {
+    if (!r.reviewReason || r.reviewReason.trim() === "") {
+      errors.push(`Review row #${r.idx} (${r.receiptId}) missing review reason`);
+    }
+  }
+
+  // Check for shortened hashes (should never happen in export)
+  for (const r of rows) {
+    if (r.txHash.length < 60 && r.txHash.length > 0) {
+      warnings.push(`Row #${r.idx} has potentially shortened hash: ${r.txHash}`);
+    }
+  }
+
+  // Verify CSV row counts match
+  const accountantLines = accountantCsv.split("\n").filter(line => line.trim());
+  const accountantDataRows = accountantLines.length - 1; // minus header
+  if (accountantDataRows !== rows.length) {
+    errors.push(`Accountant CSV row count mismatch: ${accountantDataRows} vs expected ${rows.length}`);
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+// ============================================================
+// MAIN: Download Accounting Export Package (ZIP)
+// ============================================================
+async function downloadAccountingExportPackage() {
+  try {
+    const report = buildMonthlyReport();
+    if (!report || !report.items.length) {
+      setStatus("No data loaded. Load wallet history first.", "error");
+      return;
+    }
+
+    setStatus("Building accounting export package...", "neutral");
+
+    // 1. Build normalized rows
+    const rows = await buildAccountingRows(report);
+
+    // 2. Build all files
+    const accountantCsv = buildAccountantExportCsv(rows);
+    const journalCsv = buildJournalDraftCsv(rows);
+    const reviewCsv = buildReviewRequiredCsv(rows);
+    const summaryJson = buildMonthlySummaryJson(report, rows);
+    const verifiedJson = buildVerifiedReceiptsJson(report, rows);
+    const readme = buildReadmeTxt(report, rows);
+
+    // 3. Validate
+    const validation = validateExportPackage(report, rows, accountantCsv, journalCsv, reviewCsv, summaryJson, verifiedJson);
+
+    if (!validation.valid) {
+      const errorMsg = "Export validation failed:\n" + validation.errors.join("\n");
+      console.error("Export validation errors:", validation.errors);
+      if (validation.warnings.length) {
+        console.warn("Export validation warnings:", validation.warnings);
+      }
+      setStatus("Validation failed. Check console for details.", "error");
+      // Still offer download with warning
+      if (!confirm("Validation found " + validation.errors.length + " error(s). Download anyway?")) {
+        return;
+      }
+    }
+
+    if (validation.warnings.length) {
+      console.warn("Export warnings:", validation.warnings);
+    }
+
+    // 4. Build ZIP
+    const network = report.network.toUpperCase().replace(/\s+/g, "-");
+    const dateTag = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const baseName = `txreceipts-accounting-${network}-${dateTag}`;
+
+    const zipBlob = buildZip([
+      { name: `${baseName}/accountant_export.csv`, data: accountantCsv },
+      { name: `${baseName}/journal_draft.csv`, data: journalCsv },
+      { name: `${baseName}/review_required.csv`, data: reviewCsv },
+      { name: `${baseName}/monthly_summary.json`, data: summaryJson },
+      { name: `${baseName}/verified_receipts.json`, data: verifiedJson },
+      { name: `${baseName}/README.txt`, data: readme },
+    ]);
+
+    // 5. Download
+    const url = URL.createObjectURL(zipBlob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${baseName}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    const statusMsg = validation.valid
+      ? `Export package downloaded: ${baseName}.zip (${rows.length} records)`
+      : `Export package downloaded with ${validation.errors.length} validation error(s): ${baseName}.zip`;
+    setStatus(statusMsg, validation.valid ? "success" : "error");
+  } catch (error) {
+    console.error("Export package error:", error);
+    setStatus(error instanceof Error ? error.message : "Could not create export package.", "error");
+  }
+}
+
 async function printMonthlyReport(mode = "summary") {
   try {
     const report = buildMonthlyReport();
@@ -3116,6 +3725,9 @@ qaForm?.addEventListener("submit", event => {
 downloadMonthlyCsvButton?.addEventListener("click", downloadMonthlyCsv);
 printMonthlyReportButton?.addEventListener("click", () => printMonthlyReport("summary"));
 printFullLedgerButton?.addEventListener("click", () => printMonthlyReport("full"));
+
+const downloadAccountingPackageButton = document.querySelector("#downloadAccountingPackage");
+downloadAccountingPackageButton?.addEventListener("click", downloadAccountingExportPackage);
 
 window.addEventListener("txreceipts:walletsChanged", () => {
   populateWalletProviders();
