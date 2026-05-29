@@ -95,24 +95,16 @@ const networks = window.TX_RECEIPTS_NETWORKS || [];
 
 const knownTokens = {
   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { symbol: "USDC", decimals: 6n },
-    ["chain_id", report.chainId],
   "0x4200000000000000000000000000000000000006": { symbol: "WETH", decimals: 18n },
-    ["period_start", report.periodStart],
-    ["period_end", report.periodEnd],
   "0x4200000000000000000000000000000000000042": { symbol: "OP", decimals: 18n },
-    ["ready_for_accounting", report.readyForAccountingCount],
   "0x532f27101965dd16442e59d40670faf5ebb142e4": { symbol: "BRETT", decimals: 18n },
 };
 
-    ["missing_valuation_rows", report.missingValuationCount],
-    ["unknown_counterparty_rows", report.unknownCounterpartyCount],
 let connectedWallet = null;
 let walletProvider = null;
 let targetAddress = null;
 let activeHistoryTab = "all";
-    ["gas_fees_native", `${report.totalGasFeeNative} ${currentNetwork().nativeCurrency?.symbol || "ETH"}`],
 let historyState = {
-    ["Date", "Network", "Receipt ID", "Tx Hash", "Direction", "Category", "Accounting Status", "Review Reason", "Counterparty", "Asset Movement", "Gas Fee ETH", "Gas Fee USD", "Memo", "Verification Status"],
   transfers: [],
   txNext: null,
   transferNext: null,
@@ -120,14 +112,12 @@ let historyState = {
 
 function safeDisplay(value, maxLength = 120) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
-      item.accounting.status,
-      item.accounting.reviewReason,
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
-      assetMovementText(item),
-      formatGasFeeEthText(item),
-      formatGasFeeUsdText(item),
+}
+
+async function apiFetch(path, options = {}) {
   let lastError = null;
-      item.accounting.verificationStatus,
+  for (const baseUrl of API_BASE_URLS) {
     try {
       return await fetch(`${baseUrl}${path}`, options);
     } catch (error) {
