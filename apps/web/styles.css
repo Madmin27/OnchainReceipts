@@ -1807,6 +1807,11 @@ dd {
 .col-status { width: 7%; }
 .col-hash { width: 17%; }
 
+/* --- Preview modal: table overflow fix --- */
+.print-table-wrap {
+  overflow-x: auto;
+}
+
 /* ========================================================== */
 
 @media print {
@@ -2074,6 +2079,7 @@ dd {
   .print-table-wrap {
     margin-bottom: 18px;
     page-break-inside: auto;
+    overflow-x: visible;
   }
 
   .print-tx-table {
