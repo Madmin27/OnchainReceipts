@@ -2396,11 +2396,22 @@ async function printMonthlyReport() {
   try {
     const report = buildMonthlyReport();
     if (!report) return;
+    const jsPDF = window.jspdf?.jsPDF;
+    if (!jsPDF) {
+      setStatus("PDF library could not be loaded.", "error");
+      return;
+    }
     const now = new Date();
     const dateStr = formatUtcDateTime(now);
     const network = report.network;
     const isBase = currentNetworkCapabilities().isBase;
     const gasSymbol = report.weeklyFeeAsset || currentNetwork().nativeCurrency?.symbol || "ETH";
+    const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 40;
+    const contentWidth = pageWidth - margin * 2;
+    let y = margin;
 
     // --- Binlik ayracı formatı (1,234.56) ---
     const fmt = (n) => {
@@ -2410,50 +2421,62 @@ async function printMonthlyReport() {
       return parts.join(".");
     };
 
-    // html2canvas fixed/absolute export nodes burada 0-height canvas uretebiliyor.
-    // Bu nedenle icerigi gorunmez ama render edilebilir bir static sandbox icine koyuyoruz.
-    const pdfSandbox = document.createElement("div");
-    pdfSandbox.style.position = "fixed";
-    pdfSandbox.style.left = "0";
-    pdfSandbox.style.top = "0";
-    pdfSandbox.style.width = "0";
-    pdfSandbox.style.height = "0";
-    pdfSandbox.style.overflow = "hidden";
-    pdfSandbox.style.pointerEvents = "none";
+    const ensureSpace = (needed = 16) => {
+      if (y + needed <= pageHeight - margin) return;
+      doc.addPage();
+      y = margin;
+    };
 
-    const tmp = document.createElement("div");
-    tmp.style.position = "static";
-    tmp.style.width = "800px";
-    tmp.style.background = "#fff";
-    tmp.style.color = "#000";
-    tmp.style.fontFamily = "Arial, sans-serif";
-    tmp.style.padding = "20px";
-    pdfSandbox.appendChild(tmp);
-    document.body.appendChild(pdfSandbox);
+    const drawDivider = () => {
+      ensureSpace(16);
+      doc.setDrawColor(220, 220, 220);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 14;
+    };
+
+    const drawText = (text, { size = 11, style = "normal", indent = 0, color = [17, 17, 17], gap = 4 } = {}) => {
+      const safeText = String(text ?? "-");
+      doc.setFont("helvetica", style);
+      doc.setFontSize(size);
+      doc.setTextColor(color[0], color[1], color[2]);
+      const lineHeight = Math.max(size * 1.35, 14);
+      const lines = doc.splitTextToSize(safeText, contentWidth - indent);
+      lines.forEach(line => {
+        ensureSpace(lineHeight);
+        doc.text(line, margin + indent, y);
+        y += lineHeight;
+      });
+      y += gap;
+    };
+
+    const drawLabelValue = (label, value) => {
+      drawText(`${label}: ${value}`);
+    };
+
+    const drawSection = (title) => {
+      drawDivider();
+      drawText(title, { size: 14, style: "bold", gap: 6 });
+    };
+
+    const savePdf = (filename) => {
+      doc.save(filename);
+      setStatus("PDF generated successfully.", "success");
+    };
+
+    drawText("TxReceipts - Pre-Accounting Report", { size: 18, style: "bold", gap: 2 });
+    drawText(`${network} - ${dateStr}`, { size: 11, color: [90, 90, 90], gap: 10 });
+    drawLabelValue("Wallet", report.wallet);
+    if (isBase) {
+      drawText("Base L2 - Anchored onchain", { size: 10, style: "bold", color: [0, 82, 255], gap: 10 });
+    }
 
     if (!report.totalRecords) {
-      tmp.innerHTML = `
-        <div style="max-width:760px;margin:0 auto;">
-          <div style="text-align:center;border-bottom:2px solid #333;padding-bottom:16px;margin-bottom:16px;">
-            <h1 style="font-size:20px;margin:0;">TxReceipts — Pre‑Accounting Report</h1>
-            <p style="font-size:13px;color:#555;margin:4px 0 0;">${network} · ${dateStr}</p>
-          </div>
-          <div style="margin:16px 0;">
-            <p style="font-size:12px;color:#888;">Wallet</p>
-            <code style="font-size:13px;word-break:break-all;">${report.wallet}</code>
-          </div>
-          <div style="text-align:center;padding:40px 0;">
-            <p style="font-size:14px;">No transaction records loaded for this wallet on ${network}.</p>
-            <p style="font-size:13px;color:#888;">Connect a wallet or enter an address, wait for history to load, then try again.</p>
-          </div>
-          <div style="text-align:center;font-size:11px;color:#aaa;border-top:1px solid #ddd;padding-top:12px;margin-top:16px;">
-            Report generated automatically. No data to display.
-          </div>
-        </div>
-      `;
-      const opt = { margin: [0.5, 0.5, 0.5, 0.5], filename: `txreceipts-empty-${network}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" } };
-      await html2pdf().set(opt).from(tmp).save();
-      document.body.removeChild(pdfSandbox);
+      drawSection("Summary");
+      drawText(`No transaction records loaded for this wallet on ${network}.`);
+      drawText("Connect a wallet or enter an address, wait for history to load, then try again.", { color: [110, 110, 110] });
+      drawDivider();
+      drawText("Report generated automatically. No data to display.", { size: 10, color: [150, 150, 150] });
+      savePdf(`txreceipts-empty-${network}.pdf`);
       return;
     }
 
@@ -2488,128 +2511,56 @@ async function printMonthlyReport() {
       return { idx: idx + 1, item, dir, cat, dirIcon, valueParts, valStr, gasStr };
     });
 
-    const cardsHtml = summaryCards.map(c =>
-      `<div style="background:#f5f5f5;border-radius:6px;padding:10px 14px;text-align:center;${c.warn ? 'border:2px solid #e74c3c;' : 'border:1px solid #ddd;'}">
-        <div style="font-size:11px;color:#666;margin-bottom:4px;">${c.label}</div>
-        <div style="font-size:16px;font-weight:bold;">${c.value}</div>
-      </div>`
-    ).join("");
-
-    const tokenHtml = tokenSymbols.length
-      ? `<div style="margin:12px 0;"><span style="font-size:12px;color:#888;">Tokens: </span><span style="font-size:13px;">${tokenSymbols.join(", ")}</span></div>`
-      : "";
-
     const txRowsHtml = tableRows.map(r => {
       const ts = r.item.timestamp ? formatUtcDateTime(r.item.timestamp) : "—";
       const shortHash = r.item.hash ? safeDisplay(r.item.hash, 14) : "—";
-      return `<tr style="font-size:10px;">
-        <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:center;">${r.idx}</td>
-        <td style="padding:4px 6px;border-bottom:1px solid #eee;white-space:nowrap;">${ts}</td>
-        <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:center;">${r.dirIcon}</td>
-        <td style="padding:4px 6px;border-bottom:1px solid #eee;">${r.cat.replace(/_/g, " ")}</td>
-        <td style="padding:4px 6px;border-bottom:1px solid #eee;">${r.item.title || "—"}</td>
-        <td style="padding:4px 6px;border-bottom:1px solid #eee;">${r.item.subtitle || "—"}</td>
-        <td style="padding:4px 6px;border-bottom:1px solid #eee;white-space:nowrap;">${r.valStr}</td>
-        <td style="padding:4px 6px;border-bottom:1px solid #eee;white-space:nowrap;">${r.gasStr}</td>
-        <td style="padding:4px 6px;border-bottom:1px solid #eee;text-align:center;">${r.item.accounting.status}</td>
-        <td style="padding:4px 6px;border-bottom:1px solid #eee;font-family:monospace;font-size:9px;">${shortHash}</td>
-      </tr>`;
-    }).join("");
+      return { idx: r.idx, ts, shortHash, title: r.item.title || "-", subtitle: r.item.subtitle || "-", status: r.item.accounting.status, category: r.cat.replace(/_/g, " "), dirIcon: r.dirIcon, valStr: r.valStr, gasStr: r.gasStr };
+    });
 
-    const baseBadge = isBase
-      ? `<span style="background:#0052FF;color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;">Base L2 — Anchored onchain</span>`
-      : "";
+    drawSection("Summary");
+    summaryCards.forEach(card => {
+      const marker = card.warn ? " [review]" : "";
+      drawLabelValue(card.label, `${card.value}${marker}`);
+    });
 
-    tmp.innerHTML = `
-      <div style="max-width:760px;margin:0 auto;">
-        <!-- Header -->
-        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:16px;">
-          <div>
-            <h1 style="font-size:20px;margin:0;">TxReceipts — Pre‑Accounting Report</h1>
-            <p style="font-size:13px;color:#555;margin:4px 0 0;">${network} · ${dateStr}</p>
-          </div>
-          <div>${baseBadge}</div>
-        </div>
+    if (tokenSymbols.length) {
+      drawSection("Tokens");
+      drawText(tokenSymbols.join(", "));
+    }
 
-        <!-- Wallet + Tokens -->
-        <div style="margin:12px 0;">
-          <div style="font-size:12px;color:#888;">Wallet</div>
-          <code style="font-size:13px;word-break:break-all;">${report.wallet}</code>
-        </div>
-        ${tokenHtml}
+    drawSection("Estimated Totals");
+    drawLabelValue("Estimated Incoming", `${fmt(report.estimatedIncomeValue)} ${gasSymbol}`);
+    drawLabelValue("Estimated Outgoing", `${fmt(report.estimatedOutgoingValue)} ${gasSymbol}`);
+    drawLabelValue("Gas Fees (7d)", `${report.weeklyFeeTotal} ${gasSymbol}`);
+    drawLabelValue("Top Activity", report.topActivity);
 
-        <!-- Estimated Totals -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0;">
-          <div style="background:#f0faf0;border:1px solid #b8e6b8;border-radius:6px;padding:8px 12px;text-align:center;">
-            <div style="font-size:10px;color:#2e7d32;">Estimated Incoming</div>
-            <div style="font-size:14px;font-weight:bold;color:#2e7d32;">${fmt(report.estimatedIncomeValue)} ${gasSymbol}</div>
-          </div>
-          <div style="background:#fef0f0;border:1px solid #f5b8b8;border-radius:6px;padding:8px 12px;text-align:center;">
-            <div style="font-size:10px;color:#c62828;">Estimated Outgoing</div>
-            <div style="font-size:14px;font-weight:bold;color:#c62828;">${fmt(report.estimatedOutgoingValue)} ${gasSymbol}</div>
-          </div>
-          <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:8px 12px;text-align:center;">
-            <div style="font-size:10px;color:#f57f17;">Gas Fees (7d)</div>
-            <div style="font-size:14px;font-weight:bold;color:#f57f17;">${report.weeklyFeeTotal} ${gasSymbol}</div>
-          </div>
-          <div style="background:#e8eaf6;border:1px solid #c5cae9;border-radius:6px;padding:8px 12px;text-align:center;">
-            <div style="font-size:10px;color:#283593;">Top Activity</div>
-            <div style="font-size:14px;font-weight:bold;color:#283593;">${report.topActivity}</div>
-          </div>
-        </div>
+    if (report.appFeeCount || report.protocolFeeCount) {
+      drawSection("Fee Breakdown");
+      drawLabelValue("App Fees", `${report.appFeeCount} rows - ${fmt(report.appFeeTotal)} ${gasSymbol}`);
+      drawLabelValue("Protocol Fees", `${report.protocolFeeCount} rows - ${fmt(report.protocolFeeTotal)} ${gasSymbol}`);
+      drawLabelValue("Gas Fees (7d)", `${report.weeklyFeeRecords} tx - ${report.weeklyFeeTotal} ${gasSymbol}`);
+    }
 
-        <!-- Summary Cards -->
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:16px 0;">
-          ${cardsHtml}
-        </div>
+    drawSection("Transaction Ledger");
+    txRowsHtml.forEach(row => {
+      drawText(`#${row.idx}  ${row.ts}  ${row.dirIcon}  ${row.category}  [${row.status}]`, { size: 10, style: "bold", gap: 2 });
+      drawText(`Title: ${row.title}`, { size: 10, indent: 10, gap: 2 });
+      drawText(`Counterparty: ${row.subtitle}`, { size: 10, indent: 10, gap: 2 });
+      drawText(`Value: ${row.valStr} | Gas / Fee: ${row.gasStr}`, { size: 10, indent: 10, gap: 2 });
+      drawText(`Tx Hash: ${row.shortHash}`, { size: 10, indent: 10, gap: 6, color: [85, 85, 85] });
+    });
 
-        <!-- Fee Breakdown -->
-        ${report.appFeeCount || report.protocolFeeCount ? `
-        <div style="margin:16px 0;">
-          <h3 style="font-size:13px;margin:0 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px;">Fee Breakdown</h3>
-          <table style="width:100%;font-size:12px;border-collapse:collapse;">
-            <tr><td style="padding:4px 8px;">App Fees</td><td style="padding:4px 8px;text-align:right;">${report.appFeeCount} rows · ${fmt(report.appFeeTotal)} ${gasSymbol}</td></tr>
-            <tr><td style="padding:4px 8px;">Protocol Fees</td><td style="padding:4px 8px;text-align:right;">${report.protocolFeeCount} rows · ${fmt(report.protocolFeeTotal)} ${gasSymbol}</td></tr>
-            <tr><td style="padding:4px 8px;">Gas Fees (7d)</td><td style="padding:4px 8px;text-align:right;">${report.weeklyFeeRecords} tx · ${report.weeklyFeeTotal} ${gasSymbol}</td></tr>
-          </table>
-        </div>` : ""}
+    drawSection("Notes");
+    drawText("This is a pre-accounting record prepared with TxReceipts. It is not an official invoice, tax filing, or e-ledger submission.", { size: 10, color: [110, 110, 110], gap: 4 });
+    drawText(`Generated: ${dateStr} | Network: ${network} | Wallet: ${safeDisplay(report.wallet, 24)}`, { size: 10, color: [110, 110, 110], gap: 4 });
+    if (isBase) {
+      drawText("Base network: receipts anchored to L2 with deterministic onchain verification.", { size: 10, color: [110, 110, 110] });
+    }
 
-        <!-- Transaction Table -->
-        <div style="margin:16px 0;">
-          <h3 style="font-size:13px;margin:0 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px;">Transaction Ledger</h3>
-          <table style="width:100%;border-collapse:collapse;font-size:10px;">
-            <thead>
-              <tr style="background:#f5f5f5;">
-                <th style="padding:6px;text-align:center;border-bottom:2px solid #ddd;">#</th>
-                <th style="padding:6px;text-align:left;border-bottom:2px solid #ddd;">Date (UTC)</th>
-                <th style="padding:6px;text-align:center;border-bottom:2px solid #ddd;">Dir</th>
-                <th style="padding:6px;text-align:left;border-bottom:2px solid #ddd;">Category</th>
-                <th style="padding:6px;text-align:left;border-bottom:2px solid #ddd;">Title</th>
-                <th style="padding:6px;text-align:left;border-bottom:2px solid #ddd;">Counterparty</th>
-                <th style="padding:6px;text-align:right;border-bottom:2px solid #ddd;">Value</th>
-                <th style="padding:6px;text-align:right;border-bottom:2px solid #ddd;">Gas / Fee</th>
-                <th style="padding:6px;text-align:center;border-bottom:2px solid #ddd;">Status</th>
-                <th style="padding:6px;text-align:left;border-bottom:2px solid #ddd;">Tx Hash</th>
-              </tr>
-            </thead>
-            <tbody>${txRowsHtml}</tbody>
-          </table>
-        </div>
-
-        <!-- Footer -->
-        <div style="text-align:center;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;margin-top:16px;">
-          <p style="margin:4px 0;"><strong>Disclaimer:</strong> This is a pre‑accounting record prepared with TxReceipts. It is not an official invoice, tax filing, or e‑ledger submission. All values are estimates based on onchain data and user‑applied categorisation. Consult a licensed accountant for formal reporting.</p>
-          <p style="margin:4px 0;">Generated: ${dateStr} · Network: ${network} · Wallet: ${safeDisplay(report.wallet, 24)}</p>
-          ${isBase ? '<p style="margin:4px 0;">Base network: Receipts anchored to L2 with deterministic onchain verification.</p>' : ""}
-        </div>
-      </div>
-    `;
-
-    const opt = { margin: [0.5, 0.5, 0.5, 0.5], filename: `txreceipts-monthly-${network}.pdf`, image: { type: "jpeg", quality: 0.98 }, html2canvas: { scale: 2, useCORS: true, logging: false }, jsPDF: { unit: "in", format: "a4", orientation: "portrait" } };
-    await html2pdf().set(opt).from(tmp).save();
-    document.body.removeChild(pdfSandbox);
+    savePdf(`txreceipts-monthly-${network}.pdf`);
   } catch (error) {
     console.error("PrintMonthlyReport error:", error);
+    setStatus(error instanceof Error ? error.message : "Could not create PDF.", "error");
   }
 }
 
