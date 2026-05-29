@@ -2715,8 +2715,16 @@ async function printMonthlyReport(mode = "summary") {
     );
 
     if (tokenSymbols.length) {
+      const trustedTokens = ["USDC", "USDT", "DAI", "ETH", "WETH", "WBTC", "cbETH", "wstETH", "rETH"];
+      const known = tokenSymbols.filter(s => trustedTokens.includes(s.toUpperCase()));
+      const unknown = tokenSymbols.filter(s => !trustedTokens.includes(s.toUpperCase()));
       drawSection("Tokens");
-      drawText(tokenSymbols.join(", "));
+      if (known.length) {
+        drawText(`Trusted / common assets: ${known.join(", ")}`, { size: 10, indent: 4, gap: 2 });
+      }
+      if (unknown.length) {
+        drawText(`Unverified assets: ${unknown.join(", ")}`, { size: 10, indent: 4, gap: 2, color: [153, 76, 0] });
+      }
     }
 
     drawSection("Pre-Accounting Summary");
@@ -2741,6 +2749,7 @@ async function printMonthlyReport(mode = "summary") {
       drawSection("Notes");
       drawText("This is a pre-accounting record prepared with TxReceipts. It is not an official invoice, tax filing, or e-ledger submission.", { size: 10, color: [110, 110, 110], gap: 4 });
       drawText("Classification such as income, expense, sales, purchase, or business expense is a pre-accounting suggestion unless confirmed by the user or supported by trusted dapp metadata.", { size: 10, color: [110, 110, 110], gap: 4 });
+      drawText("For accountant review, use the CSV/Excel export as the primary working file. This PDF is a summary/report view.", { size: 10, color: [153, 76, 0], indent: 4, gap: 4 });
       drawText(`Generated: ${dateStr} | Network: ${network} | Wallet: ${safeDisplay(report.wallet, 24)}`, { size: 10, color: [110, 110, 110], gap: 4 });
       if (isBase) {
         drawText("Base network: receipts anchored to L2 with deterministic onchain verification.", { size: 10, color: [110, 110, 110] });
