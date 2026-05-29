@@ -3,6 +3,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import {
+  mcpNetworkCapabilities,
+  networkCapabilitiesForReceipt,
+} from "../../../src/networks/capabilities.mjs";
 
 const TX_RECEIPTS_API_URL = (process.env.TX_RECEIPTS_API_URL || "https://api.txreceipts.com.tr").replace(/\/+$/, "");
 const TX_RECEIPTS_API_KEY = process.env.TX_RECEIPTS_API_KEY || "";
@@ -73,7 +77,18 @@ server.tool(
     content: [
       {
         type: "text",
-        text: JSON.stringify({ networks: Object.values(NETWORKS) }, null, 2),
+        text: JSON.stringify({
+          networks: Object.values(NETWORKS).map(network => ({
+            ...network,
+            networkCapabilities: mcpNetworkCapabilities(networkCapabilitiesForReceipt({ network: network.id, chainId: network.chainId })),
+          })),
+          security: {
+            readOnly: true,
+            signsTransactions: false,
+            sendsTransfers: false,
+            requestsApprovals: false,
+          },
+        }, null, 2),
       },
     ],
   }),
@@ -90,6 +105,7 @@ server.tool(
   async ({ wallet, network, limit }) => {
     const normalizedWallet = normalizeAddress(wallet);
     const config = networkConfig(network);
+    const capabilities = networkCapabilitiesForReceipt({ network: config.id, chainId: config.chainId });
     const [transactions, tokenTransfers] = await Promise.all([
       fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/transactions`, { items_count: limit }),
       fetchExplorerJson(config, `/api/v2/addresses/${normalizedWallet}/token-transfers`, { items_count: limit }),
@@ -109,6 +125,7 @@ server.tool(
         incomingTransactions: activity.filter(item => item.direction === "incoming").length,
         outgoingTransactions: activity.filter(item => item.direction === "outgoing").length,
       },
+      networkCapabilities: mcpNetworkCapabilities(capabilities),
       transactions: activity,
       tokenTransfers: tokenRows,
     };
@@ -127,6 +144,7 @@ server.tool(
   async ({ txHash, network }) => {
     const normalizedHash = normalizeTxHash(txHash);
     const config = networkConfig(network);
+    const capabilities = networkCapabilitiesForReceipt({ network: config.id, chainId: config.chainId });
     const [tx, receipt, block, tokenTransfers] = await Promise.all([
       rpc(config, "eth_getTransactionByHash", [normalizedHash]),
       rpc(config, "eth_getTransactionReceipt", [normalizedHash]),
@@ -155,6 +173,7 @@ server.tool(
       value: formatNativeValue(tx.value, config.nativeSymbol),
       gasFee: formatNativeValue(gasFeeWei, config.nativeSymbol),
       method: tx.input && tx.input !== "0x" ? tx.input.slice(0, 10) : "native transfer",
+      networkCapabilities: mcpNetworkCapabilities(capabilities),
       tokenTransfers: transfers,
       explorerUrl: `${config.explorerUrl}/tx/${normalizedHash}`,
     };

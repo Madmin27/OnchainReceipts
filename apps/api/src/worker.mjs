@@ -11,6 +11,11 @@ import {
   validateTopUpIntent,
 } from "./billing.mjs";
 import { detectQuestionRoute, routingNote } from "./questionRouter.mjs";
+import {
+  mcpNetworkCapabilities,
+  networkCapabilitiesForReceipt,
+  networkCapabilitiesSummary,
+} from "../../../src/networks/capabilities.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 const RECEIPT_BASE_URL = "https://txreceipts.com.tr";
@@ -264,11 +269,23 @@ function mcpTools() {
 
 async function callMcpTool(name, args, request, env) {
   if (name === "list_networks") {
-    return mcpText({ networks: Object.values(MCP_NETWORKS) });
+    return mcpText({
+      networks: Object.values(MCP_NETWORKS).map(network => ({
+        ...network,
+        networkCapabilities: mcpNetworkCapabilities(networkCapabilitiesForReceipt({ network: network.id, chainId: network.chainId })),
+      })),
+      security: {
+        readOnly: true,
+        signsTransactions: false,
+        sendsTransfers: false,
+        requestsApprovals: false,
+      },
+    });
   }
   if (name === "get_wallet_activity") {
     const wallet = normalizeOwnerWallet(args.wallet);
     const network = mcpNetwork(String(args.network || "base"));
+    const capabilities = networkCapabilitiesForReceipt({ network: network.id, chainId: network.chainId });
     const limit = Math.max(1, Math.min(50, Number(args.limit || 20)));
     const [transactions, tokenTransfers] = await Promise.all([
       fetchExplorerJson(network, `/api/v2/addresses/${wallet}/transactions`, { items_count: limit }),
@@ -281,6 +298,7 @@ async function callMcpTool(name, args, request, env) {
         transactions: Array.isArray(transactions.items) ? transactions.items.length : 0,
         tokenTransfers: Array.isArray(tokenTransfers.items) ? tokenTransfers.items.length : 0,
       },
+      networkCapabilities: mcpNetworkCapabilities(capabilities),
       transactions: (transactions.items || []).slice(0, limit).map(item => summarizeWalletTx(item, wallet, network)),
       tokenTransfers: (tokenTransfers.items || []).slice(0, limit).map(item => summarizeWalletTransfer(item, wallet)),
     });
@@ -288,6 +306,7 @@ async function callMcpTool(name, args, request, env) {
   if (name === "get_transaction_summary") {
     const txHash = normalizeTxHash(args.txHash);
     const network = mcpNetwork(String(args.network || "base"));
+    const capabilities = networkCapabilitiesForReceipt({ network: network.id, chainId: network.chainId });
     const [tx, receipt, transferPayload] = await Promise.all([
       rpcJson(network.rpcUrl, "eth_getTransactionByHash", [txHash]),
       rpcJson(network.rpcUrl, "eth_getTransactionReceipt", [txHash]),
@@ -308,6 +327,7 @@ async function callMcpTool(name, args, request, env) {
       value: formatNativeAmount(tx.value, network.nativeSymbol),
       gasFee: formatNativeAmount(gasFeeWei, network.nativeSymbol),
       method: tx.input && tx.input !== "0x" ? tx.input.slice(0, 10) : "native transfer",
+      networkCapabilities: mcpNetworkCapabilities(capabilities),
       tokenTransfers: (transferPayload.items || []).slice(0, 20).map(item => ({
         token: item.token?.symbol || item.token?.name || item.token_type || "TOKEN",
         amount: item.total?.value || null,
@@ -433,6 +453,10 @@ async function answerAccountingQuestion(request, env) {
   const question = String(body.question || "").trim().slice(0, 500);
   if (!question) throw httpError(400, "Missing question.");
   const context = compactAiContext(body.context || {});
+  const capabilities = context.networkCapabilities || networkCapabilitiesForReceipt({
+    network: context.network,
+    chainId: context.chainId,
+  });
   const route = detectQuestionRoute(question, context);
   if (isAmbiguousQuestion(question, context)) {
     return misunderstandingAnswer(
@@ -485,8 +509,10 @@ async function answerAccountingQuestion(request, env) {
           role: "system",
           content: [
             "You are TxReceipts Accounting AI.",
+            "Always answer in English.",
             "Answer only from the provided compact accounting JSON.",
             "Treat context.balances as the authoritative live balance snapshot for the connected wallet on the selected network.",
+            "Use context.networkCapabilities to explain network-specific behavior such as gas token, preferred stablecoin, MCP readiness, Base Account compatibility, and x402 readiness.",
             "Only answer questions about the provided network's wallet activity, transactions, fees, token movements, categories, exports, receipts, and reconciliation.",
             "If the question is outside that scope, say it is out of scope.",
             "If the question is ambiguous or you cannot map it to specific wallet transactions, balances, or selected records, say you did not understand the question from the loaded wallet data.",
@@ -505,6 +531,10 @@ async function answerAccountingQuestion(request, env) {
             "Evidence must cite concrete context fields such as tx hash, status, method, sent, received, gas, direction, category, feeValue, gasUsed, gasPrice, or timestamps.",
             "If the data is incomplete, say Confidence: low in the Missing part.",
             "If data is missing, say exactly what is missing and what the user should load.",
+            capabilities?.network === "base" ? "For Base-specific gas answers, state that Base gas is paid in ETH." : "",
+            capabilities?.network === "base" ? "For Base verification answers, state that verification uses Base transaction hash, block timestamp, and onchain token movements." : "",
+            capabilities?.network === "base" ? "For accounting export answers, mention that the output is a pre-accounting record and not an official invoice or e-ledger filing." : "",
+            capabilities?.network === "base" ? "For MCP answers, mention that Base MCP can be used for wallet activity and transaction history, while TxReceipts stays read-only and does not sign, send, swap, or request approvals." : "",
             routingNote(route),
           ].join(" "),
         },
@@ -545,10 +575,12 @@ async function answerAccountingQuestion(request, env) {
 function compactAiContext(context) {
   return {
     network: String(context.network || "").slice(0, 80),
+    chainId: Number(context.chainId || 0) || null,
     scope: String(context.scope || "").slice(0, 160),
     wallet: String(context.wallet || "").slice(0, 80),
     selectedTx: String(context.selectedTx || "").slice(0, 100),
     balances: context.balances || null,
+    networkCapabilities: context.networkCapabilities || null,
     report: context.report || {},
     analysis: context.analysis || {},
     selectedReceipt: context.selectedReceipt || null,
@@ -1272,10 +1304,15 @@ async function nextReceiptRevisionVersion(env, receiptId) {
 }
 
 function mapPublicReceipt(row, env = {}) {
+  const capabilities = networkCapabilitiesForReceipt({
+    network: String(row.network || networkCodeForChainId(row.chain_id)).toLowerCase(),
+    chainId: Number(row.chain_id),
+  });
   return {
     receiptId: row.id,
     network: String(row.network || networkCodeForChainId(row.chain_id)).toLowerCase(),
     chainId: Number(row.chain_id),
+    networkCapabilities: networkCapabilitiesSummary(capabilities),
     txHash: row.tx_hash,
     ownerWallet: row.owner_wallet,
     verificationStatus: row.verification_status || row.status,

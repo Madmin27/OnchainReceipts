@@ -91,30 +91,6 @@ const MOBILE_WALLET_OPTIONS = [
 const QUESTION_LOG_KEY = "txreceipts_question_logs_v1";
 const ACCOUNTING_OVERRIDES_KEY = "txreceipts_accounting_overrides_v1";
 const TARGET_ADDRESS_KEY = "txreceipts_target_address_v1";
-const AI_ALLOWED_INTENTS = new Set(["WALLET_SUMMARY", "MONTHLY_SPENDING", "WEEKLY_FEES", "ACCOUNTANT_SUMMARY", "EXPLAIN_TRANSACTION", "UNCATEGORIZED", "DAPP_USAGE", "TOKEN_TRANSFERS"]);
-const DETERMINISTIC_INTENTS = new Set([
-  "WALLET_SUMMARY",
-  "WEEKLY_FEES",
-  "RECENT_TRANSACTION_FEES",
-  "NATIVE_ASSET_FLOW",
-  "MONTHLY_NATIVE_SENT",
-  "BUSINESS_EXPENSE",
-  "APP_FEES",
-  "PROTOCOL_FEES",
-  "SUBSCRIPTIONS",
-  "LARGEST_EXPENSES",
-  "INCOME_EXPENSE",
-  "MONTHLY_SPENDING",
-  "DAPP_USAGE",
-  "UNCATEGORIZED",
-  "ACCOUNTANT_SUMMARY",
-  "DOWNLOAD_RECEIPT",
-  "GAS_FEE",
-  "TOKEN_TRANSFERS",
-  "TRANSACTION_STATUS",
-  "VERIFY_RECEIPT",
-  "EXPLAIN_TRANSACTION",
-]);
 const networks = window.TX_RECEIPTS_NETWORKS || [];
 
 const knownTokens = {
@@ -1405,7 +1381,7 @@ function itemTimestampMs(item) {
 
 function formatUtcDateTime(value) {
   const timestamp = new Date(value || Date.now());
-  if (!Number.isFinite(timestamp.getTime())) return "Zaman bilgisi yok";
+  if (!Number.isFinite(timestamp.getTime())) return "Time unavailable";
   const year = timestamp.getUTCFullYear();
   const month = String(timestamp.getUTCMonth() + 1).padStart(2, "0");
   const day = String(timestamp.getUTCDate()).padStart(2, "0");
@@ -1416,8 +1392,8 @@ function formatUtcDateTime(value) {
 
 function formatMonthYearTr(value) {
   const timestamp = new Date(value || Date.now());
-  if (!Number.isFinite(timestamp.getTime())) return "Bu ay";
-  return new Intl.DateTimeFormat("tr-TR", { month: "long", year: "numeric" }).format(timestamp);
+  if (!Number.isFinite(timestamp.getTime())) return "This month";
+  return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(timestamp);
 }
 
 function titleCaseLabel(value) {
@@ -1489,15 +1465,15 @@ function tokenFlowTotal(report, direction, symbol) {
 
 function transactionUserAnswer(data, selectedLedgerItem) {
   const lines = [
-    `Bu işlem ${currentNetwork().name} ağında ${formatUtcDateTime(data?.date)} tarihinde gerçekleşti.`,
+    `This transaction occurred on ${currentNetwork().name} at ${formatUtcDateTime(data?.date)}.`,
     "",
-    `İşlem türü: ${transactionTypeLabel(selectedLedgerItem?.accounting.direction)}`,
-    `Kategori: ${transactionCategoryLabel(selectedLedgerItem?.accounting.category)}`,
+    `Transaction type: ${transactionTypeLabel(selectedLedgerItem?.accounting.direction)}`,
+    `Category: ${transactionCategoryLabel(selectedLedgerItem?.accounting.category)}`,
   ];
-  if (data?.gas && data.gas !== "Not available") lines.push(`Ödenen gas: ${data.gas}`);
-  if (selectedLedgerItem?.usdValue) lines.push(`Tahmini USD karşılığı: ${usdText({ usdValue: selectedLedgerItem.usdValue }).replace(/^~/, "")}`);
-  lines.push(`Durum: ${transactionStatusLabel(data?.status)}`);
-  if (data?.id) lines.push(`Makbuz ID: ${data.id}`);
+  if (data?.gas && data.gas !== "Not available") lines.push(`Gas paid: ${data.gas}`);
+  if (selectedLedgerItem?.usdValue) lines.push(`Estimated USD value: ${usdText({ usdValue: selectedLedgerItem.usdValue }).replace(/^~/, "")}`);
+  lines.push(`Status: ${transactionStatusLabel(data?.status)}`);
+  if (data?.id) lines.push(`Receipt ID: ${data.id}`);
   return lines.join("\n");
 }
 
@@ -1508,19 +1484,19 @@ function monthlyUserAnswer(report) {
   const outgoingTotal = symbol ? tokenFlowTotal(report, "expense", symbol) : 0;
   const gasLine = report.weeklyFeeRecords
     ? `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`
-    : "Yüklenmiş fee verisi yok";
+    : "No loaded fee data";
   return [
-    `${formatMonthYearTr(latestTimestamp)} ${report.network} cüzdan özeti:`,
+    `${formatMonthYearTr(latestTimestamp)} ${report.network} wallet summary:`,
     "",
-    `Toplam gelen: ${symbol ? `${incomingTotal.toFixed(2)} ${symbol}` : "Yeterli token verisi yok"}`,
-    `Toplam çıkan: ${symbol ? `${outgoingTotal.toFixed(2)} ${symbol}` : "Yeterli token verisi yok"}`,
-    `Gas ücretleri: ${gasLine}`,
-    `Swap işlemleri: ${report.swapCount}`,
-    `İş gideri olarak işaretlenen kayıt: ${report.items.filter(item => item.accounting.direction === "expense" && item.accounting.category !== "internal_transfer").length}`,
-    `Kategori bekleyen kayıt: ${report.uncategorizedCount}`,
-    `Doğrulanmış makbuz: ${report.verifiedReceiptCount}`,
+    `Total incoming: ${symbol ? `${incomingTotal.toFixed(2)} ${symbol}` : "Insufficient token data"}`,
+    `Total outgoing: ${symbol ? `${outgoingTotal.toFixed(2)} ${symbol}` : "Insufficient token data"}`,
+    `Gas fees: ${gasLine}`,
+    `Swap transactions: ${report.swapCount}`,
+    `Rows marked as business expense: ${report.items.filter(item => item.accounting.direction === "expense" && item.accounting.category !== "internal_transfer").length}`,
+    `Rows pending categorization: ${report.uncategorizedCount}`,
+    `Verified receipts: ${report.verifiedReceiptCount}`,
     "",
-    "Muhasebeciye göndermek için CSV ve PDF özet hazırla",
+    "Prepare the CSV and PDF summary for the accountant.",
   ].join("\n");
 }
 
@@ -1687,15 +1663,36 @@ function parseQuestionMonthWindow(question) {
   return 1;
 }
 
+function parseQuestionTimeWindow(question) {
+  const text = String(question || "").toLowerCase();
+  if (/(bugün|today)/.test(text)) return { unit: "days", value: 1 };
+  if (/(bu hafta|this week|weekly|haftalık)/.test(text)) return { unit: "days", value: 7 };
+  if (/(bu ay|this month|monthly)/.test(text)) return { unit: "months", value: 1 };
+
+  const weekMatch = text.match(/(?:son|last)\s*(\d{1,2})\s*hafta/)
+    || text.match(/(\d{1,2})\s*hafta/)
+    || text.match(/(?:last)\s*(\d{1,2})\s*weeks?/)
+    || text.match(/(\d{1,2})\s*weeks?/);
+  if (weekMatch) return { unit: "days", value: Math.max(1, Math.min(52, Number(weekMatch[1]))) * 7 };
+
+  const dayMatch = text.match(/(?:son|last)\s*(\d{1,2})\s*g[uü]n/)
+    || text.match(/(\d{1,2})\s*g[uü]n/)
+    || text.match(/(?:last)\s*(\d{1,2})\s*days?/)
+    || text.match(/(\d{1,2})\s*days?/);
+  if (dayMatch) return { unit: "days", value: Math.max(1, Math.min(90, Number(dayMatch[1]))) };
+
+  return { unit: "months", value: parseQuestionMonthWindow(text) };
+}
+
 function parseNativeAssetFlow(question) {
   const text = String(question || "").toLowerCase();
   const mentionsAsset = /(eth|base|native)/.test(text);
-  const asksIncoming = /(aldim|aldım|aldim\b|al\b|receive|received|incoming|gelen)/.test(text);
-  const asksOutgoing = /(gonderdim|gönderdim|gonder|gönder|sent|send|outgoing|giden)/.test(text);
+  const asksIncoming = /(aldim|aldım|aldim\b|al\b|receive|received|incoming|gelen|geldi|gelmis|gelmiş)/.test(text);
+  const asksOutgoing = /(gonderdim|gönderdim|gonder|gönder|sent|send|outgoing|giden|gitti|cikti|çıktı)/.test(text);
   if (!mentionsAsset || (!asksIncoming && !asksOutgoing)) return null;
   return {
     direction: asksIncoming && !asksOutgoing ? "incoming" : "outgoing",
-    months: parseQuestionMonthWindow(text),
+    window: parseQuestionTimeWindow(text),
   };
 }
 
@@ -1808,15 +1805,17 @@ function templateAnswer(intent) {
   }
   if (intent === "NATIVE_ASSET_FLOW") {
     const flow = parseNativeAssetFlow(questionText);
-    const months = flow?.months || 1;
+    const window = flow?.window || { unit: "months", value: 1 };
     const direction = flow?.direction || "outgoing";
     const asset = currentNetwork().nativeCurrency?.symbol || "ETH";
     const since = new Date();
-    if (months === 1) {
+    if (window.unit === "days") {
+      since.setTime(Date.now() - window.value * 24 * 60 * 60 * 1000);
+    } else if (window.value === 1) {
       since.setDate(1);
       since.setHours(0, 0, 0, 0);
     } else {
-      since.setMonth(since.getMonth() - months);
+      since.setMonth(since.getMonth() - window.value);
     }
     const matchingRows = report.items
       .filter(item => item.kind === "tx" && item.direction === direction)
@@ -1824,14 +1823,16 @@ function templateAnswer(intent) {
       .filter(item => String(item.value || "").includes(` ${asset}`));
     const totalAmount = matchingRows.reduce((sum, item) => sum + parseAmount(item.value), 0);
     const directionLabel = direction === "incoming" ? "received" : "sent";
-    const windowLabel = months === 1 ? "this month" : `last ${months} months`;
+    const windowLabel = window.unit === "days"
+      ? (window.value === 7 ? "last 7 days" : `last ${window.value} days`)
+      : (window.value === 1 ? "this month" : `last ${window.value} months`);
     return deterministicBlock(`${windowLabel} ${asset} ${directionLabel}`, [
       ["Scope", currentNetworkScopeText()],
       ["Wallet", report.wallet],
       ["Transactions reviewed", matchingRows.length],
-      ["Total native asset", `${totalAmount.toFixed(8)} ${asset}`],
-      ["Accounting note", matchingRows.length ? `Calculated from ${direction} native-value transactions loaded for ${windowLabel}.` : `No ${direction} ${asset} value transfers are loaded for ${windowLabel}.`],
-    ], "loaded native-value transaction rows, transaction direction, transaction timestamps, network native asset values");
+      [`Total ${asset}`, `${totalAmount.toFixed(8)} ${asset}`],
+      ["Accounting note", matchingRows.length ? `Calculated from loaded ${direction} native transfers for ${windowLabel}.` : `No loaded ${asset} transfers were found for ${windowLabel}.`],
+    ], "loaded native transfer rows, direction, blockchain timestamp, native asset value");
   }
   if (intent === "MONTHLY_NATIVE_SENT") {
     const monthStart = new Date();
@@ -1852,11 +1853,11 @@ function templateAnswer(intent) {
     ], "loaded outgoing native-value transaction rows for the current calendar month, transaction timestamps, network native asset values");
   }
   if (intent === "WEEKLY_FEES") {
-    return deterministicBlock("last 7 days network fees", [
+    return deterministicBlock("last 7 days gas fees", [
       ["Scope", currentNetworkScopeText()],
       ["Wallet", report.wallet],
       ["Loaded fee rows", report.weeklyFeeRecords],
-      ["Estimated network fees paid", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
+      ["Estimated gas paid", `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`],
       ["Accounting note", report.weeklyFeeRecords ? "Calculated from loaded transaction fee fields." : "No fee fields are available in the loaded rows yet."],
     ], "loaded transaction fee fields from the last 7 days on the current network");
   }
@@ -2254,11 +2255,14 @@ async function answerQuestion(question, options = {}) {
     };
   }
 
-  const answer = templateAnswer(intent, normalizedQuestion);
-  if (answer && (preferTemplate || DETERMINISTIC_INTENTS.has(intent))) {
-    logQuestion(normalizedQuestion, intent, preferTemplate ? "template" : "template_auto");
-    return { answer, source: "template" };
+  if (preferTemplate) {
+    const answer = templateAnswer(intent, normalizedQuestion);
+    if (answer) {
+      logQuestion(normalizedQuestion, intent, "template");
+      return { answer, source: "template" };
+    }
   }
+
   try {
     const context = await compactAccountingContext();
     const response = await apiFetch(`/v1/ai/accounting-answer`, {
@@ -2272,9 +2276,9 @@ async function answerQuestion(question, options = {}) {
     return { answer: payload.answer || "AI could not prepare an answer.", source: "ai" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI fallback is unavailable.";
-    logQuestion(normalizedQuestion, intent, "ai_candidate");
+    logQuestion(normalizedQuestion, intent, "ai_failed");
     return {
-      answer: `${currentNetworkScopeText()}\nAI fallback could not be reached. ${message}\nYour question was logged as a ready-question candidate.`,
+      answer: `${currentNetworkScopeText()}\nAI could not answer right now. ${message}`,
       source: "ai",
     };
   }
