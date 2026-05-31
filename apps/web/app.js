@@ -601,7 +601,7 @@ function normalizedHistoryItems() {
 function allHistoryItems() {
   return normalizedHistoryItems()
     .filter(item => {
-      if (activeHistoryTab === "all") return item.kind === "tx";
+      if (activeHistoryTab === "all") return true;
       if (activeHistoryTab === "tokens") return item.kind === "token";
       if (activeHistoryTab === "nfts") return item.kind === "nft";
       return item.direction === activeHistoryTab;
@@ -3793,7 +3793,7 @@ async function generateReceipt(txHash, { download = false, quiet = false } = {})
     ]);
 
     if (!tx || !txReceipt) {
-      setStatus("Transaction not found on Base yet.", "error");
+      setStatus("Transaction not found on " + network.name + " yet.", "error");
       return;
     }
 

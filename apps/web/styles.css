@@ -18,6 +18,7 @@
   --glass-bg: rgba(11, 11, 18, 0.78);
   --glow-blue: 0 0 24px rgba(108, 114, 255, 0.12);
   --glow-gold: 0 0 24px rgba(255, 199, 90, 0.12);
+  --text-on-dark: #f8fafc;
 }
 
 * {
@@ -547,7 +548,7 @@ dd {
   background: #1c1917;
   border: 1px solid var(--line);
   border-radius: 8px;
-  color: var(--paper);
+  color: var(--text-on-dark);
   display: grid;
   gap: 14px;
   grid-template-columns: minmax(0, 1fr);
