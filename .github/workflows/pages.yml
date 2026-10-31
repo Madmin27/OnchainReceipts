@@ -24,6 +24,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Static checks and tests
+        run: |
+          npm run check
+          npm run test:billing
+          for f in apps/web/app.js apps/web/api.js apps/web/wallets.js apps/web/networks.js; do node --check "$f"; done
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
@@ -32,6 +43,8 @@ jobs:
           mkdir -p dist
           cp -R apps/web/. dist/
           cp -R docs dist/docs
+          # Cache-busting: replace manual ?v= stamps with the commit hash
+          find dist -maxdepth 1 -name '*.html' -exec sed -i -E "s/\?v=[0-9A-Za-z-]+/?v=${GITHUB_SHA::8}/g" {} +
 
       - name: Upload static demo
         uses: actions/upload-pages-artifact@v3

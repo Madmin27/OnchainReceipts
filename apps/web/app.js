@@ -342,22 +342,29 @@ function requireApiAuthInputs() {
 
 async function rpc(method, params) {
   const network = currentNetwork();
-  const response = await fetch(networkRpcUrls(network)[0], {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
-  });
+  let lastError = null;
 
-  if (!response.ok) {
-    throw new Error(`${network.name} RPC returned HTTP ${response.status}`);
+  for (const rpcUrl of networkRpcUrls(network)) {
+    try {
+      const response = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
+      });
+      if (!response.ok) throw new Error(`${network.name} RPC returned HTTP ${response.status}`);
+      const payload = await response.json();
+      if (payload.error) {
+        // A JSON-RPC error is an answer from the node, not an outage: do not retry elsewhere.
+        throw Object.assign(new Error(payload.error.message || `${network.name} RPC error`), { rpcError: true });
+      }
+      return payload.result;
+    } catch (error) {
+      if (error && error.rpcError) throw error;
+      lastError = error;
+    }
   }
 
-  const payload = await response.json();
-  if (payload.error) {
-    throw new Error(payload.error.message || `${network.name} RPC error`);
-  }
-
-  return payload.result;
+  throw lastError || new Error(`${network.name} RPC unavailable`);
 }
 
 async function solanaRpc(method, params) {

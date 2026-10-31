@@ -58,7 +58,7 @@ The output is an accounting-ready record. A short printable receipt can also be 
 
 V1 is intentionally narrow:
 
-- Base mainnet first, with experimental multi-network lookup in the demo
+- Base mainnet first; Ethereum, Optimism, Arbitrum, Polygon and Solana lookups are experimental in the demo
 - wallet-connected pre-accounting inbox
 - wallet ledger with income, expense, swap, transfer, gas fee, app fee, protocol fee, subscription, and uncategorized rows
 - short printable transaction note from transaction hash

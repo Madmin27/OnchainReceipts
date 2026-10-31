@@ -9,7 +9,7 @@ Free at launch:
 - 100 receipts per wallet per month
 - Base mainnet only
 - 90-day history window
-- PNG download
+- PDF and CSV export
 - limited monthly summary
 
 Abuse controls:

@@ -21,16 +21,17 @@ const validTransfer = {
   confirmations: 3,
 };
 
-assert.equal(CREDIT_OVERDRAFT_LIMIT, -10);
-assert.equal(canSpendCredit(0, 1), true);
-assert.equal(canSpendCredit(-9, 1), true);
-assert.equal(canSpendCredit(-10, 1), false);
-assert.equal(creditsForUsdc("5"), 5000);
+assert.equal(CREDIT_OVERDRAFT_LIMIT, 0);
+assert.equal(canSpendCredit(1, 1), true);
+assert.equal(canSpendCredit(0, 1), false);
+assert.equal(canSpendCredit(-1, 1), false);
+assert.equal(canSpendCredit(0, 1, -10), true);
+assert.equal(creditsForUsdc("5"), 10000);
 
 assert.deepEqual(validateTopUpIntent({ amountUsdc: "5", billingWallet }), {
   accepted: true,
   reasons: [],
-  creditAmount: 5000,
+  creditAmount: 10000,
 });
 
 assert(validateTopUpIntent({ amountUsdc: "4.999999", billingWallet }).reasons.includes("below_minimum_topup"));
@@ -43,7 +44,7 @@ const accepted = validateObservedTransfer(validTransfer, {
   creditedTxHashes: [],
 });
 assert.equal(accepted.accepted, true);
-assert.equal(accepted.creditAmount, 10000);
+assert.equal(accepted.creditAmount, 20000);
 
 assert(validateObservedTransfer({ ...validTransfer, tokenAddress: "0x4200000000000000000000000000000000000006" }, {
   treasuryAddress,
