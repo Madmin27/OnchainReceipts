@@ -111,6 +111,126 @@ let historyState = {
   transferNext: null,
 };
 
+// ------------------------------------------------------------------
+// Historical USD pricing (DefiLlama coins API, no key, CORS enabled).
+// Accounting needs the price at transaction time, not today's price.
+// Prices are cached per coin and hour bucket; failures never block the ledger.
+// ------------------------------------------------------------------
+const PRICE_API_URL = "https://coins.llama.fi/batchHistorical";
+const PRICE_CACHE_KEY = "txreceipts_price_cache_v1";
+const PRICE_BUCKET_SECONDS = 3600;
+const PRICE_BATCH_LIMIT = 40;
+const priceState = { cache: new Map(), pending: new Set(), loaded: false };
+
+function loadPriceCache() {
+  if (priceState.loaded) return;
+  priceState.loaded = true;
+  try {
+    const stored = JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) || "{}");
+    for (const [key, value] of Object.entries(stored)) {
+      if (Number.isFinite(Number(value))) priceState.cache.set(key, Number(value));
+    }
+  } catch {
+    /* cache is a convenience only */
+  }
+}
+
+function savePriceCache() {
+  try {
+    const entries = [...priceState.cache.entries()].slice(-2000);
+    localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(Object.fromEntries(entries)));
+  } catch {
+    /* ignore quota or privacy mode */
+  }
+}
+
+function priceBucket(timestamp) {
+  const seconds = Math.floor(new Date(timestamp).getTime() / 1000);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return Math.floor(seconds / PRICE_BUCKET_SECONDS) * PRICE_BUCKET_SECONDS + PRICE_BUCKET_SECONDS / 2;
+}
+
+function nativeCoinKey(network = currentNetwork()) {
+  if (network.family === "solana") return "coingecko:solana";
+  if (network.id === "polygon") return "coingecko:polygon-ecosystem-token";
+  return "coingecko:ethereum";
+}
+
+function tokenCoinKey(address, network = currentNetwork()) {
+  const normalized = String(address || "").toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/.test(normalized) || network.family !== "evm") return null;
+  return `${network.id}:${normalized}`;
+}
+
+function historicalUsdPrice(coinKey, timestamp) {
+  const bucket = priceBucket(timestamp);
+  if (!coinKey || !bucket) return null;
+  loadPriceCache();
+  const price = priceState.cache.get(`${coinKey}@${bucket}`);
+  return Number.isFinite(price) && price > 0 ? price : null;
+}
+
+function weiToUsd(wei, price) {
+  if (!price || !wei) return 0;
+  return Number(formatUnits(BigInt(wei), 18n, 10)) * price;
+}
+
+/** Collect every (coin, hour) pair the loaded history needs and fetch the missing ones. */
+async function enrichHistoricalPrices() {
+  const network = currentNetwork();
+  if (network.family !== "evm") return;
+  loadPriceCache();
+  const wanted = new Map();
+  const add = (coinKey, timestamp) => {
+    const bucket = priceBucket(timestamp);
+    if (!coinKey || !bucket) return;
+    const key = `${coinKey}@${bucket}`;
+    if (priceState.cache.has(key) || priceState.pending.has(key)) return;
+    if (!wanted.has(coinKey)) wanted.set(coinKey, new Set());
+    wanted.get(coinKey).add(bucket);
+  };
+  for (const item of historyState.transactions) add(nativeCoinKey(network), item.timestamp);
+  for (const item of historyState.transfers) {
+    if (item.token_type === "ERC-721" || item.token_type === "ERC-1155") continue;
+    add(tokenCoinKey(item.token?.address_hash || item.token?.address, network), item.timestamp);
+  }
+  const pairs = [];
+  for (const [coinKey, buckets] of wanted) for (const bucket of buckets) pairs.push([coinKey, bucket]);
+  if (!pairs.length) return;
+
+  for (let index = 0; index < pairs.length; index += PRICE_BATCH_LIMIT) {
+    const chunk = pairs.slice(index, index + PRICE_BATCH_LIMIT);
+    const request = {};
+    for (const [coinKey, bucket] of chunk) {
+      (request[coinKey] ||= []).push(bucket);
+      priceState.pending.add(`${coinKey}@${bucket}`);
+    }
+    try {
+      const url = `${PRICE_API_URL}?coins=${encodeURIComponent(JSON.stringify(request))}&searchWidth=4h`;
+      const response = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`price api ${response.status}`);
+      const payload = await response.json();
+      for (const [coinKey, bucket] of chunk) {
+        const points = payload?.coins?.[coinKey]?.prices || [];
+        let best = null;
+        for (const point of points) {
+          const distance = Math.abs(Number(point.timestamp) - bucket);
+          if (Number(point.price) > 0 && distance <= 4 * PRICE_BUCKET_SECONDS && (!best || distance < best.distance)) {
+            best = { price: Number(point.price), distance };
+          }
+        }
+        // 0 marks "asked, no trusted price" so the same pair is not requested on every render.
+        priceState.cache.set(`${coinKey}@${bucket}`, best ? best.price : 0);
+      }
+    } catch {
+      /* leave rows unpriced; UI shows "USD unavailable" */
+    } finally {
+      for (const [coinKey, bucket] of chunk) priceState.pending.delete(`${coinKey}@${bucket}`);
+    }
+  }
+  savePriceCache();
+}
+
 function safeDisplay(value, maxLength = 120) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
@@ -543,9 +663,14 @@ function normalizeTx(item) {
   const isIncoming = sameAddress(to, wallet) && !sameAddress(from, wallet);
   const isOutgoing = sameAddress(from, wallet);
   const method = item.method || item.decoded_input?.method_call?.split("(")[0] || "transaction";
+  const nativePrice = historicalUsdPrice(nativeCoinKey(), item.timestamp);
+  const feeWei = blockscoutFeeWei(item);
   return {
     kind: "tx",
     hash: safeDisplay(item.hash, 66),
+    usdValue: item.value && item.value !== "0" ? weiToUsd(item.value, nativePrice) : 0,
+    usdFee: weiToUsd(feeWei, nativePrice),
+    usdSource: nativePrice ? "historical" : "unavailable",
     title: `${isIncoming ? "Incoming" : isOutgoing ? "Outgoing" : "Contract"} ${safeDisplay(method, 40)}`,
     subtitle: `${labelAddress(item.from)} -> ${labelAddress(item.to)}`,
     timestamp: item.timestamp,
@@ -582,10 +707,18 @@ function normalizeTransfer(item) {
     timestamp: item.timestamp,
     value: amount,
     direction: isIncoming ? "incoming" : isOutgoing ? "outgoing" : "other",
-    usdValue: Number(item.token?.exchange_rate || 0) > 0 && !isNft
-      ? Number(formatDecimalUnits(item.total?.value || "0", decimals, 8) || 0) * Number(item.token?.exchange_rate || 0)
-      : 0,
+    ...tokenUsdValuation(item, decimals, isNft),
   };
+}
+
+function tokenUsdValuation(item, decimals, isNft) {
+  if (isNft) return { usdValue: 0, usdSource: "unavailable" };
+  const amount = Number(formatDecimalUnits(item.total?.value || "0", decimals, 8) || 0);
+  const historical = historicalUsdPrice(tokenCoinKey(item.token?.address_hash || item.token?.address), item.timestamp);
+  if (historical) return { usdValue: amount * historical, usdSource: "historical" };
+  const current = Number(item.token?.exchange_rate || 0);
+  if (current > 0) return { usdValue: amount * current, usdSource: "current" };
+  return { usdValue: 0, usdSource: "unavailable" };
 }
 
 function normalizedHistoryItems() {
@@ -705,6 +838,7 @@ function formatGasFeeEthText(item, maxDigits = 9, direction) {
 }
 
 function formatGasFeeUsdText(item) {
+  if (item.direction === "incoming") return "Gas paid by sender";
   return Number(item.usdFee || 0) > 0 ? usdText({ usdValue: Number(item.usdFee || 0) }).replace(/^~/, "") : "USD unavailable";
 }
 
@@ -873,6 +1007,9 @@ async function loadHistory({ more = false } = {}) {
     if (more) {
       visibleHistoryLimit += PAGE_SIZE;
     }
+    renderHistory();
+    setHistoryStatus(`Pricing ${currentNetwork().name} activity at transaction time...`);
+    await enrichHistoricalPrices().catch(() => {});
     renderHistory();
   } catch (error) {
     loadMoreHistoryButton.hidden = true;
@@ -1464,10 +1601,11 @@ function titleCaseLabel(value) {
 }
 
 function transactionTypeLabel(direction) {
-  if (direction === "income") return "Gelir";
-  if (direction === "expense") return "Gider";
+  if (direction === "income") return "Income";
+  if (direction === "expense") return "Expense";
   if (direction === "transfer") return "Transfer";
-  return "İnceleme Gerekli";
+  if (direction === "swap") return "Swap";
+  return "Needs Review";
 }
 
 function transactionCategoryLabel(category) {
@@ -1485,17 +1623,17 @@ function transactionCategoryLabel(category) {
     internal_transfer: "Internal Transfer",
     uncategorized: "Needs Review",
   };
-  return labels[String(category || "")] || titleCaseLabel(category || "İşlem");
+  return labels[String(category || "")] || titleCaseLabel(category || "Transaction");
 }
 
 function transactionStatusLabel(status) {
   const normalized = String(status || "").toLowerCase();
   if (["ready"].includes(normalized)) return "Accounting Ready";
   if (["review"].includes(normalized)) return "Needs Review";
-  if (["verified", "success", "successful", "ok"].includes(normalized)) return "Başarılı";
-  if (["failed", "error"].includes(normalized)) return "Başarısız";
-  if (["pending", "queued"].includes(normalized)) return "Beklemede";
-  return titleCaseLabel(normalized || "bilinmiyor");
+  if (["verified", "success", "successful", "ok"].includes(normalized)) return "Successful";
+  if (["failed", "error"].includes(normalized)) return "Failed";
+  if (["pending", "queued"].includes(normalized)) return "Pending";
+  return titleCaseLabel(normalized || "unknown");
 }
 
 function parseAssetValueParts(value) {
@@ -2634,6 +2772,7 @@ async function buildAccountingRows(report) {
       missingValuation: !!item.accounting.missingValuation,
       hasUnknownCounterparty: !!item.accounting.hasUnknownCounterparty,
       usdValue: item.usdValue || "",
+      usdSource: item.usdSource || "unavailable",
       rawItem: item,
     };
   }));
@@ -2665,7 +2804,10 @@ function classifyRow(row) {
 // ============================================================
 function buildValuation(row) {
   if (row.missingValuation) return "MISSING";
-  if (row.usdValue && Number(row.usdValue) > 0) return `USD ${Number(row.usdValue).toFixed(2)}`;
+  if (row.usdValue && Number(row.usdValue) > 0) {
+    const basis = row.rawItem?.usdSource === "current" ? " (current price)" : "";
+    return `USD ${Number(row.usdValue).toFixed(2)}${basis}`;
+  }
   return "Not available";
 }
 
@@ -2887,7 +3029,8 @@ function buildReadmeTxt(report, rows) {
     "  IMPORTANT NOTES",
     "",
     "  - All transaction hashes and addresses are full-length, never shortened.",
-    "  - USD values are only included when onchain pricing data is available.",
+    "  - USD values use the market price at the transaction time (DefiLlama historical prices); rows marked (current price) fall back to today's explorer price.",
+    "  - USD values are left empty when no trusted price exists for the asset.",
     "  - No AI-predicted or estimated values are used in this package.",
     "  - Classification (income/expense/swap/fee) is based on onchain",
     "    heuristics and may need professional accounting adjustment.",
@@ -3299,7 +3442,7 @@ async function printMonthlyReport(mode = "summary") {
     drawLabelValue("Valuation missing", `${report.missingValuationCount} rows`);
 
     // ===== STRENGTHENED USD NOTE (item 5) =====
-    drawText("Estimated USD total: USD totals are intentionally not calculated when trusted pricing is missing.", { size: 10, color: [153, 76, 0], indent: 4, gap: 2 });
+    drawText("USD figures are priced at transaction time from DefiLlama historical data; totals are not calculated when any row lacks a trusted price.", { size: 10, color: [153, 76, 0], indent: 4, gap: 2 });
 
     drawLabelValue("Top Activity", report.topActivity);
 

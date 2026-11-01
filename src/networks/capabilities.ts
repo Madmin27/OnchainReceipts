@@ -27,10 +27,10 @@ export const NETWORK_CAPABILITIES: Record<string, NetworkCapabilities> = {
     supportsPaymaster: true,
     supportsBaseAccount: true,
     accountingNotes: [
-      "Base aginda gas ETH ile odenir.",
-      "Document Date blockchain transaction timestamp olmali.",
-      "USDC Base icin tercih edilen stablecoin olarak ele alinabilir.",
-      "TxReceipts read-only by default kalir; sign, send, swap, approval istemez.",
+      "Gas on Base is paid in ETH.",
+      "Document date must be the blockchain transaction timestamp.",
+      "USDC is the preferred stablecoin on Base.",
+      "TxReceipts stays read-only: it never asks to sign, send, swap or approve.",
     ],
   },
   ethereum: {
@@ -45,8 +45,8 @@ export const NETWORK_CAPABILITIES: Record<string, NetworkCapabilities> = {
     supportsPaymaster: false,
     supportsBaseAccount: false,
     accountingNotes: [
-      "Document Date blockchain transaction timestamp olmali.",
-      "TxReceipts read-only by default kalir.",
+      "Document date must be the blockchain transaction timestamp.",
+      "TxReceipts stays read-only.",
     ],
   },
   optimism: {
@@ -61,8 +61,8 @@ export const NETWORK_CAPABILITIES: Record<string, NetworkCapabilities> = {
     supportsPaymaster: false,
     supportsBaseAccount: false,
     accountingNotes: [
-      "Document Date blockchain transaction timestamp olmali.",
-      "TxReceipts read-only by default kalir.",
+      "Document date must be the blockchain transaction timestamp.",
+      "TxReceipts stays read-only.",
     ],
   },
   arbitrum: {
@@ -77,8 +77,8 @@ export const NETWORK_CAPABILITIES: Record<string, NetworkCapabilities> = {
     supportsPaymaster: false,
     supportsBaseAccount: false,
     accountingNotes: [
-      "Document Date blockchain transaction timestamp olmali.",
-      "TxReceipts read-only by default kalir.",
+      "Document date must be the blockchain transaction timestamp.",
+      "TxReceipts stays read-only.",
     ],
   },
   polygon: {
@@ -94,8 +94,8 @@ export const NETWORK_CAPABILITIES: Record<string, NetworkCapabilities> = {
     supportsPaymaster: false,
     supportsBaseAccount: false,
     accountingNotes: [
-      "Document Date blockchain transaction timestamp olmali.",
-      "TxReceipts read-only by default kalir.",
+      "Document date must be the blockchain transaction timestamp.",
+      "TxReceipts stays read-only.",
     ],
   },
 };
