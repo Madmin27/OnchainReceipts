@@ -75,6 +75,14 @@ const txActionStatus = document.querySelector("#txActionStatus");
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+// Canonical USDC contracts; anything else calling itself USDC is a lookalike.
+const USDC_ADDRESSES = {
+  base: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+  ethereum: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+  optimism: "0x0b2c639c533813f4aa9d7837caf62653d097ff85",
+  arbitrum: "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+  polygon: "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+};
 const ETH_DECIMALS = 18n;
 const PAGE_SIZE = 20;
 const SOLANA_HISTORY_PAGE_ATTEMPTS = 5;
@@ -231,8 +239,16 @@ async function enrichHistoricalPrices() {
   savePriceCache();
 }
 
+const INVISIBLE_CHARS = new RegExp("[\\u0000-\\u001f\\u007f-\\u009f\\u00ad\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060-\\u206f\\ufeff]", "g");
+// Cyrillic/Greek letters that render like Latin ones; used only when deciding whether a token symbol imitates ETH/USDC.
+const CONFUSABLES = { "А":"A","В":"B","Е":"E","К":"K","М":"M","Н":"H","О":"O","Р":"P","С":"C","Т":"T","Х":"X","а":"a","е":"e","о":"o","р":"p","с":"c","х":"x","у":"y","і":"i","Α":"A","Β":"B","Ε":"E","Ζ":"Z","Η":"H","Ι":"I","Κ":"K","Μ":"M","Ν":"N","Ο":"O","Ρ":"P","Τ":"T","Υ":"Y","Χ":"X","ο":"o","ν":"v","ϲ":"c","Ｅ":"E","Ｔ":"T","Ｈ":"H"};
+
+function foldConfusables(text) {
+  return String(text || "").replace(INVISIBLE_CHARS, "").replace(/./gu, ch => CONFUSABLES[ch] || ch).replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
 function safeDisplay(value, maxLength = 120) {
-  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  const text = String(value ?? "").replace(INVISIBLE_CHARS, "").replace(/\s+/g, " ").trim();
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
 }
 
@@ -645,10 +661,22 @@ function buildUrl(path, params = null) {
   return url.toString();
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error(`History API returned HTTP ${response.status}`);
-  return response.json();
+async function fetchJson(url, { retries = 2 } = {}) {
+  // Public explorers answer 5xx or 429 now and then; one or two short retries avoid an empty ledger.
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(20_000) });
+      if (response.ok) return response.json();
+      lastError = new Error(`History API returned HTTP ${response.status}`);
+      if (response.status < 500 && response.status !== 429) throw lastError;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (/HTTP 4\d\d/.test(lastError.message) && !/HTTP 429/.test(lastError.message)) throw lastError;
+    }
+    if (attempt < retries) await new Promise(resolve => setTimeout(resolve, 1500 * (attempt + 1)));
+  }
+  throw lastError || new Error("History API unavailable");
 }
 
 function pageParamsToQuery(params) {
@@ -692,7 +720,13 @@ function normalizeTransfer(item) {
   const tokenType = item.token_type || item.token?.type || "token";
   const isNft = tokenType === "ERC-721" || tokenType === "ERC-1155";
   const decimals = item.total?.decimals ?? item.token?.decimals ?? (isNft ? 0 : 18);
-  const symbol = safeDisplay(item.token?.symbol || item.token?.name || tokenType, 24);
+  const rawSymbol = safeDisplay(item.token?.symbol || item.token?.name || tokenType, 24);
+  const nativeSymbol = currentNetwork().nativeCurrency?.symbol || "ETH";
+  const canonicalUsdc = String(item.token?.address_hash || item.token?.address || "").toLowerCase() === USDC_ADDRESSES[currentNetwork().id];
+  const folded = foldConfusables(item.token?.symbol || item.token?.name || "");
+  const looksLikeNative = folded === nativeSymbol.toUpperCase() || folded === "MATIC" || folded === "WETH" && false;
+  const looksLikeUsdc = folded === "USDC" && !canonicalUsdc;
+  const symbol = !isNft && (looksLikeNative || looksLikeUsdc) ? `${rawSymbol} (unverified token)` : rawSymbol;
   const amount = isNft
     ? `#${item.total?.token_id || "token"}`
     : `${formatDecimalUnits(item.total?.value || "0", decimals)} ${symbol}`;
@@ -991,9 +1025,10 @@ async function loadHistory({ more = false } = {}) {
     setHistoryStatus(more ? `Loading older ${currentNetwork().name} activity...` : `Loading latest ${currentNetwork().name} activity...`);
     const txParams = more ? pageParamsToQuery(historyState.txNext) : null;
     const transferParams = more ? pageParamsToQuery(historyState.transferNext) : null;
+    const exhausted = { items: [], next_page_params: null };
     const [txPayload, transferPayload] = await Promise.all([
-      fetchJson(buildUrl(`/api/v2/addresses/${wallet}/transactions`, txParams)),
-      fetchJson(buildUrl(`/api/v2/addresses/${wallet}/token-transfers`, transferParams)),
+      more && !historyState.txNext ? exhausted : fetchJson(buildUrl(`/api/v2/addresses/${wallet}/transactions`, txParams)),
+      more && !historyState.transferNext ? exhausted : fetchJson(buildUrl(`/api/v2/addresses/${wallet}/token-transfers`, transferParams)),
     ]);
 
     historyState.transactions = more
@@ -1560,6 +1595,7 @@ function buildMonthlyReport() {
     largestExpenseRows: [...outgoing].sort((left, right) => parseAmount(right.value) - parseAmount(left.value)).slice(0, 5),
     topActivity: top ? `${top[0]} (${top[1]} records)` : "Not available",
     items: ledgerItems,
+    usd: buildUsdSpend(ledgerItems, null),
   };
 }
 
@@ -1681,6 +1717,159 @@ function transactionUserAnswer(data, selectedLedgerItem) {
     lines.push("Base: this receipt is anchored to Base L2 with deterministic onchain verification.");
   }
   return lines.join("\n");
+}
+
+const MONTH_NAMES = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+function formatUsd(value) {
+  const amount = Number(value) || 0;
+  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Resolve "this month", "last month", "October" or "October 2026" into a [start, end) window. */
+function monthWindowFromQuestion(question) {
+  const text = String(question || "").toLowerCase();
+  const now = new Date();
+  let year = now.getFullYear();
+  let month = now.getMonth();
+  if (/last month|previous month|gecen ay|geçen ay/.test(text)) {
+    month -= 1;
+    if (month < 0) { month = 11; year -= 1; }
+  } else {
+    const named = MONTH_NAMES.findIndex(name => new RegExp(`\\b${name}\\b`).test(text));
+    if (named >= 0) {
+      month = named;
+      const yearMatch = text.match(/\b(20\d{2})\b/);
+      if (yearMatch) year = Number(yearMatch[1]);
+      else if (named > now.getMonth()) year -= 1;
+    }
+  }
+  const start = new Date(year, month, 1, 0, 0, 0, 0);
+  const end = new Date(year, month + 1, 1, 0, 0, 0, 0);
+  const label = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(start);
+  return { start: start.getTime(), end: Math.min(end.getTime(), Date.now() + 60_000), label };
+}
+
+function oldestTimestampMs(list) {
+  const stamps = list
+    .map(item => item.timestamp ? new Date(item.timestamp).getTime() : (item.blockTime ? Number(item.blockTime) * 1000 : 0))
+    .filter(value => Number.isFinite(value) && value > 0);
+  return stamps.length ? Math.min(...stamps) : 0;
+}
+
+function oldestLoadedTimestampMs() {
+  return oldestTimestampMs([...historyState.transactions, ...historyState.transfers]);
+}
+
+/** Each list (transactions, token transfers) must reach `sinceMs` on its own, or have no further page. */
+function historyCovers(sinceMs) {
+  const txCovered = oldestTimestampMs(historyState.transactions) <= sinceMs || !historyState.txNext;
+  const transferCovered = oldestTimestampMs(historyState.transfers) <= sinceMs || !historyState.transferNext;
+  return txCovered && transferCovered;
+}
+
+function moreHistoryAvailable() {
+  return Boolean(historyState.txNext || historyState.transferNext);
+}
+
+/** Load older pages until both lists reach `sinceMs` (bounded so a busy wallet cannot hang the UI). */
+async function ensureHistoryCovers(sinceMs, maxPages = 20) {
+  let pages = 0;
+  while (pages < maxPages && moreHistoryAvailable() && !historyCovers(sinceMs)) {
+    pages += 1;
+    setQaContext(`Loading older activity to cover the full period (${pages}/${maxPages})...`);
+    await loadHistory({ more: true });
+  }
+  return { pagesLoaded: pages, complete: historyCovers(sinceMs) };
+}
+
+/**
+ * USD view of ledger rows. Spend = outgoing transfers and token payments (expense rows) plus gas
+ * paid by the wallet. Swaps are asset exchanges, reported separately and never counted as spend.
+ * Rows that moved value but have no trusted price are listed, not silently dropped into zero.
+ */
+function buildUsdSpend(ledgerItems, window = null) {
+  const inWindow = item => {
+    if (!window) return true;
+    const stamp = itemTimestampMs(item);
+    return stamp >= window.start && stamp < window.end;
+  };
+  const rows = ledgerItems.filter(inWindow);
+  const movedValue = item => String(item.value || "").trim().toLowerCase() !== "ok" && parseAmount(item.value) > 0;
+  const totals = {
+    spentTransfersUsd: 0, spentTransferRows: 0,
+    spentTokensUsd: 0, spentTokenRows: 0,
+    gasUsd: 0, gasRows: 0, gasNativeWei: 0n,
+    receivedUsd: 0, receivedRows: 0,
+    swapRows: 0, swapMovedUsd: 0,
+    unpriced: [],
+    unpricedGasRows: 0,
+    rows: rows.length,
+  };
+  for (const item of rows) {
+    const direction = item.accounting?.direction;
+    const usd = Number(item.usdValue) || 0;
+    const failed = item.accounting?.verificationStatus === "failed";
+    if (item.kind === "tx" && item.direction === "outgoing") {
+      const feeWei = blockscoutFeeWei(item.rawItem || item) || 0n;
+      if (feeWei > 0n) {
+        totals.gasRows += 1;
+        totals.gasNativeWei += feeWei;
+        if (Number(item.usdFee) > 0) totals.gasUsd += Number(item.usdFee);
+        else totals.unpricedGasRows += 1;
+      }
+    }
+    if (failed) continue;
+    if (direction === "expense" && movedValue(item)) {
+      if (usd > 0) {
+        if (item.kind === "token") { totals.spentTokensUsd += usd; totals.spentTokenRows += 1; }
+        else { totals.spentTransfersUsd += usd; totals.spentTransferRows += 1; }
+      } else {
+        totals.unpriced.push(item.value);
+      }
+    } else if (direction === "income" && movedValue(item)) {
+      if (usd > 0) { totals.receivedUsd += usd; totals.receivedRows += 1; }
+      else totals.unpriced.push(item.value);
+    } else if (direction === "swap") {
+      totals.swapRows += 1;
+      totals.swapMovedUsd += usd;
+    }
+  }
+  totals.spentUsd = totals.spentTransfersUsd + totals.spentTokensUsd + totals.gasUsd;
+  totals.netUsd = totals.receivedUsd - totals.spentUsd;
+  totals.gasNative = `${formatUnits(totals.gasNativeWei, ETH_DECIMALS, 6)} ${currentNetwork().nativeCurrency?.symbol || "ETH"}`;
+  return totals;
+}
+
+function monthlySpendAnswer(report, window, coverage) {
+  if (!report.totalRecords) {
+    return `No ${report.network} activity is loaded for this wallet yet, so there is nothing to total for ${window.label}. Load the wallet history first; if the explorer returned an error it is shown under the activity list.`;
+  }
+  const usd = buildUsdSpend(report.items, window);
+  const oldest = Math.max(oldestTimestampMs(historyState.transactions), oldestTimestampMs(historyState.transfers));
+  const coverageLine = coverage.complete
+    ? `Coverage: full period loaded (${usd.rows} rows between ${formatDate(window.start)} and ${formatDate(Math.min(window.end, Date.now()))}).`
+    : `Coverage: PARTIAL. Loaded history starts ${formatDate(oldest)}; older rows in this period are not included. Use "Load more" and ask again.`;
+  const unpricedLine = usd.unpriced.length
+    ? `Unpriced rows (excluded from totals): ${usd.unpriced.length} - ${usd.unpriced.slice(0, 4).join("; ")}${usd.unpriced.length > 4 ? "; ..." : ""}`
+    : "Unpriced rows: none";
+  const gasNote = usd.unpricedGasRows ? ` (${usd.unpricedGasRows} gas rows unpriced)` : "";
+  return [
+    `${window.label} spend on ${report.network} for wallet ${report.wallet === "Not selected" ? report.wallet : shortHash(report.wallet)}:`,
+    "",
+    `Total spent: ${formatUsd(usd.spentUsd)}`,
+    `  Outgoing ${currentNetwork().nativeCurrency?.symbol || "ETH"} transfers: ${formatUsd(usd.spentTransfersUsd)} (${usd.spentTransferRows} rows)`,
+    `  Token payments: ${formatUsd(usd.spentTokensUsd)} (${usd.spentTokenRows} rows)`,
+    `  Gas fees: ${formatUsd(usd.gasUsd)} = ${usd.gasNative} (${usd.gasRows} transactions)${gasNote}`,
+    `Total received: ${formatUsd(usd.receivedUsd)} (${usd.receivedRows} rows)`,
+    `Net: ${usd.netUsd < 0 ? "-" : ""}${formatUsd(Math.abs(usd.netUsd))}`,
+    `Swaps (asset exchanges, not counted as spend): ${usd.swapRows} rows, ${formatUsd(usd.swapMovedUsd)} moved`,
+    unpricedLine,
+    coverageLine,
+    "",
+    "Basis: USD at the market price of each transaction's hour (DefiLlama historical prices). Failed transactions count only their gas.",
+    "Disclaimer: pre-accounting record prepared with TxReceipts; not an invoice, tax filing or e-ledger submission.",
+  ].join("\n");
 }
 
 function monthlyUserAnswer(report) {
@@ -1812,9 +2001,9 @@ function updateAccountingPanel() {
       ? "Exports: CSV for Excel, print view for PDF"
       : "Exports: CSV and PDF ready after loading";
   }
-  if (monthlyIncome) monthlyIncome.textContent = String(report.totalIncomeRows);
-  if (monthlyExpenses) monthlyExpenses.textContent = String(report.totalExpenseRows);
-  if (monthlyGasFees) monthlyGasFees.textContent = `${report.weeklyFeeTotal} ${report.weeklyFeeAsset}`;
+  if (monthlyIncome) monthlyIncome.textContent = report.totalRecords ? `${formatUsd(report.usd.receivedUsd)} · ${report.totalIncomeRows} rows` : "0";
+  if (monthlyExpenses) monthlyExpenses.textContent = report.totalRecords ? `${formatUsd(report.usd.spentUsd)} · ${report.totalExpenseRows} rows` : "0";
+  if (monthlyGasFees) monthlyGasFees.textContent = report.totalRecords ? `${formatUsd(report.usd.gasUsd)} · ${report.usd.gasNative}` : "0 ETH";
   if (monthlyAppFees) monthlyAppFees.textContent = report.appProtocolFeeStatus;
   if (monthlySwaps) monthlySwaps.textContent = String(report.swapCount);
   if (monthlySubscriptions) monthlySubscriptions.textContent = String(report.subscriptionCount);
@@ -2487,6 +2676,15 @@ async function answerQuestion(question, options = {}) {
   const normalizedQuestion = String(question || "").trim();
   const intent = detectIntent(normalizedQuestion);
   const preferTemplate = Boolean(options.preferTemplate || READY_QUESTION_SET.has(normalizedQuestion));
+
+  // "How much did I spend this month / in October?" is always answered deterministically from priced rows.
+  if (intent === "MONTHLY_SPENDING" && currentTargetAddress() && currentNetwork().family === "evm") {
+    const window = monthWindowFromQuestion(normalizedQuestion);
+    const coverage = await ensureHistoryCovers(window.start);
+    const report = buildMonthlyReport();
+    logQuestion(normalizedQuestion, intent, "template");
+    return { answer: monthlySpendAnswer(report, window, coverage), source: "template" };
+  }
 
   if (!isInScopeAccountingQuestion(normalizedQuestion)) {
     logQuestion(normalizedQuestion, intent, "blocked");

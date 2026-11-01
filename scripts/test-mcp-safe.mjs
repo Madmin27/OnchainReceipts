@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import {
   USDC_ADDRESSES,
+  foldSymbol,
+  symbolImitates,
   assertApiUrl,
   csvCell,
   csvLine,
@@ -31,6 +33,15 @@ assert.equal(untrustedText(undefined), null);
 assert.equal(untrustedSymbol("USDC<script>alert(1)</script>"), "USDCscriptalert1script");
 assert.equal(untrustedSymbol("\u0000"), "TOKEN");
 assert.equal(untrustedSymbol("x".repeat(80)).length <= 32, true);
+
+// Homoglyph and invisible-character lookalikes fold to their target
+assert.equal(foldSymbol("Е⁯ΤН⁯"), "ETH");          // Cyrillic E, Greek T, Cyrillic H, U+206F
+assert.equal(foldSymbol("ET\u200b\u200bH"), "ETH");
+assert.equal(foldSymbol("ＵＳＤＣ"), "USDC");
+assert.equal(symbolImitates("Е⁯ΤН⁯", "ETH"), true);
+assert.equal(symbolImitates("USD-C", "USDC"), true);
+assert.equal(symbolImitates("WETH", "ETH"), false);
+assert.equal(symbolImitates("", "ETH"), false);
 
 // Deep sanitisation keeps structure, strips strings, bounds depth
 const deep = sanitizeDeep({ memo: "hi\u0007there", nested: { list: ["a​", 1, true, null] }, n: 2 });

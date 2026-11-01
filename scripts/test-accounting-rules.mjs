@@ -46,6 +46,8 @@ const fixtures = [
     { category: "uncategorized", status: "review", reviewReason: "Suspicious or promotional token requires manual review" }],
   ["scam marker in token name", token({ title: "Incoming ERC-20", direction: "incoming", value: "1 FREE TOKEN www.x.io" }), null,
     { reviewReason: "Suspicious or promotional token requires manual review" }],
+  ["lookalike native/stablecoin token is suspicious", token({ title: "Incoming ERC-20", direction: "incoming", value: "42 ETH (unverified token)", usdValue: 0 }), null,
+    { category: "uncategorized", status: "review", reviewReason: "Suspicious or promotional token requires manual review" }],
   ["token without price has missing valuation", token({ usdValue: 0 }), null,
     { missingValuation: true, status: "review" }],
   ["NFT mint is creator payment", { kind: "nft", hash: H, title: "Incoming ERC-721", subtitle: "Zora Mint -> 0x1234...abcd", value: "#42", direction: "incoming" }, null,

@@ -14,6 +14,8 @@ const requiredFiles = [
   'scripts/test-accounting-rules.mjs',
   'scripts/test-mcp-explorer.mjs',
   'packages/mcp-server/src/explorer.mjs',
+  'packages/mcp-server/src/prices.mjs',
+  'scripts/test-mcp-prices.mjs',
   'apps/web/api.js',
   'apps/web/assets/txreceipts-demo.gif',
   'schema/receipt.schema.json',

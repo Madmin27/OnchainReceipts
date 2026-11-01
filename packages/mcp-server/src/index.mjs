@@ -17,10 +17,12 @@ import {
   tokenAddressOf,
   safeBigInt,
   sanitizeDeep,
+  symbolImitates,
   untrustedSymbol,
   untrustedText,
 } from "./safe.mjs";
 import { explorerSources, fetchEtherscanItems } from "./explorer.mjs";
+import { cachedPrice, loadPrices, pricePairsFor, roundUsd, usdSpendSummary } from "./prices.mjs";
 
 const TX_RECEIPTS_API_URL = assertApiUrl(process.env.TX_RECEIPTS_API_URL || "https://api.txreceipts.com.tr");
 const TX_RECEIPTS_API_KEY = process.env.TX_RECEIPTS_API_KEY || "";
@@ -480,42 +482,75 @@ server.tool(
 
 server.tool(
   "get_monthly_summary",
-  "Aggregate wallet activity into a monthly pre-accounting summary with total incoming/outgoing value, gas costs, top transactions, and category grouping. Uses useAddress semantics.",
+  "Answer 'how much did I spend / receive this month?' in USD for one wallet and month. Loads the whole calendar month from the explorer, prices every row at its transaction time (DefiLlama historical), and returns spent (native transfers + token payments + gas), received, net, unpriced rows and a ready-to-read answer sentence, plus native totals, top transactions and method grouping. year/month default to the current month (UTC).",
   {
     wallet: z.string().describe("0x wallet address"),
     network: z.enum(["base", "ethereum", "optimism", "arbitrum", "polygon"]).default("base"),
-    year: z.number().int().describe("4-digit year"),
-    month: z.number().int().min(1).max(12).describe("1-12 month number"),
+    year: z.number().int().min(2015).max(2100).optional().describe("4-digit year; defaults to the current year (UTC)"),
+    month: z.number().int().min(1).max(12).optional().describe("1-12 month number; defaults to the current month (UTC)"),
   },
   READ_ONLY_OPEN_WORLD,
-  async ({ wallet, network, year, month }) => {
+  async ({ wallet, network, year: yearInput, month: monthInput }) => {
     const normalizedWallet = normalizeAddress(wallet);
     const config = networkConfig(network);
     const capabilities = networkCapabilitiesForReceipt({ network: config.id, chainId: config.chainId });
-    const limit = 200;
+    const now = new Date();
+    const year = yearInput ?? now.getUTCFullYear();
+    const month = monthInput ?? (now.getUTCMonth() + 1);
+    const periodStart = Date.UTC(year, month - 1, 1);
+    const periodEnd = Date.UTC(year, month, 1);
+    const limit = 1000;
+    // Keep paging only until the page reaches rows older than the period start.
+    const coverageOptions = {
+      maxPages: 20,
+      stopWhen: pageItems => pageItems.some(item => item.timestamp && new Date(item.timestamp).getTime() < periodStart),
+    };
     const [transactions, tokenTransfers] = await Promise.all([
-      fetchExplorerItems(config, `/api/v2/addresses/${normalizedWallet}/transactions`, limit),
-      fetchExplorerItems(config, `/api/v2/addresses/${normalizedWallet}/token-transfers`, limit),
+      fetchExplorerItems(config, `/api/v2/addresses/${normalizedWallet}/transactions`, limit, coverageOptions),
+      fetchExplorerItems(config, `/api/v2/addresses/${normalizedWallet}/token-transfers`, limit, coverageOptions),
     ]);
     const txItems = transactions.items;
     const transferItems = tokenTransfers.items;
     const truncated = transactions.truncated || tokenTransfers.truncated;
     const dataSource = [...new Set([transactions.source, tokenTransfers.source].filter(Boolean))].join(" + ");
 
-    const monthTx = txItems.filter(item => {
+    const inPeriod = item => {
       if (!item.timestamp) return false;
-      const d = new Date(item.timestamp);
-      return d.getFullYear() === year && (d.getMonth() + 1) === month;
-    });
-    const monthTransfer = transferItems.filter(item => {
-      if (!item.timestamp) return false;
-      const d = new Date(item.timestamp);
-      return d.getFullYear() === year && (d.getMonth() + 1) === month;
-    });
+      const stamp = new Date(item.timestamp).getTime();
+      return stamp >= periodStart && stamp < periodEnd;
+    };
+    const monthTx = txItems.filter(inPeriod);
+    const monthTransfer = transferItems.filter(inPeriod);
+    const oldestOf = list => Math.min(...list.map(item => new Date(item.timestamp || 0).getTime()).filter(v => v > 0), Number.POSITIVE_INFINITY);
+    const oldestTx = oldestOf(txItems);
+    const oldestTransfer = oldestOf(transferItems);
+    const txCovered = oldestTx <= periodStart || !transactions.truncated;
+    const transferCovered = oldestTransfer <= periodStart || !tokenTransfers.truncated;
+    const oldestLoaded = Math.max(...[oldestTx, oldestTransfer].filter(Number.isFinite));
+    const coverage = {
+      complete: txCovered && transferCovered,
+      transactionsCovered: txCovered,
+      tokenTransfersCovered: transferCovered,
+      oldestLoaded: Number.isFinite(oldestLoaded) ? new Date(oldestLoaded).toISOString() : null,
+      note: null,
+    };
+    if (!coverage.complete) coverage.note = `Loaded history starts ${coverage.oldestLoaded}; older rows in this period are not included.`;
+
+    await loadPrices(pricePairsFor(config.id, monthTx, monthTransfer));
+    const usd = usdSpendSummary({ networkId: config.id, wallet: normalizedWallet, txItems: monthTx, transferItems: monthTransfer, nativeSymbol: config.nativeSymbol }, cachedPrice);
+    const monthLabel = new Date(periodStart).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+    const answer = [
+      `In ${monthLabel} this wallet spent ${fmtUsd(usd.spentUsd)} on ${config.name}:`,
+      `${fmtUsd(usd.spentNativeUsd)} in outgoing ${config.nativeSymbol} transfers (${usd.spentNativeRows} rows), ${fmtUsd(usd.spentTokensUsd)} in outgoing token transfers (${usd.spentTokenRows} rows) and ${fmtUsd(usd.gasUsd)} in gas (${usd.gasRows} transactions, ${usd.gasNative}).`,
+      `It received ${fmtUsd(usd.receivedUsd)} (${usd.receivedNativeRows + usd.receivedTokenRows} rows). Net: ${usd.netUsd < 0 ? "-" : ""}${fmtUsd(Math.abs(usd.netUsd))}.`,
+      usd.unpricedRows.length ? `${usd.unpricedRows.length} row(s) moved value without a trusted price and are excluded from these totals.` : "Every value-moving row was priced.",
+      coverage.complete ? "The full month was loaded." : coverage.note,
+      "Outgoing token transfers include swaps and bridges; review the token rows before treating the total as expenses.",
+    ].join(" ");
 
     const monthStr = `${year}-${String(month).padStart(2, "0")}`;
-    const rows = monthTx.slice(0, 100).map(item => summarizeTransactionRow(item, normalizedWallet, config));
-    const tokens = monthTransfer.slice(0, 100).map(item => summarizeTokenTransferRow(item, normalizedWallet, config));
+    const rows = monthTx.slice(0, 200).map(item => summarizeTransactionRow(item, normalizedWallet, config));
+    const tokens = monthTransfer.slice(0, 200).map(item => summarizeTokenTransferRow(item, normalizedWallet, config));
     const incoming = rows.filter(r => r.direction === "incoming");
     const outgoing = rows.filter(r => r.direction === "outgoing");
     const totalIncomingNative = incoming.reduce((sum, r) => sum + parseFloat((r.value || "0").split(" ")[0] || "0"), 0);
@@ -535,6 +570,24 @@ server.tool(
           wallet: normalizedWallet,
           network: config.name,
           month: monthStr,
+          answer,
+          usd: {
+            spent: roundUsd(usd.spentUsd),
+            spentNativeTransfers: roundUsd(usd.spentNativeUsd),
+            spentTokenTransfers: roundUsd(usd.spentTokensUsd),
+            gas: roundUsd(usd.gasUsd),
+            gasNative: usd.gasNative,
+            received: roundUsd(usd.receivedUsd),
+            net: roundUsd(usd.netUsd),
+            rows: {
+              spentNative: usd.spentNativeRows, spentTokens: usd.spentTokenRows, gas: usd.gasRows,
+              receivedNative: usd.receivedNativeRows, receivedTokens: usd.receivedTokenRows,
+              unpriced: usd.unpricedRows.length, unpricedGas: usd.unpricedGasRows,
+            },
+            unpricedRows: usd.unpricedRows.slice(0, 25),
+            basis: usd.basis,
+          },
+          coverage,
           truncated,
           dataSource,
           truncationNote: truncated ? "Explorer history was cut at the page limit; totals for this month may be incomplete." : null,
@@ -625,7 +678,7 @@ server.tool(
         reasons.push({ flag: "large_token_transfer", detail: `${(Number(amount) / 1e6).toFixed(2)} USDC` });
       }
       // Only USDC has a canonical address table here, so only USDC lookalikes can be judged.
-      if (!canonicalUsdc && /usdc/i.test(symbol)) {
+      if (!canonicalUsdc && symbolImitates(symbol, "USDC")) {
         reasons.push({ flag: "suspicious_token_symbol", detail: `token at ${(tokenAddressOf(item) || "unknown")} uses the symbol "${symbol}" but is not the canonical USDC contract on this network` });
       }
       if (reasons.length === 0) continue;
@@ -831,6 +884,10 @@ function normalizeTxHash(value) {
   return txHash.toLowerCase();
 }
 
+function fmtUsd(value) {
+  return `$${(Number(value) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function toolResult(payload) {
   const body = payload && typeof payload === "object" && !Array.isArray(payload)
     ? { ...payload, notice: UNTRUSTED_NOTICE }
@@ -840,7 +897,9 @@ function toolResult(payload) {
 
 function tokenLabel(item, config) {
   const symbol = untrustedSymbol(item.token?.symbol || item.token?.name || item.token_type);
-  if (symbol === "USDC" && !isCanonicalUsdc(config?.id, tokenAddressOf(item))) return "USDC (unverified contract)";
+  if (symbolImitates(symbol, "USDC") && !isCanonicalUsdc(config?.id, tokenAddressOf(item))) return `${symbol} (unverified contract)`;
+  // An ERC-20 can never be the chain's native coin; a token called ETH/POL (even with lookalike letters) is an imitation.
+  if (config?.nativeSymbol && (symbolImitates(symbol, config.nativeSymbol) || symbolImitates(symbol, "MATIC"))) return `${symbol} (unverified token)`;
   return symbol;
 }
 
@@ -859,19 +918,20 @@ async function fetchExplorerJson(config, path, params = {}) {
 }
 
 /** Follow Blockscout v2 cursor pagination until `limit` items or the page cap is reached. */
-async function fetchBlockscoutItems(config, path, limit) {
+async function fetchBlockscoutItems(config, path, limit, { maxPages = EXPLORER_MAX_PAGES, stopWhen = null } = {}) {
   const items = [];
   let nextPageParams = null;
   let pages = 0;
-  while (items.length < limit && pages < EXPLORER_MAX_PAGES) {
+  while (items.length < limit && pages < maxPages) {
     const payload = await fetchExplorerJson(config, path, nextPageParams || {});
     pages += 1;
     const pageItems = Array.isArray(payload.items) ? payload.items : [];
     items.push(...pageItems);
     nextPageParams = payload.next_page_params && typeof payload.next_page_params === "object" ? payload.next_page_params : null;
     if (!nextPageParams || pageItems.length === 0) break;
+    if (stopWhen && stopWhen(pageItems)) break;
   }
-  const truncated = items.length > limit || (Boolean(nextPageParams) && pages >= EXPLORER_MAX_PAGES);
+  const truncated = items.length > limit || (Boolean(nextPageParams) && pages >= maxPages && !(stopWhen && stopWhen(items)));
   return { items: items.slice(0, limit), truncated, pagesFetched: pages, pageSize: EXPLORER_PAGE_SIZE, source: `${config.name} Blockscout` };
 }
 
@@ -881,12 +941,12 @@ async function fetchBlockscoutItems(config, path, limit) {
  * and their rows are normalised to the Blockscout shape. The winning source is reported so the
  * agent can tell the user where the data came from.
  */
-async function fetchExplorerItems(config, path, limit) {
+async function fetchExplorerItems(config, path, limit, options = {}) {
   const address = (path.match(/\/addresses\/(0x[0-9a-f]{40})\//i) || [])[1];
   const errors = [];
   for (const source of explorerSources(config)) {
     try {
-      if (source.kind === "blockscout") return await fetchBlockscoutItems(config, path, limit);
+      if (source.kind === "blockscout") return await fetchBlockscoutItems(config, path, limit, options);
       if (!address) continue;
       return await fetchEtherscanItems(source, address, path, limit);
     } catch (error) {

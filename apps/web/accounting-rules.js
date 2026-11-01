@@ -34,7 +34,7 @@
 
   function hasSuspiciousTokenSignals(item) {
     if (item.kind !== "token") return false;
-    return /scam|telegram|t\.me|claim|airdrop|bonus|reward|free token|visit|http|www\./.test(itemText(item));
+    return /scam|telegram|t\.me|claim|airdrop|bonus|reward|free token|visit|http|www\.|\(unverified token\)/.test(itemText(item));
   }
 
   function hasMissingValuation(item) {

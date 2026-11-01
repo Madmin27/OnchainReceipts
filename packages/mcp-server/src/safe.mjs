@@ -25,12 +25,14 @@ export const USDC_ADDRESSES = {
   polygon: "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
 };
 
-const CONTROL_CHARS = new RegExp("[\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]", "g");
+const CONTROL_CHARS = new RegExp("[\\u0000-\\u001f\\u007f-\\u009f]", "g");
+// Zero-width and bidi characters are removed outright: "ET\u200bH" must become "ETH" so lookalikes are caught.
+const INVISIBLE_CHARS = new RegExp("[\\u00ad\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060-\\u206f\\ufeff]", "g");
 
 /** Strip control/bidi characters, collapse whitespace and cap the length of third-party text. */
 export function untrustedText(value, maxLength = TEXT_LIMITS.label) {
   if (value === null || value === undefined) return null;
-  const text = String(value).replace(CONTROL_CHARS, " ").replace(/\s+/g, " ").trim();
+  const text = String(value).replace(INVISIBLE_CHARS, "").replace(CONTROL_CHARS, " ").replace(/\s+/g, " ").trim();
   if (!text) return null;
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
 }
@@ -76,6 +78,20 @@ export function csvLine(cells) {
 export function tokenAddressOf(item) {
   const raw = item?.token?.address_hash || item?.token?.address || "";
   return String(raw).toLowerCase() || null;
+}
+
+// Cyrillic/Greek/fullwidth letters that render like Latin ones. Used only for lookalike detection.
+const CONFUSABLES = { "А":"A","В":"B","Е":"E","К":"K","М":"M","Н":"H","О":"O","Р":"P","С":"C","Т":"T","Х":"X","а":"a","е":"e","о":"o","р":"p","с":"c","х":"x","у":"y","і":"i","Α":"A","Β":"B","Ε":"E","Ζ":"Z","Η":"H","Ι":"I","Κ":"K","Μ":"M","Ν":"N","Ο":"O","Ρ":"P","Τ":"T","Υ":"Y","Χ":"X","ο":"o","ν":"v","ϲ":"c","Ｅ":"E","Ｔ":"T","Ｈ":"H","Ｕ":"U","Ｓ":"S","Ｄ":"D","Ｃ":"C" };
+
+/** Canonical form for comparing symbols: invisible chars removed, confusables folded, alphanumerics only, upper case. */
+export function foldSymbol(text) {
+  return String(text || "").replace(INVISIBLE_CHARS, "").replace(/./gu, ch => CONFUSABLES[ch] || ch).replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
+/** True when a token symbol imitates `target` (ETH, POL, USDC...) after folding lookalike characters. */
+export function symbolImitates(symbol, target) {
+  const folded = foldSymbol(symbol);
+  return Boolean(folded) && folded === foldSymbol(target);
 }
 
 export function isCanonicalUsdc(networkId, tokenAddress) {
