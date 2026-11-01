@@ -628,88 +628,38 @@ function normalizeSolanaTx(item) {
   };
 }
 
+// Classification rules live in accounting-rules.js (shared with scripts/test-accounting-rules.mjs).
+const accountingRules = window.TxReceiptsAccounting;
+
 function accountingCategoryForItem(item) {
-  const override = getAccountingOverride(item.hash);
-  if (override?.category) return override.category;
-  const text = `${item.title} ${item.subtitle} ${item.value}`.toLowerCase();
-  if (/failed|error/.test(text)) return "uncategorized";
-  if (/app fee|service fee|platform fee/.test(text)) return "app_fee";
-  if (/protocol fee|bridge fee|router fee|lp fee/.test(text)) return "protocol_fee";
-  if (/swap|exchange|router/.test(text)) return "swap";
-  if (/subscription|renew/.test(text)) return "subscription";
-  if (/creator|support|mint/.test(text)) return "creator_payment";
-  if (/refund/.test(text)) return "refund";
-  if (/fee|gas/.test(text)) return "gas_fee";
-  if (/approve|approval|allowance/.test(text)) return "authorization";
-  if (/deploy|contract creation|create contract/.test(text)) return "contract_deployment";
-  if (item.kind === "token" && hasSuspiciousTokenSignals(item)) return "uncategorized";
-  if (/claim|register|contract call|multicall/.test(text)) return "contract_call";
-  if (item.direction === "incoming") return "uncategorized";
-  if (item.direction === "outgoing") return "uncategorized";
-  if (item.direction === "other") return "uncategorized";
-  return "internal_transfer";
+  return accountingRules.categoryForItem(item, getAccountingOverride(item.hash));
 }
 
 function accountingDirectionForItem(item) {
-  const override = getAccountingOverride(item.hash);
-  if (override?.direction) return override.direction;
-  const category = accountingCategoryForItem(item);
-  if (category === "swap") return "swap";
-  if (category === "internal_transfer") return "transfer";
-  if (category === "gas_fee" || item.direction === "outgoing") return "expense";
-  if (item.direction === "incoming") return "income";
-  return "unknown";
+  return accountingRules.directionForItem(item, getAccountingOverride(item.hash));
 }
 
 function hasUnknownCounterparty(item) {
-  return /unknown/i.test(String(item.subtitle || ""));
+  return accountingRules.hasUnknownCounterparty(item);
 }
 
 function hasSuspiciousTokenSignals(item) {
-  const text = `${item.title} ${item.subtitle} ${item.value}`.toLowerCase();
-  if (item.kind !== "token") return false;
-  return /scam|telegram|t\.me|claim|airdrop|bonus|reward|free token|visit|http|www\./.test(text);
+  return accountingRules.hasSuspiciousTokenSignals(item);
 }
 
 function hasMissingValuation(item) {
-  return item.kind === "token" && !(Number(item.usdValue) > 0);
+  return accountingRules.hasMissingValuation(item);
 }
 
 function accountingReviewReasonForItem(item, category) {
-  const override = getAccountingOverride(item.hash);
-  if (override?.category || override?.direction) return "";
-  const text = `${item.title} ${item.subtitle} ${item.value}`.toLowerCase();
-  if (/failed|error/.test(text)) return "Onchain execution failed";
-  if (hasSuspiciousTokenSignals(item)) return "Suspicious or promotional token requires manual review";
-  if (/approve|approval|allowance/.test(text)) return "Approval only; classify manually";
-  if (/deploy|contract creation|create contract/.test(text)) return "Contract deployment requires classification";
-  if (/claim|register|contract call|multicall/.test(text)) return "Contract call requires classification";
-  if (hasUnknownCounterparty(item)) return "Unknown counterparty";
-  if (item.kind === "token" && item.direction === "incoming") return "Incoming token requires classification";
-  if (item.kind === "token" && item.direction === "outgoing") return "Outgoing token requires classification";
-  if (String(item.value || "").trim().toLowerCase() === "ok") return "No asset movement detected";
-  if (hasMissingValuation(item)) return "Token valuation unavailable";
-  if (category === "uncategorized" || item.direction === "other") return "Transaction requires manual classification";
-  return "";
+  return accountingRules.reviewReasonForItem(item, category, getAccountingOverride(item.hash));
 }
 
 function accountingMetaForItem(item) {
-  const override = getAccountingOverride(item.hash);
-  const category = accountingCategoryForItem(item);
-  const direction = accountingDirectionForItem(item);
-  const verificationStatus = /failed|error/i.test(`${item.title} ${item.value}`) ? "failed" : "verified";
-  const reviewReason = accountingReviewReasonForItem(item, category);
-  const status = verificationStatus === "failed" ? "failed" : (reviewReason ? "review" : "ready");
-  return {
-    direction,
-    category,
-    status,
-    verificationStatus,
-    reviewReason,
-    missingValuation: hasMissingValuation(item),
-    hasUnknownCounterparty: hasUnknownCounterparty(item),
-    memo: override?.memo || (reviewReason || `${category.replaceAll("_", " ")} ready from loaded ${currentNetwork().name} row`),
-  };
+  return accountingRules.metaForItem(item, {
+    override: getAccountingOverride(item.hash),
+    networkName: currentNetwork().name,
+  });
 }
 
 function selectedLedgerItem() {

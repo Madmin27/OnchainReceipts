@@ -8,8 +8,9 @@
     "check": "node scripts/check-static.js",
     "test:billing": "node scripts/test-usdc-credits.js && node scripts/test-api-billing.mjs",
     "mcp:start": "node packages/mcp-server/src/index.mjs",
-    "test:mcp": "node scripts/test-mcp-safe.mjs && node scripts/test-mcp-server.mjs",
-    "test": "npm run check && npm run test:billing && npm run test:mcp"
+    "test:mcp": "node scripts/test-mcp-safe.mjs && node scripts/test-mcp-explorer.mjs && node scripts/test-mcp-server.mjs",
+    "test": "npm run check && npm run test:web && npm run test:billing && npm run test:mcp",
+    "test:web": "node scripts/test-accounting-rules.mjs"
   },
   "keywords": [
     "base",

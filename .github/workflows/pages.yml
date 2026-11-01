@@ -35,9 +35,10 @@ jobs:
       - name: Static checks and tests
         run: |
           npm run check
+          npm run test:web
           npm run test:billing
           npm run test:mcp
-          for f in apps/web/app.js apps/web/api.js apps/web/wallets.js apps/web/networks.js; do node --check "$f"; done
+          for f in apps/web/app.js apps/web/accounting-rules.js apps/web/api.js apps/web/wallets.js apps/web/networks.js; do node --check "$f"; done
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

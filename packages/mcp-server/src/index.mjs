@@ -20,6 +20,7 @@ import {
   untrustedSymbol,
   untrustedText,
 } from "./safe.mjs";
+import { explorerSources, fetchEtherscanItems } from "./explorer.mjs";
 
 const TX_RECEIPTS_API_URL = assertApiUrl(process.env.TX_RECEIPTS_API_URL || "https://api.txreceipts.com.tr");
 const TX_RECEIPTS_API_KEY = process.env.TX_RECEIPTS_API_KEY || "";
@@ -136,6 +137,7 @@ server.tool(
     const txItems = transactions.items;
     const transferItems = tokenTransfers.items;
     const truncated = transactions.truncated || tokenTransfers.truncated;
+    const dataSource = [...new Set([transactions.source, tokenTransfers.source].filter(Boolean))].join(" + ");
     const activity = txItems.slice(0, limit).map(item => summarizeTransactionRow(item, normalizedWallet, config));
     const tokenRows = transferItems.slice(0, limit).map(item => summarizeTokenTransferRow(item, normalizedWallet, config));
 
@@ -149,6 +151,7 @@ server.tool(
         outgoingTransactions: activity.filter(item => item.direction === "outgoing").length,
       },
       truncated,
+      dataSource,
       networkCapabilities: mcpNetworkCapabilities(capabilities),
       transactions: activity,
       tokenTransfers: tokenRows,
@@ -286,6 +289,7 @@ server.tool(
     const txItems = transactions.items;
     const transferItems = tokenTransfers.items;
     const truncated = transactions.truncated || tokenTransfers.truncated;
+    const dataSource = [...new Set([transactions.source, tokenTransfers.source].filter(Boolean))].join(" + ");
     const activity = txItems.slice(0, limit).map(item => summarizeTransactionRow(item, normalizedWallet, config));
     const tokenRows = transferItems.slice(0, limit).map(item => summarizeTokenTransferRow(item, normalizedWallet, config));
     const incoming = activity.filter(t => t.direction === "incoming");
@@ -296,6 +300,7 @@ server.tool(
     const payload = {
       preAccountingReport: true,
       truncated,
+      dataSource,
       disclaimer: "This output is a pre-accounting record prepared with TxReceipts and is not an official invoice, tax filing, or e-ledger submission. Consult a licensed accountant for formal reporting.",
       generatedAt: new Date().toISOString(),
       wallet: normalizedWallet,
@@ -408,6 +413,7 @@ server.tool(
     const txItems = transactions.items;
     const transferItems = tokenTransfers.items;
     const truncated = transactions.truncated || tokenTransfers.truncated;
+    const dataSource = [...new Set([transactions.source, tokenTransfers.source].filter(Boolean))].join(" + ");
 
     const ledger = [];
     let runningNativeBalance = 0n;
@@ -463,6 +469,7 @@ server.tool(
             totalTokenTransfers: tokenLedger.length,
           },
           truncated,
+          dataSource,
           networkCapabilities: mcpNetworkCapabilities(capabilities),
           ledger,
           tokenTransfers: tokenLedger,
@@ -493,6 +500,7 @@ server.tool(
     const txItems = transactions.items;
     const transferItems = tokenTransfers.items;
     const truncated = transactions.truncated || tokenTransfers.truncated;
+    const dataSource = [...new Set([transactions.source, tokenTransfers.source].filter(Boolean))].join(" + ");
 
     const monthTx = txItems.filter(item => {
       if (!item.timestamp) return false;
@@ -528,6 +536,7 @@ server.tool(
           network: config.name,
           month: monthStr,
           truncated,
+          dataSource,
           truncationNote: truncated ? "Explorer history was cut at the page limit; totals for this month may be incomplete." : null,
           semantics: "useAddress — monthly aggregation for accounting",
           summary: {
@@ -568,6 +577,7 @@ server.tool(
     const txItems = transactions.items;
     const transferItems = tokenTransfers.items;
     const truncated = transactions.truncated || tokenTransfers.truncated;
+    const dataSource = [...new Set([transactions.source, tokenTransfers.source].filter(Boolean))].join(" + ");
 
     const flagged = [];
     for (const item of txItems.slice(0, limit)) {
@@ -640,6 +650,7 @@ server.tool(
           semantics: "useAddress — compliance review flagging",
           reviewRequiredCount: flagged.length,
           truncated,
+          dataSource,
           totalTransactionsReviewed: txItems.length,
           totalTokenTransfersReviewed: transferItems.length,
           networkCapabilities: mcpNetworkCapabilities(capabilities),
@@ -669,6 +680,7 @@ server.tool(
     const txItems = transactions.items;
     const transferItems = tokenTransfers.items;
     const truncated = transactions.truncated || tokenTransfers.truncated;
+    const dataSource = [...new Set([transactions.source, tokenTransfers.source].filter(Boolean))].join(" + ");
 
     const csvRows = [];
     const seenHashes = new Set();
@@ -725,6 +737,7 @@ server.tool(
           preAccountingDisclaimer: "This output is a pre-accounting record prepared with TxReceipts and is not an official invoice, tax filing, or e-ledger submission.",
           rowCount: csvRows.length - 1,
           truncated,
+          dataSource,
           csv: csvRows.join("\r\n"),
           csvNote: "All cells are quoted; cells starting with = + - @ are prefixed with an apostrophe to block spreadsheet formulas. Token labels come from third-party data.",
           networkCapabilities: mcpNetworkCapabilities(capabilities),
@@ -846,7 +859,7 @@ async function fetchExplorerJson(config, path, params = {}) {
 }
 
 /** Follow Blockscout v2 cursor pagination until `limit` items or the page cap is reached. */
-async function fetchExplorerItems(config, path, limit) {
+async function fetchBlockscoutItems(config, path, limit) {
   const items = [];
   let nextPageParams = null;
   let pages = 0;
@@ -859,7 +872,28 @@ async function fetchExplorerItems(config, path, limit) {
     if (!nextPageParams || pageItems.length === 0) break;
   }
   const truncated = items.length > limit || (Boolean(nextPageParams) && pages >= EXPLORER_MAX_PAGES);
-  return { items: items.slice(0, limit), truncated, pagesFetched: pages, pageSize: EXPLORER_PAGE_SIZE };
+  return { items: items.slice(0, limit), truncated, pagesFetched: pages, pageSize: EXPLORER_PAGE_SIZE, source: `${config.name} Blockscout` };
+}
+
+/**
+ * Load address history from the first explorer source that answers. Blockscout is tried first;
+ * if it is blocked or down, Etherscan-compatible sources (Routescan, Etherscan with a key) are used
+ * and their rows are normalised to the Blockscout shape. The winning source is reported so the
+ * agent can tell the user where the data came from.
+ */
+async function fetchExplorerItems(config, path, limit) {
+  const address = (path.match(/\/addresses\/(0x[0-9a-f]{40})\//i) || [])[1];
+  const errors = [];
+  for (const source of explorerSources(config)) {
+    try {
+      if (source.kind === "blockscout") return await fetchBlockscoutItems(config, path, limit);
+      if (!address) continue;
+      return await fetchEtherscanItems(source, address, path, limit);
+    } catch (error) {
+      errors.push(`${source.label}: ${untrustedText(error?.message, TEXT_LIMITS.error) || "failed"}`);
+    }
+  }
+  throw new Error(`No explorer source answered for ${config.name}. ${errors.join(" | ")}`);
 }
 
 async function rpc(config, method, params) {

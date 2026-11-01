@@ -41,9 +41,17 @@ Token names and symbols, method labels, memos, categories and error strings come
 
 Agents should still verify anything that matters against the explorer links before making an accounting entry.
 
-## Networks
+## Networks and data sources
 
-Base (default), Ethereum, Optimism, Arbitrum One, Polygon. Public RPC and Blockscout endpoints are fixed in the code; every request has a 15 second timeout and a 5 MB response ceiling.
+Base (default), Ethereum, Optimism, Arbitrum One, Polygon. Public RPC and explorer endpoints are fixed in the code; every request has a 15 second timeout and a 5 MB response ceiling.
+
+Address history comes from Blockscout first. Blockscout sits behind Cloudflare and sometimes challenges server IPs, so the server falls back automatically:
+
+1. Blockscout v2 (all networks, keyless, paginated)
+2. Routescan Etherscan-compatible API (Ethereum only, keyless)
+3. Etherscan V2 API (all five networks) when `TX_RECEIPTS_ETHERSCAN_API_KEY` is set
+
+Every wallet result reports `dataSource` so the agent can say where the numbers came from, and `truncated` when the history was cut at the page limit. If no source answers, the tool returns one error naming each source that failed instead of an empty report.
 
 ## Environment
 
@@ -51,6 +59,7 @@ Base (default), Ethereum, Optimism, Arbitrum One, Polygon. Public RPC and Blocks
 - `TX_RECEIPTS_API_KEY`: optional; needed for `get_credit_balance` and `create_receipt`. Keep the client config file that holds it at mode 600.
 - `TX_RECEIPTS_PROJECT_ID`: optional, sent with `create_receipt`.
 - `TX_RECEIPTS_ENABLE_WRITE`: set to `1` to register `create_receipt`. Leave unset for a strictly read-only server.
+- `TX_RECEIPTS_ETHERSCAN_API_KEY`: optional Etherscan API key; enables the Etherscan V2 fallback for Base, Optimism, Arbitrum and Polygon when Blockscout is unreachable.
 
 ## Run
 
