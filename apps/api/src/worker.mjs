@@ -16,6 +16,15 @@ import {
   networkCapabilitiesForReceipt,
   networkCapabilitiesSummary,
 } from "../../../src/networks/capabilities.mjs";
+import {
+  TEXT_LIMITS,
+  csvLine,
+  isCanonicalUsdc,
+  tokenAddressOf,
+  safeBigInt,
+  untrustedSymbol,
+  untrustedText,
+} from "../../../packages/mcp-server/src/safe.mjs";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 const RECEIPT_BASE_URL = "https://txreceipts.com.tr";
@@ -52,7 +61,7 @@ const MCP_NETWORKS = {
     name: "Optimism",
     chainId: 10,
     rpcUrl: "https://mainnet.optimism.io",
-    blockscoutUrl: "https://optimism.blockscout.com",
+    blockscoutUrl: "https://explorer.optimism.io",
     explorerUrl: "https://optimistic.etherscan.io",
     nativeSymbol: "ETH",
   },
@@ -712,26 +721,38 @@ async function callMcpTool(name, args, request, env) {
         });
       }
     }
+    const flaggedHashes = new Set(flagged.map(f => String(f.txHash || "").toLowerCase()));
     for (const item of transferItems) {
       const from = String(item.from?.hash || "").toLowerCase();
       const to = String(item.to?.hash || "").toLowerCase();
-      const amount = item.total?.value || "0";
-      const tokenSymbol = item.token?.symbol || "TOKEN";
-      if (tokenSymbol === "USDC" && BigInt(amount || "0") > BigInt(1000e6)) {
-        const hash = item.transaction_hash;
-        if (!flagged.some(f => f.txHash === hash)) {
-          flagged.push({
-            txHash: hash,
-            timestamp: item.timestamp || null,
-            direction: to === wallet ? "incoming" : "outgoing",
-            method: "token_transfer",
-            value: `${(Number(amount) / 1e6).toFixed(2)} ${tokenSymbol}`,
-            flags: [{ flag: "large_token_transfer", detail: `${(Number(amount) / 1e6).toFixed(2)} ${tokenSymbol}` }],
-            from: item.from?.hash || null,
-            to: item.to?.hash || null,
-          });
-        }
+      const hash = String(item.transaction_hash || "").toLowerCase();
+      if (!hash || flaggedHashes.has(hash)) continue;
+      const amount = safeBigInt(item.total?.value);
+      const symbol = untrustedSymbol(item.token?.symbol);
+      const canonicalUsdc = isCanonicalUsdc(network.id, tokenAddressOf(item));
+      const reasons = [];
+      // Real USDC is identified by contract address, never by symbol.
+      if (canonicalUsdc && amount > 1000n * 10n ** 6n) {
+        reasons.push({ flag: "large_token_transfer", detail: `${(Number(amount) / 1e6).toFixed(2)} USDC` });
       }
+      // Only USDC has a canonical address table here, so only USDC lookalikes can be judged.
+      if (!canonicalUsdc && /usdc/i.test(symbol)) {
+        reasons.push({ flag: "suspicious_token_symbol", detail: `token at ${(tokenAddressOf(item) || "unknown")} uses the symbol "${symbol}" but is not the canonical USDC contract on this network` });
+      }
+      if (reasons.length === 0) continue;
+      flaggedHashes.add(hash);
+      flagged.push({
+        txHash: hash,
+        timestamp: item.timestamp || null,
+        direction: to === wallet && from !== wallet ? "incoming" : from === wallet ? "outgoing" : "other",
+        method: "token_transfer",
+        token: canonicalUsdc ? "USDC" : symbol,
+        tokenAddress: tokenAddressOf(item),
+        amountRaw: amount.toString(),
+        flags: reasons,
+        from: item.from?.hash || null,
+        to: item.to?.hash || null,
+      });
     }
 
     return mcpText({
@@ -759,6 +780,7 @@ async function callMcpTool(name, args, request, env) {
     const transferItems = (tokenTransfers.items || []).slice(0, limit);
 
     const csvRows = [];
+    const seenHashes = new Set();
     csvRows.push("txHash,timestamp,direction,method,value,gasFee,token,amount,from,to,status");
     for (const item of txItems) {
       const from = String(item.from?.hash || "").toLowerCase();
@@ -766,29 +788,31 @@ async function callMcpTool(name, args, request, env) {
       const direction = to === wallet && from !== wallet ? "incoming" : from === wallet ? "outgoing" : "other";
       const value = item.value && item.value !== "0" ? formatNativeAmount(item.value, network.nativeSymbol) : "0";
       const fee = item.fee?.value || "";
-      csvRows.push([
+      seenHashes.add(String(item.hash || "").toLowerCase());
+      csvRows.push(csvLine([
         item.hash,
         item.timestamp || "",
         direction,
-        `"${(item.method || "transaction").replace(/"/g, '""')}"`,
-        `"${value}"`,
-        `"${fee}"`,
+        untrustedText(item.method, TEXT_LIMITS.label) || "transaction",
+        value,
+        fee,
         "",
         "",
         item.from?.hash || "",
         item.to?.hash || "",
-        item.status || "ok",
-      ].join(","));
+        untrustedText(item.status, TEXT_LIMITS.label) || "ok",
+      ]));
     }
     for (const item of transferItems) {
-      const hash = item.transaction_hash;
-      if (csvRows.some(r => r.startsWith(hash))) continue;
+      const hash = String(item.transaction_hash || "").toLowerCase();
+      if (!hash || seenHashes.has(hash)) continue;
       const from = String(item.from?.hash || "").toLowerCase();
       const to = String(item.to?.hash || "").toLowerCase();
       const direction = to === wallet && from !== wallet ? "incoming" : from === wallet ? "outgoing" : "other";
-      const tokenSymbol = item.token?.symbol || item.token?.name || "TOKEN";
-      const amount = item.total?.value || "0";
-      csvRows.push([
+      const symbol = untrustedSymbol(item.token?.symbol || item.token?.name);
+      const tokenSymbol = symbol === "USDC" && !isCanonicalUsdc(network.id, tokenAddressOf(item)) ? "USDC (unverified contract)" : symbol;
+      const amount = safeBigInt(item.total?.value).toString();
+      csvRows.push(csvLine([
         hash,
         item.timestamp || "",
         direction,
@@ -800,7 +824,7 @@ async function callMcpTool(name, args, request, env) {
         item.from?.hash || "",
         item.to?.hash || "",
         "ok",
-      ].join(","));
+      ]));
     }
 
     return mcpText({
@@ -810,7 +834,7 @@ async function callMcpTool(name, args, request, env) {
       semantics: "useAddress — accounting CSV export",
       preAccountingDisclaimer: "This output is a pre-accounting record prepared with TxReceipts and is not an official invoice, tax filing, or e-ledger submission.",
       rowCount: csvRows.length - 1,
-      csv: csvRows.join("\n"),
+      csv: csvRows.join("\r\n"),
       networkCapabilities: mcpNetworkCapabilities(capabilities),
       mimeType: "text/csv",
       filename: `txreceipts_${wallet.slice(2, 10)}_${network.id}_${new Date().toISOString().slice(0, 10)}.csv`,

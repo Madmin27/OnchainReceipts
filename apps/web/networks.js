@@ -58,7 +58,7 @@ window.TX_RECEIPTS_NETWORKS = [
     rpcUrl: "https://mainnet.optimism.io",
     rpcUrls: ["https://mainnet.optimism.io", "https://optimism-rpc.publicnode.com"],
     explorerUrl: "https://optimistic.etherscan.io",
-    blockscoutUrl: "https://optimism.blockscout.com",
+    blockscoutUrl: "https://explorer.optimism.io",
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   },
   {

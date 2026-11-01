@@ -29,10 +29,14 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install MCP server dependencies
+        run: npm ci --prefix packages/mcp-server --no-fund --no-audit
+
       - name: Static checks and tests
         run: |
           npm run check
           npm run test:billing
+          npm run test:mcp
           for f in apps/web/app.js apps/web/api.js apps/web/wallets.js apps/web/networks.js; do node --check "$f"; done
 
       - name: Configure Pages
